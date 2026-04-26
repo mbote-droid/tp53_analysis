@@ -1,0 +1,21 @@
+# Conda/Mamba environment file for TP53 Analysis Pipeline
+# Usage: conda env create -f environment.yaml
+#        mamba env create -f environment.yaml
+
+name: tp53-analysis
+channels:
+  - conda-forge
+  - bioconda
+  - defaults
+dependencies:
+  - python=3.9
+  - biopython::biopython>=1.79
+  - matplotlib>=3.3.0
+  - numpy>=1.19.0
+  - pip
+  - pip:
+    - urllib3>=1.26.0
+
+# Metadata
+variables:
+  ENTREZ_EMAIL: ""  # Set your email here or use environment variable
