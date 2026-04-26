@@ -13,7 +13,7 @@ setup(
     description="Comprehensive bioinformatics pipeline for TP53 gene analysis",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/yourusername/tp53_analysis",
+    url="https://github.com/mbote-driod/tp53_analysis",
     packages=find_packages(),
     classifiers=[
         "Programming Language :: Python :: 3",
