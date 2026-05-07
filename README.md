@@ -1,5 +1,8 @@
 # TP53 Bioinformatics Analysis Pipeline
 
+![Run Tests](https://github.com/mbote-driod/tp53_analysis/actions/workflows/tests.yml/badge.svg)
+![Pylint](https://github.com/mbote-driod/tp53_analysis/actions/workflows/pylint.yml/badge.svg)
+
 A comprehensive bioinformatics pipeline for analyzing the TP53 gene (tumor suppressor protein p53) and its orthologs across species. This pipeline fetches sequences from NCBI, performs sequence analysis, detects mutations, discovers open reading frames, conducts multi-species phylogenetic comparisons, and annotates protein domains.
 
 ## Features
