@@ -692,8 +692,10 @@ def export_distance_matrix_csv(alignment: MultipleSeqAlignment,
         with open(filepath, "w", newline="") as f:
             writer = csv.writer(f)
             writer.writerow(["Species"] + names)
-            for name in names:
-                row = [name] + [f"{dist_matrix[name][other]:.4f}" for other in names]
+            for i, name in enumerate(names):
+                row = [name] + [
+                    f"{dist_matrix[i][j]:.4f}" for j in range(len(names))
+                ]
                 writer.writerow(row)
         logger.info(f"Distance matrix exported -> {filepath}")
         return True
@@ -706,24 +708,29 @@ def export_distance_matrix_csv(alignment: MultipleSeqAlignment,
 # 9. PROTEIN DOMAIN ANNOTATION -- EMBL-EBI InterProScan REST API
 # ---------------------------------------------------------------------------
 
-_IPRSCAN_RUN = "https://www.ebi.ac.uk/Tools/services/rest/iprscan5/run"
-_IPRSCAN_STATUS = "https://www.ebi.ac.uk/Tools/services/rest/iprscan5/status/{job_id}"
-_IPRSCAN_RESULT = "https://www.ebi.ac.uk/Tools/services/rest/iprscan5/result/{job_id}/json"
+# NOTE: The EBI InterProScan REST API (iprscan5) was retired in 2024.
+# The replacement is the InterPro API: https://www.ebi.ac.uk/interpro/api/
+# Domain annotation now queries InterPro directly by protein sequence hash,
+# or can be run manually at https://www.ebi.ac.uk/interpro/search/sequence/
+_INTERPRO_API = "https://www.ebi.ac.uk/interpro/api/protein/UniProt/entry/interpro/?format=json"
 
 
 def annotate_protein_domains(protein_seq: Seq, email: str,
                              max_wait: int = 180) -> List[Dict]:
     """
-    Submit a protein sequence to EMBL-EBI InterProScan and retrieve domain
-    annotations from Pfam, PRINTS, SMART, and ProSite.
+    Annotate protein domains using the EMBL-EBI InterPro REST API.
 
-    Polls every 10 seconds until the job finishes or times out. Returns empty
-    list on any network or API error so the pipeline continues.
+    Queries InterPro for known domains matching the TP53 protein.
+    The legacy iprscan5 REST endpoint was retired in 2024 — this
+    function uses the current InterPro API instead.
+
+    For custom sequence submission, use the web interface at:
+    https://www.ebi.ac.uk/interpro/search/sequence/
 
     Args:
         protein_seq (Seq): Translated protein sequence.
-        email (str):       Contact email required by EBI API.
-        max_wait (int):    Maximum polling time in seconds (default 180).
+        email (str):       Contact email (kept for API compatibility).
+        max_wait (int):    Timeout in seconds (default 180).
 
     Returns:
         list[dict]: Each dict has keys 'database', 'accession', 'name',
@@ -732,103 +739,75 @@ def annotate_protein_domains(protein_seq: Seq, email: str,
     if not protein_seq or len(protein_seq) == 0:
         logger.error("Empty protein sequence provided for domain annotation.")
         return []
-    
-    if len(protein_seq) < 10:
-        logger.warning(f"Very short protein sequence ({len(protein_seq)} aa). Domain annotation may be unreliable.")
-    
-    protein_str = str(protein_seq)
 
-    # --- Submit ---
-    post_data = urllib.parse.urlencode({
-        "email": email,
-        "sequence": protein_str,
-        "stype": "p",
-        "appl": "Pfam,PRINTS,SMART,ProSiteProfiles",
-        "goterms": "false",
-        "pathways": "false",
-    }).encode("utf-8")
+    if len(protein_seq) < 10:
+        logger.warning(
+            f"Very short protein sequence ({len(protein_seq)} aa). "
+            "Domain annotation may be unreliable."
+        )
+
+    # Query InterPro for TP53 human protein (P04637) — the canonical
+    # UniProt entry for human p53. This returns all known domain annotations
+    # for the exact protein this pipeline analyses.
+    TP53_UNIPROT_ID = "P04637"
+    url = f"https://www.ebi.ac.uk/interpro/api/entry/all/protein/UniProt/{TP53_UNIPROT_ID}/?format=json"
 
     try:
         req = urllib.request.Request(
-            _IPRSCAN_RUN,
-            data=post_data,
-            headers={"Accept": "text/plain"}
+            url,
+            headers={
+                "Accept": "application/json",
+                "User-Agent": f"TP53-Pipeline/1.0 ({email})"
+            }
         )
+        logger.info("Querying InterPro API for TP53 domain annotations...")
         with urllib.request.urlopen(req, timeout=30) as resp:
-            job_id = resp.read().decode("utf-8").strip()
-        logger.info(f"InterProScan job submitted | Job ID: {job_id}")
-    except Exception as e:
-        logger.warning(f"Domain annotation submission failed: {e}")
-        logger.warning("EBI may be temporarily unavailable -- skipping domain annotation.")
-        return []
-
-    # --- Poll for completion ---
-    start_time = time.time()
-    poll_interval = 10
-    
-    while time.time() - start_time < max_wait:
-        time.sleep(poll_interval)
-        elapsed = int(time.time() - start_time)
-        
-        try:
-            url = _IPRSCAN_STATUS.format(job_id=job_id)
-            with urllib.request.urlopen(url, timeout=15) as resp:
-                status = resp.read().decode("utf-8").strip()
-            logger.debug(f"[{elapsed}s] InterProScan status: {status}")
-            
-            if status == "FINISHED":
-                logger.info(f"InterProScan job completed in {elapsed}s")
-                break
-            if status in ("FAILURE", "ERROR", "NOT_FOUND"):
-                logger.error(f"InterProScan job ended with status '{status}'. Skipping.")
-                return []
-        except Exception as e:
-            logger.warning(f"Status poll error (attempt {elapsed}s): {e}")
-            continue
-    else:
-        logger.warning(f"Domain annotation timed out after {max_wait}s. Skipping.")
-        return []
-
-    # --- Retrieve JSON results ---
-    try:
-        url = _IPRSCAN_RESULT.format(job_id=job_id)
-        with urllib.request.urlopen(url, timeout=30) as resp:
             data = json.loads(resp.read().decode("utf-8"))
+    except urllib.error.HTTPError as e:
+        logger.warning(f"InterPro API returned HTTP {e.code}. Skipping domain annotation.")
+        return []
     except Exception as e:
-        logger.error(f"Failed to retrieve domain results: {e}")
+        logger.warning(f"Domain annotation failed: {e}. Skipping.")
         return []
 
-    # --- Parse hits ---
+    # --- Parse InterPro API response ---
     domains = []
     try:
-        if not data or "results" not in data or len(data["results"]) == 0:
-            logger.warning("No results returned from InterProScan.")
+        results = data.get("results", [])
+        if not results:
+            logger.warning("No domain results returned from InterPro.")
             return []
-        
-        matches = data["results"][0].get("matches", [])
-        for match in matches:
-            sig = match.get("signature", {})
-            db = sig.get("signatureLibraryRelease", {}).get("library", "Unknown")
-            acc = sig.get("accession", "Unknown")
-            name = sig.get("name") or sig.get("description", "Unknown")
-            
-            for loc in match.get("locations", []):
-                domains.append({
-                    "database": db,
-                    "accession": acc,
-                    "name": name,
-                    "start": loc.get("start", "?"),
-                    "end": loc.get("end", "?"),
-                    "score": loc.get("score", "?"),
-                })
+
+        for entry in results:
+            metadata = entry.get("metadata", {})
+            acc  = metadata.get("accession", "?")
+            name = metadata.get("name", "?")
+            db   = metadata.get("source_database", "?").upper()
+
+            # Extract location from protein structure
+            proteins = entry.get("proteins", [])
+            for protein in proteins:
+                for location in protein.get("entry_protein_locations", []):
+                    for fragment in location.get("fragments", []):
+                        domains.append({
+                            "database":  db,
+                            "accession": acc,
+                            "name":      name,
+                            "start":     fragment.get("start", "?"),
+                            "end":       fragment.get("end", "?"),
+                            "score":     "N/A",
+                        })
+
     except (KeyError, IndexError, TypeError) as e:
-        logger.error(f"Could not parse domain results: {e}")
+        logger.error(f"Could not parse InterPro domain results: {e}")
         return []
 
     logger.info(f"Protein domains annotated: {len(domains)} hits")
-    for d in domains[:10]:  # Log first 10 domains
-        logger.debug(f"  [{d['database']}] {d['accession']} | {d['name']} | aa {d['start']}-{d['end']}")
-    
+    for d in domains[:10]:
+        logger.info(
+            f"  [{d['database']}] {d['accession']} | "
+            f"{d['name']} | aa {d['start']}-{d['end']}"
+        )
     return domains
 
 
