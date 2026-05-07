@@ -25,7 +25,7 @@ setup(
         "Intended Audience :: Science/Research",
         "Topic :: Scientific/Engineering :: Bio-Informatics",
     ],
-    python_requires=">=3.8",
+    python_requires=">=3.10",
     install_requires=[
         "biopython>=1.79",
         "matplotlib>=3.3.0",
@@ -34,7 +34,7 @@ setup(
     ],
     entry_points={
         "console_scripts": [
-            "tp53-analysis=tp53_analysis:main",
+            "tp53-analysis=main_tp53_analysis:main",
         ],
     },
 )

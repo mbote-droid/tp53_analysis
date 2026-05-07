@@ -1,0 +1,29 @@
+[MASTER]
+# Maximum number of characters on a single line
+max-line-length=100
+
+# Minimum Python version to target
+min-python-version=3.8
+
+# Specify a configuration file
+disable=
+    missing-module-docstring,
+    missing-function-docstring,
+    line-too-long,
+    too-many-locals,
+    too-many-statements,
+
+[FORMAT]
+# Maximum number of characters on a single line
+max-line-length=100
+
+[DESIGN]
+# Maximum number of arguments for function / method
+max-args=6
+
+# Maximum number of attributes for a class
+max-attributes=10
+
+[MESSAGES CONTROL]
+# Only show warnings with the listed confidence levels
+confidence=HIGH
