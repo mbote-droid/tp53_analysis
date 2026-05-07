@@ -19,7 +19,7 @@ A comprehensive bioinformatics pipeline for analyzing the TP53 gene (tumor suppr
 
 ## Requirements
 
-- Python 3.8+
+- Python 3.10+
 - Internet connection (for NCBI Entrez and EMBL-EBI APIs)
 - NCBI account email (required by NCBI Entrez API)
 
@@ -50,13 +50,13 @@ pip install -r requirements.txt
 The NCBI Entrez API requires an email address. Set it before running:
 
 ```bash
-export ENTREZ_EMAIL="your.email@example.com"
+   $env:ENTREZ_EMAIL="your.email@example.com"
 ```
 
 **Optional:** For faster NCBI requests, obtain an API key from [NCBI](https://www.ncbi.nlm.nih.gov/account/settings/#api-key-management) and set:
 
 ```bash
-export NCBI_API_KEY="your_api_key_here"
+$env:NCBI_API_KEY="your_api_key_here"
 ```
 
 ## Usage
@@ -64,7 +64,7 @@ export NCBI_API_KEY="your_api_key_here"
 ### Basic Usage
 
 ```bash
-python tp53_analysis.py --accession NM_000546
+python main_tp53_analysis.py --accession NM_000546
 ```
 
 This fetches the human TP53 sequence (NM_000546) and runs the complete pipeline.
@@ -73,25 +73,25 @@ This fetches the human TP53 sequence (NM_000546) and runs the complete pipeline.
 
 ```bash
 # Skip phylogenetic analysis (faster)
-python tp53_analysis.py --accession NM_000546 --skip-phylo
+python main_tp53_analysis.py --accession NM_000546 --skip-phylo
 
 # Skip domain annotation (saves 2-3 minutes)
-python tp53_analysis.py --accession NM_000546 --skip-domains
+python main_tp53_analysis.py --accession NM_000546 --skip-domains
 
 # Skip both optional analyses
-python tp53_analysis.py --accession NM_000546 --skip-phylo --skip-domains
+python main_tp53_analysis.py --accession NM_000546 --skip-phylo --skip-domains
 
 # Custom mutation window (100 bp instead of 50)
-python tp53_analysis.py --accession NM_000546 --mutation-window 100
+python main_tp53_analysis.py --accession NM_000546 --mutation-window 100
 
 # Custom ORF minimum length (200 bp instead of 100)
-python tp53_analysis.py --accession NM_000546 --orf-min-length 200
+python main_tp53_analysis.py --accession NM_000546 --orf-min-length 200
 
 # Custom GC content window (200 bp instead of 100)
-python tp53_analysis.py --accession NM_000546 --gc-window 200
+python main_tp53_analysis.py --accession NM_000546 --gc-window 200
 
 # Increase domain annotation timeout (default 180s)
-python tp53_analysis.py --accession NM_000546 --max-domain-wait 300
+python main_tp53_analysis.py --accession NM_000546 --max-domain-wait 300
 ```
 
 ### Command-Line Arguments
@@ -139,10 +139,10 @@ You can edit `TP53_HOMOLOGS` in the code to study any gene family.
 
 ```bash
 # 1. Set email
-export ENTREZ_EMAIL="your@email.com"
+$env:ENTREZ_EMAIL="your@email.com"
 
 # 2. Run complete analysis
-python tp53_analysis.py --accession NM_000546
+python main_tp53_analysis.py --accession NM_000546
 
 # 3. Check results
 ls -lh results/
@@ -192,7 +192,7 @@ Use `--skip-domains` to reduce runtime to ~30 seconds.
 ### ENTREZ_EMAIL not set
 ```
 [ERROR] ENTREZ_EMAIL environment variable is not set.
-Run: export ENTREZ_EMAIL='your.email@example.com' then retry.
+Run: $env:ENTREZ_EMAIL='your.email@example.com' then retry.
 ```
 **Solution**: Set the environment variable as shown in Installation section.
 
@@ -233,6 +233,105 @@ View logs:
 cat results/tp53_analysis.log
 tail -f results/tp53_analysis.log  # Live monitoring
 ```
+
+## Testing
+
+This project uses a comprehensive suite of automated integration and unit tests to ensure the accuracy of the TP53 genomic analysis.
+
+Mutation Accuracy: Validates that the pipeline correctly identifies single-nucleotide variants and maps them to the correct genomic coordinates.
+
+Sequence Integrity: Ensures DNA-to-Protein translation logic handles biological sequences correctly.
+
+Data Validation: Implements strict checks for NCBI accession formats (e.g., NM_ series) and user metadata to prevent "garbage-in, garbage-out" errors.
+
+Bioinformatics Metrics: Verified calculations for GC-content and Open Reading Frame (ORF) discovery against known gold-standard TP53 sequences.
+
+### Run All Tests
+
+```bash
+python -m pytest 
+```
+
+### Run Tests with Coverage Report
+
+```bash
+python -m pytest --cov=. --cov-report=html
+```
+
+This generates a coverage report in `htmlcov/index.html`.
+
+### Run Specific Test Class
+
+```bash
+python -m pytest tests/test_tp53_analysis.py::TestSequenceAnalysis
+```
+
+### Run with Verbose Output
+
+```bash
+python -m pytest -v
+```
+
+### Test Coverage Goal
+
+- Current coverage: ~80% (core analysis functions)
+- All critical functions have unit tests
+- Integration tests cover end-to-end pipeline
+
+### Writing New Tests
+
+Add new test cases to `tests/test_tp53_analysis.py`:
+
+```python
+def test_my_new_function(self):
+    """Test description."""
+    result = my_function(test_input)
+    self.assertEqual(result, expected_output)
+```
+
+Then run: `python -m pytest tests/test_tp53_analysis.py::TestMyClass::test_my_new_function`
+
+---
+
+## Code Quality & Linting
+
+We use **pylint** to maintain code quality standards.
+
+### Run Pylint Locally
+
+```bash
+python -m pylint tp53_analysis.py
+```
+
+### Pylint Configuration
+
+Code style rules are defined in `.pylintrc`. Current settings:
+- Max line length: 100 characters
+- Min Python version: 3.8
+- Enforces PEP 8 conventions
+
+### Interpreting Pylint Score
+
+- **10.0**: Perfect code (unlikely, but great!)
+- **8.0+**: Good quality code
+- **7.0+**: Acceptable, minor improvements suggested
+- **<7.0**: Code needs review and improvements
+
+### Auto-format Code with Black
+
+```bash
+python -m black main_tp53_analysis.py
+```
+
+Black automatically formats your code to PEP 8 standards.
+
+### CI/CD Pipeline
+
+Both pytest and pylint run automatically on every push via GitHub Actions:
+- `.github/workflows/tests.yml` - Runs unit tests
+- `.github/workflows/pylint.yml` - Checks code quality
+
+Check the "Actions" tab on your GitHub repo to see results!
 
 ## Contributing
 

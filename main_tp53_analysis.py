@@ -137,14 +137,18 @@ def validate_sequence(seq: Seq, seq_type: str = "DNA") -> bool:
         bool: True if sequence is valid.
     """
     seq_str = str(seq).upper()
-    
+
+    # Empty sequence is never valid
+    if not seq_str:
+        return False
+
     if seq_type == "DNA":
-        valid_chars = set("ACGTN-")
+        valid_chars = set("ACGTNRYSWKMBDHV-")  # Full IUPAC ambiguity alphabet
     elif seq_type == "PROTEIN":
         valid_chars = set("ACDEFGHIKLMNPQRSTVWY*-")
     else:
         return False
-    
+
     return all(c in valid_chars for c in seq_str)
 
 
@@ -198,11 +202,15 @@ def fetch_sequence(accession_id: str, email: str, max_retries: int = 3) -> Optio
         SeqRecord: BioPython SeqRecord object containing the sequence.
         None: If fetch fails after all retries.
     """
+    accession_id = accession_id.strip()
     if not validate_accession(accession_id):
         logger.warning(f"Accession '{accession_id}' has unusual format, attempting fetch anyway.")
     
-    Entrez.email = email
-    Entrez.api_key = os.environ.get("NCBI_API_KEY", "")  # Optional for faster requests
+    Entrez.email = email.strip()
+    # Only assign api_key when a real value exists — empty string causes HTTP 400
+    _api_key = os.environ.get("NCBI_API_KEY", "").strip()
+    if _api_key:
+        Entrez.api_key = _api_key
     
     for attempt in range(max_retries):
         try:
@@ -263,8 +271,8 @@ def analyze_protein(dna_sequence: Seq) -> Optional[Seq]:
         protein = dna_sequence.translate(to_stop=True)
         
         if len(protein) == 0:
-            logger.warning("Translation resulted in empty protein (no start codon found?).")
-            return None
+            logger.warning("Translation produced empty protein — possible missing start codon.")
+            return protein  # empty Seq is valid — not an error
         
         logger.info(f"Protein translated: {len(protein)} amino acids")
         return protein
