@@ -382,5 +382,9 @@ This project is licensed under the MIT License - see LICENSE file for details.
 
 ---
 
+## Debugging Journal
+See [DEBUGGING.md](DEBUGGING.md) for a full record of bugs 
+encountered during development and how they were resolved.
+
 **Last Updated**: 2026-04-26  
 **Version**: 1.0.0
