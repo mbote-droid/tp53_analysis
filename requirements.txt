@@ -1,5 +1,4 @@
 # TP53 Bioinformatics Analysis Pipeline
-# Core dependencies for sequence analysis and visualization
 
 # Bioinformatics
 biopython>=1.79
@@ -15,9 +14,4 @@ numpy>=1.19.0
 
 pandas>=1.2.0      # for CSV exports
 
-# Development dependencies
-pytest>=6.0.0  # Testing
-pytest-cov>=2.10.0  # Coverage
-black>=21.0  # Code formatting
-pylint>=2.7.0  # Linting
-mypy>=0.900  # Type checking
+streamlit>=1.28.0  
