@@ -68,6 +68,13 @@ $env:NCBI_API_KEY="your_api_key_here"
 
 ### Basic Usage
 
+## Run with Docker
+
+```bash
+   docker-compose up
+```
+   Access at `http://localhost:8501`
+
 ```bash
 python main_tp53_analysis.py --accession NM_000546
 ```
@@ -359,6 +366,16 @@ If you use this pipeline in research, please cite:
   url={https://github.com/mbote-driod/tp53_analysis}
 }
 ```
+
+---
+
+## 🏥 Clinical AI Portfolio
+
+If you are interested in my other work at the intersection of surgery and software engineering, check out:
+
+*   **[SurgiLogic-QA](https://github.com/mbote-droid/SurgiLogic-QA)**: An AI-powered platform for surgical knowledge retrieval and clinical decision support.
+
+---
 
 ## References
 

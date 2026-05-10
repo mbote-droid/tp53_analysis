@@ -1,0 +1,29 @@
+# Docker Compose — TP53 Bioinformatics Pipeline
+# ================================================
+# Usage:
+#   docker-compose up          → start the web app
+#   docker-compose up --build  → rebuild and start
+#   docker-compose down        → stop and remove container
+
+version: '3.8'
+
+services:
+  tp53-pipeline:
+    build: .
+    image: tp53-pipeline:latest
+    container_name: tp53-analysis
+    ports:
+      - "8501:8501"
+    environment:
+      - ENTREZ_EMAIL=${ENTREZ_EMAIL:-}
+      - NCBI_API_KEY=${NCBI_API_KEY:-}
+      - MPLBACKEND=Agg
+    volumes:
+      # Mount results folder so outputs are saved to your local machine
+      - ./results:/app/results
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8501/_stcore/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
