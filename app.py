@@ -20,6 +20,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from Bio.Seq import Seq
 
+
 # Suppress BioPython partial codon warning in the UI
 warnings.filterwarnings("ignore", category=UserWarning, module="Bio")
 
@@ -32,6 +33,8 @@ import logging as _logging
 _pipeline.logger = _logging.getLogger("TP53Pipeline")
 _pipeline.logger.setLevel(_logging.DEBUG)
 _pipeline.logger.addHandler(_logging.NullHandler())
+
+from cancer_heatmap import plot_mutation_heatmap, KNOWN_HOTSPOTS
 
 from main_tp53_analysis import (
     fetch_sequence,
@@ -266,7 +269,41 @@ st.markdown("""
 # 🧬 TP53 Bioinformatics Pipeline
 ### Genomic Analysis for Tumour Suppressor Genes
 """)
-st.markdown("""
+
+tab1, tab2 = st.tabs(["🔬 Pipeline Analysis", "🔥 Cancer Heatmap"])
+
+with tab2:
+    st.markdown("## 🔥 TP53 Hotspot Mutations Across Cancer Types")
+    st.markdown(
+        "<div style='color:#8B949E;font-size:0.9rem;margin-bottom:16px;'>"
+        "12 known TP53 hotspot mutations across 11 cancer types, based on the "
+        "<b>IARC TP53 Database</b> and published somatic mutation literature."
+        "</div>", unsafe_allow_html=True)
+
+    heatmap_path = "results/cancer_mutation_heatmap.png"
+    if st.button("Generate Heatmap", key="hm_btn"):
+        with st.spinner("Generating..."):
+            plot_mutation_heatmap(output_path=heatmap_path)
+        st.success("Done!")
+
+    if os.path.exists(heatmap_path):
+        st.image(heatmap_path, use_container_width=True,
+                 caption="TP53 Hotspot Mutation Frequency — IARC TP53 Database")
+        with open(heatmap_path, "rb") as f:
+            st.download_button("Download PNG", f.read(),
+                               "cancer_mutation_heatmap.png", "image/png")
+    else:
+        st.info("Click 'Generate Heatmap' above.")
+
+    import pandas as pd
+    st.markdown("### Hotspot Reference Table")
+    rows = [{"Mutation": h["aa"], "Codon": h["codon"],
+             "Change": h["change"], "Cancer Types": ", ".join(h["cancers"])}
+            for h in KNOWN_HOTSPOTS]
+    st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+
+with tab1:
+    st.markdown("""
 <div style="color:#8B949E; font-size:0.9rem; margin-bottom:24px;">
 TP53 is mutated in ~50% of all human cancers. This pipeline fetches, analyzes, 
 and visualizes the gene across species — from sequence to protein domains.
