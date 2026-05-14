@@ -66,3 +66,9 @@ htmlcov/
 .env
 .env.local
 *.bak
+
+# TP53 RAG Platform (Gemma 4 Hackathon)
+tp53_rag/venv/
+tp53_rag/data/chroma_db/
+tp53_rag/.env
+tp53_rag/logs/
