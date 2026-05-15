@@ -1,0 +1,156 @@
+{
+  "name": "TP53 RAG Platform — Full Analysis Workflow",
+  "description": "Automated TP53 analysis pipeline integrated with the RAG multi-agent platform. Triggers on new accession input, runs the bioinformatics pipeline, dispatches to all RAG agents, and delivers a comprehensive report.",
+  "nodes": [
+    {
+      "id": "1",
+      "name": "Trigger: New Accession Input",
+      "type": "n8n-nodes-base.webhook",
+      "position": [200, 300],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "tp53-analysis",
+        "responseMode": "lastNode"
+      },
+      "notes": "Receives accession ID (e.g. NM_000546) from external systems or manual input"
+    },
+    {
+      "id": "2",
+      "name": "Health Check: RAG Platform",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [400, 300],
+      "parameters": {
+        "method": "GET",
+        "url": "http://localhost:8000/health",
+        "options": { "timeout": 5000 }
+      },
+      "notes": "Verify the RAG platform API is running before dispatching"
+    },
+    {
+      "id": "3",
+      "name": "IF: Platform Ready?",
+      "type": "n8n-nodes-base.if",
+      "position": [600, 300],
+      "parameters": {
+        "conditions": {
+          "string": [{ "value1": "={{$json.status}}", "operation": "equals", "value2": "healthy" }]
+        }
+      }
+    },
+    {
+      "id": "4",
+      "name": "Run TP53 Pipeline",
+      "type": "n8n-nodes-base.executeCommand",
+      "position": [800, 200],
+      "parameters": {
+        "command": "cd /path/to/tp53_analysis && python main_tp53_analysis.py --accession {{$node['Trigger: New Accession Input'].json.accession}} --skip-domains",
+        "options": { "timeout": 120000 }
+      },
+      "notes": "Runs the existing TP53 bioinformatics pipeline. Adjust path as needed."
+    },
+    {
+      "id": "5",
+      "name": "Load Pipeline Results",
+      "type": "n8n-nodes-base.readBinaryFiles",
+      "position": [1000, 200],
+      "parameters": {
+        "filePath": "/path/to/tp53_analysis/results/",
+        "fileSelector": "*.csv"
+      },
+      "notes": "Loads mutations.csv, orfs.csv, protein_domains.csv from pipeline output"
+    },
+    {
+      "id": "6",
+      "name": "Parse & Format Pipeline Data",
+      "type": "n8n-nodes-base.code",
+      "position": [1200, 200],
+      "parameters": {
+        "language": "javascript",
+        "jsCode": "// Parse CSV results from TP53 pipeline and format for RAG API\nconst accession = $('Trigger: New Accession Input').item.json.accession || 'NM_000546';\n\n// In production, parse actual CSV files from pipeline\n// This demonstrates the data structure expected by the RAG API\nconst pipelineData = {\n  accession: accession,\n  sequence_length: 2591,\n  gc_content: 52.8,\n  mutations: [\n    // Populated from mutations.csv\n    { position: 524, original: 'G', mutant: 'A', amino_acid_change: 'R175H' }\n  ],\n  orfs: [\n    // Populated from orfs.csv\n    { frame: '+1', start: 203, end: 1384, length: 1181 }\n  ],\n  protein_domains: [\n    // Populated from protein_domains.csv\n    { database: 'Pfam', name: 'P53', accession: 'PF00870', start: 94, end: 292 }\n  ],\n  phylo_species: [\n    'Homo sapiens', 'Pan troglodytes', 'Mus musculus',\n    'Rattus norvegicus', 'Danio rerio'\n  ]\n};\n\nreturn { json: { pipeline_data: pipelineData } };"
+      }
+    },
+    {
+      "id": "7",
+      "name": "RAG: Full Multi-Agent Analysis",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [1400, 200],
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:8000/analyse",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            { "name": "pipeline_data", "value": "={{$json.pipeline_data}}" },
+            { "name": "include_report", "value": true },
+            { "name": "include_sources", "value": false }
+          ]
+        },
+        "options": { "timeout": 300000 }
+      },
+      "notes": "Dispatches to all 6 RAG agents: mutation, ORF, phylogenetics, domain, clinical, report"
+    },
+    {
+      "id": "8",
+      "name": "Format Final Report",
+      "type": "n8n-nodes-base.code",
+      "position": [1600, 200],
+      "parameters": {
+        "language": "javascript",
+        "jsCode": "const results = $json.results;\nconst accession = $json.accession;\n\nconst report = `\n# TP53 Analysis Report\nAccession: ${accession}\nGenerated: ${new Date().toISOString()}\n\n## Mutation Analysis\n${results.mutation_analysis?.answer || 'Not available'}\n\n## Clinical Interpretation\n${results.clinical_interpretation?.answer || 'Not available'}\n\n## Comprehensive Report\n${results.report_generation?.answer || 'Not available'}\n`;\n\nreturn { json: { report, accession, full_results: results } };"
+      }
+    },
+    {
+      "id": "9a",
+      "name": "Send Email Report",
+      "type": "n8n-nodes-base.emailSend",
+      "position": [1800, 100],
+      "parameters": {
+        "toEmail": "={{$('Trigger: New Accession Input').item.json.email}}",
+        "subject": "TP53 Analysis Complete: {{$json.accession}}",
+        "text": "={{$json.report}}"
+      }
+    },
+    {
+      "id": "9b",
+      "name": "Save Report to File",
+      "type": "n8n-nodes-base.writeFile",
+      "position": [1800, 300],
+      "parameters": {
+        "fileName": "/reports/tp53_{{$json.accession}}_{{$now}}.txt",
+        "dataPropertyName": "report"
+      }
+    },
+    {
+      "id": "10",
+      "name": "Error: Platform Not Ready",
+      "type": "n8n-nodes-base.noOp",
+      "position": [800, 400],
+      "notes": "Handle case where RAG platform is not running. Alert admin."
+    }
+  ],
+  "connections": {
+    "Trigger: New Accession Input": { "main": [[ { "node": "Health Check: RAG Platform", "type": "main", "index": 0 } ]] },
+    "Health Check: RAG Platform": { "main": [[ { "node": "IF: Platform Ready?", "type": "main", "index": 0 } ]] },
+    "IF: Platform Ready?": {
+      "main": [
+        [{ "node": "Run TP53 Pipeline", "type": "main", "index": 0 }],
+        [{ "node": "Error: Platform Not Ready", "type": "main", "index": 0 }]
+      ]
+    },
+    "Run TP53 Pipeline": { "main": [[ { "node": "Load Pipeline Results", "type": "main", "index": 0 } ]] },
+    "Load Pipeline Results": { "main": [[ { "node": "Parse & Format Pipeline Data", "type": "main", "index": 0 } ]] },
+    "Parse & Format Pipeline Data": { "main": [[ { "node": "RAG: Full Multi-Agent Analysis", "type": "main", "index": 0 } ]] },
+    "RAG: Full Multi-Agent Analysis": { "main": [[ { "node": "Format Final Report", "type": "main", "index": 0 } ]] },
+    "Format Final Report": {
+      "main": [[
+        { "node": "Send Email Report", "type": "main", "index": 0 },
+        { "node": "Save Report to File", "type": "main", "index": 0 }
+      ]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "errorWorkflow": "TP53_Error_Handler"
+  }
+}
