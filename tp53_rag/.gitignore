@@ -1,0 +1,38 @@
+# Virtual environment
+venv/
+.venv/
+
+# ChromaDB (large, regenerates automatically)
+data/chroma_db/
+
+# Model cache
+data/structures/
+data/reports/
+data/surgical_briefs/
+data/structure_outputs/
+
+# Environment secrets
+.env
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Logs
+logs/
+*.log
+
+# VS Code
+.vscode/
+
+# Test cache
+.pytest_cache/
+.coverage
+htmlcov/
+
+# OS files
+.DS_Store
+Thumbs.db
