@@ -2,208 +2,28 @@
 ════════════════════════════════════════════════════════════
   🧬 Mutation Analysis
 ════════════════════════════════════════════════════════════
-As an expert molecular oncologist, I have completed the analysis of the detected *TP53* mutations. All three identified variants are **hotspot mutations** located within the **DNA-Binding Domain (DBD)** (residues 94–292), which is the most frequently mutated region in cancer, accounting for approximately 90% of mutations (Context 3).
 
-Below is the detailed clinical and functional interpretation for each mutation:
-
-### 1. R175H (c.524G>A)
-*   **Classification:** This is a **hotspot mutation** and is classified as a **conformational mutant** (Context 3, 5).
-*   **Functional Impact:** This mutation results in a **loss of DNA binding** and exerts a **dominant-negative effect** over wild-type p53 (Context 5). Crucially, it is associated with **Gain-of-Function (GOF) activity** (Context 5). Under the IARC functional classification, this likely falls into Class 1 (Loss of transactivation) or Class 4 (GOF) (Context 1).
-*   **Clinical Associations:** R175H is the most common *TP53* mutation (~5% of all *TP53* mutations) and is frequently identified in **breast, colorectal, lung, and ovarian cancers**. It is clinically associated with a **poor prognosis** (Context 5).
-*   **Therapeutic Implications:** This mutation is a target for **APR-246 (eprenetapopt)**, which aims to restore the wild-type conformation of the protein (Context 4).
-
-### 2. R248W
-*   **Classification:** This is a **hotspot mutation** and is classified as a **contact mutant** (Context 3).
-*   **Functional Impact:** Located within the DBD, as a hotspot missense mutation, it is capable of acquiring **Gain-of-Function (GOF) activities** independent of the loss of wild-type p53 (Context 2). These activities can include promoting invasion and metastasis through interactions with p63 and p73, activating oncogenic transcription programs, or interacting with chromatin remodeling complexes such as SWI/SNF (Context 2).
-*   **Clinical Associations:** While specific cancer types for this exact variant were not detailed in the provided context, hotspot mutations in this domain are highly significant in oncogenesis (Context 3).
-*   **Therapeutic Implications:** Similar to R175H, R248W is a target for **APR-246 (eprenetapopt)** to restore wild-type conformation (Context 4).
-
-### 3. R273H
-*   **Classification:** This is a **hotspot mutation** and is classified as a **contact mutant** (Context 3).
-*   **Functional Impact:** As a hotspot mutation within the DBD, it is implicated in **Gain-of-Function (GOF) activity** (Context 2). This may include the inhibition of p63/p73 tumor suppressor activity or the promotion of metastatic pathways (Context 2).
-*   **Clinical Associations:** Detailed cancer-specific associations for R273H were not provided in the context, though it is recognized as one of the six primary hotspot codons (Context 3).
-*   **Therapeutic Implications:** While specific targeting for R273H was not listed, the context notes that **PRIMA-1MET** is currently under clinical investigation for *TP53* mutations (Context 4).
-
-### Summary Table for Clinical Actionability
-
-| Mutation | Type | Functional Impact | Clinical Note | Potential Therapy |
-| :--- | :--- | :--- | :--- | :--- |
-| **R175H** | Conformational | Loss of DNA binding; GOF; Dominant-negative | Breast, Colorectal, Lung, Ovarian; Poor prognosis | APR-246 |
-| **R248W** | Contact | Potential GOF (Invasion/Metastasis) | Hotspot in DBD | APR-246 |
-| **R273H** | Contact | Potential GOF (p63/p73 inhibition) | Hotspot in DBD | PRIMA-1MET (investigational) |
 
 ════════════════════════════════════════════════════════════
   🔬 ORF & Isoform Analysis
 ════════════════════════════════════════════════════════════
-Based on the bioinformatics pipeline data and the provided molecular context, my interpretation of the discovered Open Reading Frames (ORFs) for the *TP53* gene (NM_000546) is as follows:
 
-### 1. Analysis of ORF 1: Canonical p53α
-*   **Frame Notation:** +1
-*   **Correspondence:** This ORF corresponds directly to the **canonical p53α isoform**.
-*   **Biological Significance:** As noted in Context 3, p53α is the most abundant isoform and consists of 393 amino acids. This ORF encompasses the full functional architecture of the "guardian of the genome" (Context 2), including:
-    *   **Transactivation Domains (TAD):** Both TAD1 (residues 1-40) and TAD2 (40-67), which are essential for interacting with MDM2 and CBP/p300 (Context 4).
-    *   **DNA-Binding Domain (DBD):** The Pfam domain (PF00870) identified in the analysis.
-    *   **Tetramerization Domain:** The Pfam domain (PF07710) required for the protein to function as a transcription factor.
-*   **Clinical/Mutational Context:** This ORF contains three critical mutation sites identified by the pipeline: **R175H, R248W, and R273H**. According to Context 5, these are "hotspot positions" that are "invariant across mammals." Their presence within this +1 ORF suggests that mutations in this specific sequence are highly likely to disrupt the structural integrity or DNA-binding capacity of the canonical p53 protein, leading to loss of function or gain of oncogenic function.
-
-### 2. Analysis of ORF 2: Non-Canonical +2 Frame ORF
-*   **Frame Notation:** +2
-*   **Correspondence:** This ORF **does not correspond to any known p53 isoforms** (such as $\Delta$40p53, $\Delta$133p53, or $\beta/\gamma$ isoforms) described in the context. 
-*   **Biological Significance and Reading Frame Context:** 
-    *   The known isoforms ($\Delta$40, $\Delta$133, etc.) are products of alternative promoters or alternative splicing that maintain a functional relationship to the canonical protein sequence (Context 3). 
-    *   The discovered ORF in the **+2 frame** is out-of-frame relative to the canonical p53α. In standard molecular biology, translation in an alternative reading frame usually results in a completely different amino acid sequence and often an early stop codon.
-    *   The start position (nucleotide 521) is highly significant as it is in immediate proximity to the **R175H mutation site** (nucleotide 524). 
-*   **Interpretation:** While this +2 ORF may represent a bioinformatics artifact, in a specialized biological context, it could suggest the potential for **ribosomal frameshifting** or the existence of a non-canonical peptide. If translated, this would produce a protein product entirely distinct from the 393 aa p53α, potentially possessing different cellular localization or interaction partners.
-
-### Summary Table of Interpretations
-
-| Feature | ORF 1 (+1) | ORF 2 (+2) |
-| :--- | :--- | :--- |
-| **Isoform Identity** | **p53α (Canonical)** | **None (Non-canonical)** |
-| **Length (nt)** | 1181 | 267 |
-| **Functional Status** | Primary transcription factor; "Guardian of the genome" | Likely non-functional or regulatory peptide |
-| **Key Domains** | Full TAD, DBD, and Tetramerization | No known p53 domains |
-| **Clinical Relevance** | Contains critical hotspot mutations (R175, R248, R273) | Proximity to R175 mutation site |
-
-**Conclusion:** The pipeline has successfully identified the primary driver of genome integrity (p53$\alpha$ in the +1 frame). The detection of the +2 frame ORF, while not matching known functional isoforms, warrants investigation into whether non-canonical translation or frameshifting plays a role in *TP53* regulation or disease progression, particularly given its proximity to the R175 invariant hotspot.
 
 ════════════════════════════════════════════════════════════
   🌳 Phylogenetic Analysis
 ════════════════════════════════════════════════════════════
-As an expert evolutionary biologist specializing in the p53 family, I have interpreted the provided phylogenetic and sequence analysis data. The conservation patterns observed in this dataset provide profound insights into the structural and functional constraints that govern p53, allowing us to predict the pathogenicity of specific mutations with high confidence.
 
-### 1. Evolutionary Landscape and Phylogenetic Validation
-The phylogenetic clustering (Human $\rightarrow$ Chimpanzee $\rightarrow$ Mouse/Rat $\rightarrow$ Zebrafish) aligns perfectly with established vertebrate phylogeny, validating the accuracy of the analysis pipeline (Context 3). 
-
-The degree of sequence identity across these species serves as a proxy for evolutionary constraint:
-*   **Primates:** Extremely high conservation, with the Chimpanzee sequence sharing **98.7% identity** with humans (Context 4).
-*   **Rodents:** Moderate conservation, with approximately **76–77% identity** (Context 4).
-*   **Teleosts (Zebrafish):** Lower overall identity at **53%**, yet significantly higher conservation within critical functional regions (Context 4, 5).
-
-This gradient of conservation demonstrates that while the protein has diverged over hundreds of millions of years, specific "islands" of sequence have remained nearly unchanged, indicating intense purifying selection.
-
-### 2. Domain-Specific Conservation Patterns
-The analysis reveals that conservation is not uniform across the protein, but rather concentrated in critical functional domains:
-
-*   **DNA-Binding Domain (DBD):** Identified in the Pfam data (residues 94–292), this is the most highly conserved region. Even in Zebrafish, where overall identity is only 53%, the DBD maintains approximately **70% conservation** (Context 5). This underscores the DBD's essential role in p53's function as a transcription factor.
-*   **Tetramerization Domain:** The Pfam data (residues 323–356) shows this domain is also conserved across species (Context 5), which is vital for the protein's ability to form functional homotetramers.
-*   **Divergent Regions:** The N- and C-termini show higher divergence in rodents (Context 4), and the proline-rich region shows species-specific differences that influence apoptosis efficiency (Context 1). Additionally, the zebrafish p53 features a unique N-terminal extension not found in mammals (Context 1).
-
-### 3. Interpretation of Mutation Pathogenicity
-The most critical finding for clinical application lies in the relationship between the identified mutations and the invariant positions. The pipeline identified three specific mutations in the human sequence (NM_000546):
-1.  **R175H** (Position 524/Residue 175)
-2.  **R248W** (Position 742/Residue 248)
-3.  **R273H** (Position 818/Residue 273)
-
-**Evolutionary Interpretation of these Mutations:**
-These three residues (**R175, R248, and R273**) are explicitly identified as **invariant hotspot positions across mammals** (Context 1). In evolutionary biology, an "invariant" position means that natural selection has prevented any change at these coordinates for millions of years because any deviation results in a loss of fitness (likely through loss of genome integrity).
-
-Because these residues are structurally and functionally critical, the identified mutations are almost certainly **highly pathogenic**:
-*   **Structural/Functional Criticality:** Their invariance confirms they are essential for the integrity of the DNA-binding domain (Context 1).
-*   **Predictive Power:** The fact that these positions have resisted change across the evolutionary trajectory from zebrafish to humans makes them "evolutionary Achilles' heels." A mutation at these sites (such as the R175H, R248W, or R273H identified in the data) represents a disruption of a fundamental biological mechanism that the cell has evolved to protect at all costs.
-
-### Summary for Researchers
-Cross-species conservation is a powerful predictor of mutation impact because it differentiates between **neutral variation** (tolerated changes in divergent regions like the termini) and **lethal variation** (changes in invariant hotspots). The high conservation of the DNA-binding domain and the absolute invariance of residues 175, 248, and 273 provide definitive evidence that the mutations detected in this analysis are likely to result in a profound loss of p53's tumor-suppressive function.
 
 ════════════════════════════════════════════════════════════
   🏗️ Protein Domain Annotation
 ════════════════════════════════════════════════════════════
-As an expert in the structural biology of the p53 protein, I have interpreted the InterProScan domain annotations in conjunction with the provided genomic and proteomic data. The p53 protein (393 amino acids) is a modular transcription factor whose function is defined by a highly coordinated architecture of regulatory and effector domains.
 
-Below is a detailed mechanistic interpretation of the identified domains and their biological significance.
-
-### 1. Transactivation Domain (TAD) 
-*Note: While not explicitly flagged in the Pfam "Analysis Data" section, this domain is critical to the protein's identity as defined in Context 1.*
-
-*   **Functional Role:** Located at the N-terminus (residues 1–67), the TAD is the "command center" for protein-protein interactions. It is bifurcated into **TAD1 (1–40)** and **TAD2 (40–67)**. 
-    *   **TAD1** serves as the primary regulatory interface, interacting with **MDM2** to facilitate ubiquitination (as noted in Context 2 regarding RFFL/RNF34/COP1-mediated ubiquitination) and with co-activators like **CBP/p300** and **TFIID** to initiate transcription. 
-    *   **TAD2** is essential for the full transcriptional potency required to activate downstream target genes.
-*   **Significance of Boundaries:** The transition from TAD1 to TAD2 represents a shift from regulatory control (e.g., MDM2-mediated degradation) to active recruitment of the transcriptional machinery. 
-*   **Clinical/Mechanistic Connection:** Disruptions here do not necessarily stop p53 from binding DNA, but they prevent the protein from "turning on" the genes necessary for cell-cycle arrest or apoptosis.
-
-### 2. DNA-Binding Domain (DBD) [Pfam PF00870 | Residues 94–292]
-*   **Functional Role:** This is the core effector domain. It is responsible for the sequence-specific recognition of DNA response elements. The DBD allows p53 to act as the "guardian of the genome" (Context 5) by binding to promoters of genes involved in DNA repair, cell-cycle arrest, and apoptosis.
-*   **Relating Architecture to Function:** Context 2 highlights that interactions with proteins like **ZNF385A** via the DBD can enhance transactivation functions. This indicates that the DBD is not just a passive DNA-anchor but a dynamic platform for protein-DNA-protein complexes.
-*   **Impact of Mutations (Clinical Significance):** The mutation data provided is highly significant. All three identified mutations occur within the functional range of the DNA-binding region:
-    *   **R175H (cDNA 524):** Often a structural mutation that destabilizes the fold of the DBD.
-    *   **R248W (cDNA 742) & R273H (cDNA 818):** These are classic "contact mutations." Arginine (R) residues at these positions typically make direct contact with the DNA backbone or bases. Replacing them with bulky or differently charged residues (W, H) directly abolishes the protein's ability to recognize its target sequences.
-*   **Clinical Connection:** Because these mutations occur in the DBD, they explain why TP53 is the most frequently mutated gene in cancer (>50% of tumors). The loss of DNA-binding capability means the cell can no longer respond to genotoxic stress, allowing mutations to accumulate unchecked.
-
-### 3. Tetramerization Domain (TD) [Pfam PF07710 | Residues 323–356]
-*   **Functional Role:** p53 does not function as a monomer; it must assemble into a **homotetramer** to be biologically active. This domain facilitates the oligomerization of four p53 polypeptide chains.
-*   **Significance of Boundaries:** The placement of the TD following the DBD is a classic example of modular design: one domain finds the target (DBD), and the subsequent domain (TD) ensures the assembly of a high-affinity, multivalent complex.
-*   **Relating Architecture to Function:** The tetrameric state is essential for the cooperative binding of p53 to DNA. If the TD is disrupted, even a perfectly intact DBD would fail to achieve the stability and avidity required to drive transcription of cell-cycle arrest genes.
-
-### Summary of Domain Architecture and Clinical Integration
-
-The domain architecture of p53 creates a functional flow: **Regulation (TAD) $\rightarrow$ Execution (DBD) $\rightarrow$ Assembly (TD).**
-
-| Domain | Residues | Primary Function | Impact of Mutations (per Data) |
-| :--- | :--- | :--- | :--- |
-| **TAD** | 1–67 | Recruitment of co-activators/MDM2 | Loss of transcriptional control/regulation |
-| **DBD** | 94–292 | Sequence-specific DNA binding | **R175H, R248W, R273H** lead to loss of DNA contact/structure |
-| **TD** | 323–356 | Homotetramer formation | Loss of protein oligomerization and stability |
-
-**Conclusion:** The provided analysis shows a protein whose critical functional components are heavily targeted by somatic mutations. The concentration of mutations (**R175H, R248W, R273H**) in the DNA-binding domain (PF00870) provides a direct mechanistic explanation for the oncogenic phenotype: the "guardian" is present, but it is "blind" to the DNA it is meant to protect.
 
 ════════════════════════════════════════════════════════════
   🏥 Clinical Interpretation
 ════════════════════════════════════════════════════════════
-Error generating response: 500 INTERNAL. {'error': {'code': 500, 'message': 'Internal error encountered.', 'status': 'INTERNAL'}}. Please ensure Ollama is running with: ollama serve
+
 
 ════════════════════════════════════════════════════════════
   📋 Comprehensive Report
 ════════════════════════════════════════════════════════════
-# **TP53 Genomic and Proteomic Analysis Report**
-
-**Date:** October 26, 2023  
-**Subject:** Comprehensive Analysis of *TP53* (NM_000546)  
-**Status:** Highly Significant – Clinical Actionability Identified
-
----
-
-### **1. Executive Summary**
-Analysis of the *TP53* transcript (NM_000546) identifies three critical hotspot missense mutations (R175H, R248W, and R273H) concentrated within the DNA-binding domain. These variants are strongly associated with loss of function and potential gain-of-function (GOF) oncogenic activity. Given the specific mutation profiles, the sample presents potential eligibility for targeted therapeutic interventions such as APR-246.
-
-### **2. Sequence Quality and Features**
-*   **Accession:** NM_000546 (*Homo sapiens*)
-*   **Sequence Length:** 2591 bp
-*   **GC Content:** 52.8%
-*   **Codon Usage Profile:** The sequence demonstrates characteristic arginine codon enrichment (e.g., CGG at 0.24, CGC at 0.22), which is consistent with the observed amino acid composition (R: 0.076).
-
-### **3. Mutation Analysis Findings**
-The pipeline identified three pathogenic-class hotspot mutations, all localized within the critical DNA-binding region:
-
-| Position | Original | Mutant | Codon Change | Amino Acid Change | Functional Impact |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-| 524 | G | A | CGT $\rightarrow$ CAT | **R175H** | DNA-binding disruption |
-| 742 | C | T | CGG $\rightarrow$ TGG | **R248W** | DNA-binding disruption |
-| 818 | G | A | CGT $\rightarrow$ CAT | **R273H** | DNA-binding disruption |
-
-All three mutations are situated within the DNA-binding domain (residues 94–292), a region responsible for approximately 90% of cancer-related *TP53* mutations.
-
-### **4. ORF and Isoform Findings**
-Two Open Reading Frames (ORFs) were identified:
-*   **Canonical ORF (+1 frame):** Spans residues 203–1384 (1181 bp), encoding the **p53$\alpha$ isoform (393 aa)**. This is the primary functional protein responsible for tumor suppression.
-*   **Alternative ORF (+2 frame):** A shorter fragment (267 aa) was detected. This may represent a non-canonical isoform or a truncated protein product, which warrants further investigation regarding its role in dominant-negative effects.
-
-### **5. Protein Domain Architecture**
-The protein architecture is defined by two primary functional modules:
-*   **P53 DNA-Binding Domain (Pfam PF00870):** Residues 94–292. This domain is the locus of all detected mutations, suggesting a high likelihood of impaired transcriptional regulation.
-*   **P53 Tetramerization Domain (Pfam PF07710):** Residues 323–356. This domain is essential for the formation of the functional p53 tetramer.
-
-### **6. Cross-Species Conservation Analysis**
-Phylogenetic validation confirms high sequence conservation across vertebrates, following the expected evolutionary trajectory: *Homo sapiens $\rightarrow$ Pan troglodytes $\rightarrow$ Mus musculus/Rattus norvegicus $\rightarrow$ Danio rerio*. This high degree of conservation underscores the fundamental biological necessity of the *TP53* sequence for maintaining genome integrity, reinforcing the high pathogenicity likelihood of the identified mutations.
-
-### **7. Clinical Significance Assessment**
-*   **Functional Classification:** Based on IARC criteria, these hotspot missense mutations likely fall into **Class 1** (loss of transactivation) or **Class 4** (Gain-of-Function/GOF), where the mutant protein acquires new oncogenic properties and exerts dominant-negative effects.
-*   **Therapeutic Implications:** 
-    *   The **R175H** and **R248W** mutations are specific targets for **APR-246 (eprenetapopt)**, which aims to restore the wild-type conformation of the p53 protein.
-    *   Clinical relevance is highly dependent on the cancer type. If this profile is identified in **Ovarian cancer** (~96% frequency), **Triple-negative breast cancer** (~80%), or **Small cell lung cancer** (~75%), the clinical urgency is maximal.
-*   **Risk Profile:** The presence of these mutations is strongly associated with genomic instability and complex karyotypes.
-
-### **8. Recommendations and Next Steps**
-1.  **Clinical Correlation:** Immediately cross-reference these findings with the patient's primary tumor type to assess statistical risk and therapeutic alignment.
-2.  **Therapeutic Screening:** Evaluate the patient's eligibility for clinical trials involving **APR-246** or **PRIMA-1MET**, specifically targeting the R175H and R248W variants.
-3.  **Functional Assays:** Conduct downstream transcriptional activity assays to differentiate between Class 1 (loss of function) and Class 4 (gain of function) activity.
-4.  **Isoform Investigation:** Perform RNA-Seq to determine if the alternative +2 ORF is being actively translated, as this may contribute to the oncogenic phenotype.
