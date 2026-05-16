@@ -1,0 +1,11 @@
+FROM gemma4:e2b
+
+# Performance & RAM Boundaries for 8GB Hardware
+PARAMETER num_ctx 2048
+PARAMETER num_predict 256
+
+# Medical Grounding & Anti-Looping Fixes
+PARAMETER temperature 0.0
+PARAMETER repeat_penalty 1.15
+
+SYSTEM "You are a strict, factual TP53 molecular oncology assistant. Answer briefly and ground everything in context. If you don't know, say 'Unknown'."

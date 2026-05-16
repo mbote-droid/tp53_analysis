@@ -78,15 +78,15 @@
         "method": "POST",
         "url": "http://localhost:8000/analyse",
         "sendBody": true,
-        "bodyParameters": {
-          "parameters": [
-            { "name": "pipeline_data", "value": "={{$json.pipeline_data}}" },
-            { "name": "include_report", "value": true },
-            { "name": "include_sources", "value": false }
-          ]
-        },
-        "options": { "timeout": 300000 }
-      },
+        "specifyBody": "json",
+          "jsonBody": "{\n  \"pipeline_data\": {{$json.pipeline_data}},\n  \"include_report\": true,\n  \"include_sources\": false\n}
+            
+            
+            
+          
+        
+"options": { "timeout": 300000 }
+      }
       "notes": "Dispatches to all 6 RAG agents: mutation, ORF, phylogenetics, domain, clinical, report"
     },
     {
