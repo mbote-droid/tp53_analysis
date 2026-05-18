@@ -5,6 +5,7 @@
 [![Ollama](https://img.shields.io/badge/Runtime-Ollama-green)](https://ollama.com)
 [![ChromaDB](https://img.shields.io/badge/Vector%20DB-ChromaDB-orange)](https://trychroma.com)
 [![FastAPI](https://img.shields.io/badge/API-FastAPI-009688)](https://fastapi.tiangolo.com)
+[![Streamlit](https://shields.io)](https://streamlit.io)
 
 
 > **Health & Sciences Track | Ollama Special Track | Safety & Trust Track**

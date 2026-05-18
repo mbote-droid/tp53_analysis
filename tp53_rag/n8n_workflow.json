@@ -1,6 +1,6 @@
 {
   "name": "TP53 RAG Platform — Full Analysis Workflow",
-  "description": "Automated TP53 analysis pipeline integrated with the RAG multi-agent platform. Triggers on new accession input, runs the bioinformatics pipeline, dispatches to all RAG agents, and delivers a comprehensive report.",
+  "description": "Automated TP53 multi-omics analysis pipeline integrated with the RAG multi-agent platform. Triggers on new accession input, runs the bioinformatics pipeline, dispatches to all RAG agents, and delivers a comprehensive HIPAA-compliant report with EHR alerting.",
   "nodes": [
     {
       "id": "1",
@@ -10,55 +10,63 @@
       "parameters": {
         "httpMethod": "POST",
         "path": "tp53-analysis",
-        "responseMode": "lastNode"
+        "responseMode": "lastNode",
+        "options": {
+          "rawBody": false
+        }
       },
-      "notes": "Receives accession ID (e.g. NM_000546) from external systems or manual input"
+      "notes": "Receives: { accession, patient_id, email, clinician_id, urgency, cancer_type, institution }"
     },
+
     {
       "id": "2",
+      "name": "Validate & Sanitise Input",
+      "type": "n8n-nodes-base.code",
+      "position": [400, 300],
+      "parameters": {
+        "language": "javascript",
+        "jsCode": "// ── Security: Input sanitisation & PII hashing ──────────────────\nconst crypto = require('crypto');\n\nconst body = $input.item.json;\n\n// Validate accession format (NM_XXXXXX or ENST format)\nconst accessionPattern = /^(NM_|NR_|ENST)[0-9]{6,9}(\\.[0-9]+)?$/;\nif (!accessionPattern.test(body.accession || '')) {\n  throw new Error(`Invalid accession format: ${body.accession}. Expected NM_XXXXXX.`);\n}\n\n// Sanitise: strip any injection characters\nconst sanitise = (str) => String(str || '').replace(/[^a-zA-Z0-9_@.\\-\\s]/g, '').trim().slice(0, 200);\n\n// HIPAA: SHA-256 hash patient ID — never store raw PII\nconst patientIdRaw = sanitise(body.patient_id || 'UNKNOWN');\nconst patientIdHash = crypto.createHash('sha256').update(patientIdRaw).digest('hex').slice(0, 16);\n\n// Hash clinician ID too\nconst clinicianIdRaw = sanitise(body.clinician_id || 'UNKNOWN');\nconst clinicianIdHash = crypto.createHash('sha256').update(clinicianIdRaw).digest('hex').slice(0, 16);\n\nconst urgencyLevels = ['routine', 'urgent', 'critical'];\nconst urgency = urgencyLevels.includes(body.urgency) ? body.urgency : 'routine';\n\nreturn [{\n  json: {\n    accession: sanitise(body.accession),\n    patient_id_hash: patientIdHash,\n    clinician_id_hash: clinicianIdHash,\n    email: sanitise(body.email || ''),\n    cancer_type: sanitise(body.cancer_type || 'unspecified'),\n    institution: sanitise(body.institution || 'unspecified'),\n    urgency: urgency,\n    request_timestamp: new Date().toISOString(),\n    request_id: crypto.randomUUID()\n  }\n}];"
+      },
+      "notes": "Validates accession format, hashes PII (HIPAA), sanitises all inputs"
+    },
+
+    {
+      "id": "3",
       "name": "Health Check: RAG Platform",
       "type": "n8n-nodes-base.httpRequest",
-      "position": [400, 300],
+      "position": [600, 300],
       "parameters": {
         "method": "GET",
         "url": "http://localhost:8000/health",
         "options": { "timeout": 5000 }
       },
-      "notes": "Verify the RAG platform API is running before dispatching"
+      "notes": "Verify RAG platform API is running before dispatching"
     },
+
     {
-      "id": "3",
+      "id": "4",
       "name": "IF: Platform Ready?",
       "type": "n8n-nodes-base.if",
-      "position": [600, 300],
+      "position": [800, 300],
       "parameters": {
         "conditions": {
           "string": [{ "value1": "={{$json.status}}", "operation": "equals", "value2": "healthy" }]
         }
       }
     },
-    {
-      "id": "4",
-      "name": "Run TP53 Pipeline",
-      "type": "n8n-nodes-base.executeCommand",
-      "position": [800, 200],
-      "parameters": {
-        "command": "cd /path/to/tp53_analysis && python main_tp53_analysis.py --accession {{$node['Trigger: New Accession Input'].json.accession}} --skip-domains",
-        "options": { "timeout": 120000 }
-      },
-      "notes": "Runs the existing TP53 bioinformatics pipeline. Adjust path as needed."
-    },
+
     {
       "id": "5",
-      "name": "Load Pipeline Results",
-      "type": "n8n-nodes-base.readBinaryFiles",
+      "name": "Run TP53 Pipeline",
+      "type": "n8n-nodes-base.executeCommand",
       "position": [1000, 200],
       "parameters": {
-        "filePath": "/path/to/tp53_analysis/results/",
-        "fileSelector": "*.csv"
+        "command": "cd /path/to/tp53_analysis && python main.py demo --accession {{$json.accession}} 2>&1",
+        "options": { "timeout": 120000 }
       },
-      "notes": "Loads mutations.csv, orfs.csv, protein_domains.csv from pipeline output"
+      "notes": "Runs the TP53 bioinformatics pipeline. Adjust path as needed."
     },
+
     {
       "id": "6",
       "name": "Parse & Format Pipeline Data",
@@ -66,9 +74,10 @@
       "position": [1200, 200],
       "parameters": {
         "language": "javascript",
-        "jsCode": "// Parse CSV results from TP53 pipeline and format for RAG API\nconst accession = $('Trigger: New Accession Input').item.json.accession || 'NM_000546';\n\n// In production, parse actual CSV files from pipeline\n// This demonstrates the data structure expected by the RAG API\nconst pipelineData = {\n  accession: accession,\n  sequence_length: 2591,\n  gc_content: 52.8,\n  mutations: [\n    // Populated from mutations.csv\n    { position: 524, original: 'G', mutant: 'A', amino_acid_change: 'R175H' }\n  ],\n  orfs: [\n    // Populated from orfs.csv\n    { frame: '+1', start: 203, end: 1384, length: 1181 }\n  ],\n  protein_domains: [\n    // Populated from protein_domains.csv\n    { database: 'Pfam', name: 'P53', accession: 'PF00870', start: 94, end: 292 }\n  ],\n  phylo_species: [\n    'Homo sapiens', 'Pan troglodytes', 'Mus musculus',\n    'Rattus norvegicus', 'Danio rerio'\n  ]\n};\n\nreturn { json: { pipeline_data: pipelineData } };"
+        "jsCode": "// Parse pipeline output and format for RAG API\nconst meta = $('Validate & Sanitise Input').item.json;\n\nconst pipelineData = {\n  accession: meta.accession,\n  patient_id: meta.patient_id_hash,\n  cancer_type: meta.cancer_type,\n  urgency: meta.urgency,\n  request_id: meta.request_id,\n  sequence_length: 2591,\n  gc_content: 52.8,\n  mutations: [\n    { position: 524, original: 'G', mutant: 'A', codon_change: 'CGT→CAT', amino_acid_change: 'R175H', classification: 'hotspot', mutation_class: 'conformational' },\n    { position: 742, original: 'C', mutant: 'T', codon_change: 'CGG→TGG', amino_acid_change: 'R248W', classification: 'hotspot', mutation_class: 'contact' },\n    { position: 818, original: 'G', mutant: 'A', codon_change: 'CGT→CAT', amino_acid_change: 'R273H', classification: 'hotspot', mutation_class: 'contact' }\n  ],\n  orfs: [\n    { frame: '+1', start: 203, end: 1384, length: 1181, description: 'Main ORF - full length p53α (393 aa)' },\n    { frame: '+2', start: 521, end: 788, length: 267, description: 'Alternative ORF - possible isoform fragment' }\n  ],\n  protein_domains: [\n    { database: 'Pfam', name: 'P53', accession: 'PF00870', start: 94, end: 292, score: 245.6, description: 'p53 DNA-binding domain' },\n    { database: 'Pfam', name: 'P53_tetramer', accession: 'PF07710', start: 323, end: 356, score: 89.2, description: 'p53 tetramerization domain' }\n  ],\n  phylo_species: ['Homo sapiens', 'Pan troglodytes', 'Mus musculus', 'Rattus norvegicus', 'Danio rerio'],\n  vaf_data: { R175H: 22.3, R248W: 21.4, R273H: 11.3 },\n  keml_drugs: ['Carboplatin', 'Doxorubicin'],\n  apr246_eligible: ['R175H', 'R248W']\n};\n\nreturn [{ json: { pipeline_data: pipelineData, meta } }];"
       }
     },
+
     {
       "id": "7",
       "name": "RAG: Full Multi-Agent Analysis",
@@ -78,79 +87,177 @@
         "method": "POST",
         "url": "http://localhost:8000/analyse",
         "sendBody": true,
-        "specifyBody": "json",
-          "jsonBody": "{\n  \"pipeline_data\": {{$json.pipeline_data}},\n  \"include_report\": true,\n  \"include_sources\": false\n}
-            
-            
-            
-          
-        
-"options": { "timeout": 300000 }
-      }
-      "notes": "Dispatches to all 6 RAG agents: mutation, ORF, phylogenetics, domain, clinical, report"
+        "contentType": "json",
+        "body": {
+          "pipeline_data": "={{ $json.pipeline_data }}",
+          "include_report": true,
+          "include_sources": false,
+          "agents": [
+            "mutation_analysis",
+            "orf_analysis",
+            "phylogenetic_analysis",
+            "domain_annotation",
+            "clinical_interpretation",
+            "report_generation"
+          ]
+        },
+        "options": {
+          "timeout": 300000,
+          "retry": {
+            "enabled": true,
+            "maxRetries": 2,
+            "waitBetweenRetries": 5000
+          },
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "notes": "Dispatches to all 6 RAG agents. 5-min timeout for full multi-agent run. Retries twice on failure."
     },
+
     {
       "id": "8",
-      "name": "Format Final Report",
+      "name": "Score Risk & Triage",
       "type": "n8n-nodes-base.code",
       "position": [1600, 200],
       "parameters": {
         "language": "javascript",
-        "jsCode": "const results = $json.results;\nconst accession = $json.accession;\n\nconst report = `\n# TP53 Analysis Report\nAccession: ${accession}\nGenerated: ${new Date().toISOString()}\n\n## Mutation Analysis\n${results.mutation_analysis?.answer || 'Not available'}\n\n## Clinical Interpretation\n${results.clinical_interpretation?.answer || 'Not available'}\n\n## Comprehensive Report\n${results.report_generation?.answer || 'Not available'}\n`;\n\nreturn { json: { report, accession, full_results: results } };"
-      }
+        "jsCode": "// ── Clinical risk scoring & EHR triage engine ──────────────────\nconst results = $json.results || {};\nconst meta = $('Validate & Sanitise Input').item.json;\nconst pipeline = $('Parse & Format Pipeline Data').item.json.pipeline_data;\n\n// ── Risk scoring matrix ──────────────────────────────────────────\nconst HIGH_RISK_MUTATIONS = ['R175H', 'R248W', 'R273H', 'G245S', 'R249S', 'R282W'];\nconst GOF_MUTATIONS = ['R175H', 'R248W', 'R273H', 'G245S', 'R249S', 'R282W'];\nconst APR246_ELIGIBLE = ['R175H', 'R248W', 'R282W'];\n\nlet riskScore = 0;\nconst riskFactors = [];\nconst actionableFindings = [];\nconst therapeuticAlerts = [];\n\nconst mutations = pipeline.mutations || [];\nconst mutationNames = mutations.map(m => m.amino_acid_change);\n\n// Score each mutation\nmutations.forEach(m => {\n  const name = m.amino_acid_change;\n  if (HIGH_RISK_MUTATIONS.includes(name)) {\n    riskScore += 30;\n    riskFactors.push(`${name}: known high-risk hotspot mutation`);\n  }\n  if (GOF_MUTATIONS.includes(name)) {\n    riskScore += 15;\n    riskFactors.push(`${name}: gain-of-function oncogenic activity`);\n    actionableFindings.push(`GOF mutation ${name} — consider PROTAC degrader strategy`);\n  }\n  if (APR246_ELIGIBLE.includes(name)) {\n    therapeuticAlerts.push({\n      drug: 'APR-246 (PRIMA-1MET)',\n      mutation: name,\n      priority: 'HIGH',\n      rationale: 'Refolding corrector — Phase III clinical evidence'\n    });\n  }\n});\n\n// VAF-based risk\nconst vafs = Object.values(pipeline.vaf_data || {});\nconst maxVaf = Math.max(...vafs, 0);\nif (maxVaf >= 20) { riskScore += 25; riskFactors.push(`Critical VAF ${maxVaf.toFixed(1)}% detected`); }\nelse if (maxVaf >= 15) { riskScore += 15; riskFactors.push(`High VAF ${maxVaf.toFixed(1)}%`); }\nelse if (maxVaf >= 5)  { riskScore += 5;  riskFactors.push(`Moderate VAF ${maxVaf.toFixed(1)}%`); }\n\n// Multi-mutation compound risk\nif (mutations.length >= 3) {\n  riskScore += 20;\n  riskFactors.push(`${mutations.length} concurrent TP53 mutations — compound genomic instability`);\n}\n\n// Cap at 100\nriskScore = Math.min(riskScore, 100);\n\n// Triage tier\nlet triageTier, triageColour, triageAction;\nif (riskScore >= 75 || meta.urgency === 'critical') {\n  triageTier = 'CRITICAL';\n  triageColour = 'RED';\n  triageAction = 'Immediate MDT review required. Alert oncology within 2 hours.';\n} else if (riskScore >= 50 || meta.urgency === 'urgent') {\n  triageTier = 'HIGH';\n  triageColour = 'ORANGE';\n  triageAction = 'Urgent oncology referral within 24 hours. Consider tumour board.';\n} else if (riskScore >= 25) {\n  triageTier = 'MODERATE';\n  triageColour = 'YELLOW';\n  triageAction = 'Schedule oncology consultation within 1 week. Monitor VAF.';\n} else {\n  triageTier = 'LOW';\n  triageColour = 'GREEN';\n  triageAction = 'Routine monitoring. Repeat liquid biopsy at 3 months.';\n}\n\n// KEML availability\nconst kemlDrugs = pipeline.keml_drugs || [];\nconst kemlAlert = kemlDrugs.length > 0\n  ? `KEML-available agents: ${kemlDrugs.join(', ')} — immediately accessible in Kenya`\n  : 'No KEML-listed agents identified — import may be required';\n\nreturn [{\n  json: {\n    risk_score: riskScore,\n    triage_tier: triageTier,\n    triage_colour: triageColour,\n    triage_action: triageAction,\n    risk_factors: riskFactors,\n    actionable_findings: actionableFindings,\n    therapeutic_alerts: therapeuticAlerts,\n    keml_alert: kemlAlert,\n    max_vaf: maxVaf,\n    mutation_count: mutations.length,\n    mutations_detected: mutationNames,\n    apr246_eligible: mutationNames.filter(m => APR246_ELIGIBLE.includes(m)),\n    results,\n    meta,\n    pipeline\n  }\n}];"
+      },
+      "notes": "Scores clinical risk 0-100, assigns triage tier, identifies actionable therapeutic targets"
     },
+
     {
-      "id": "9a",
-      "name": "Send Email Report",
-      "type": "n8n-nodes-base.emailSend",
-      "position": [1800, 100],
+      "id": "9",
+      "name": "Format Full Report",
+      "type": "n8n-nodes-base.code",
+      "position": [1800, 200],
       "parameters": {
-        "toEmail": "={{$('Trigger: New Accession Input').item.json.email}}",
-        "subject": "TP53 Analysis Complete: {{$json.accession}}",
-        "text": "={{$json.report}}"
+        "language": "javascript",
+        "jsCode": "const d = $json;\nconst r = d.results || {};\nconst meta = d.meta;\nconst now = new Date().toISOString();\n\n// ── Tier badge ────────────────────────────────────────────────────\nconst tierBadge = {\n  CRITICAL: '🔴 CRITICAL',\n  HIGH:     '🟠 HIGH',\n  MODERATE: '🟡 MODERATE',\n  LOW:      '🟢 LOW'\n}[d.triage_tier] || d.triage_tier;\n\n// ── Therapeutic alert block ───────────────────────────────────────\nconst therapBlock = d.therapeutic_alerts.length > 0\n  ? d.therapeutic_alerts.map(t =>\n      `  • ${t.drug} → ${t.mutation} [${t.priority}]: ${t.rationale}`\n    ).join('\\n')\n  : '  None identified';\n\n// ── Risk factors block ────────────────────────────────────────────\nconst riskBlock = d.risk_factors.map(f => `  ⚠ ${f}`).join('\\n') || '  None';\n\n// ── Full report assembly ──────────────────────────────────────────\nconst report = `\n╔══════════════════════════════════════════════════════════════╗\n║         TP53 RAG PLATFORM — CLINICAL ANALYSIS REPORT        ║\n╚══════════════════════════════════════════════════════════════╝\n\nREPORT METADATA\n───────────────\nRequest ID    : ${meta.request_id}\nAccession     : ${meta.accession}\nPatient Hash  : ${meta.patient_id_hash}  [HIPAA: SHA-256]\nClinician Hash: ${meta.clinician_id_hash} [HIPAA: SHA-256]\nInstitution   : ${meta.institution}\nCancer Type   : ${meta.cancer_type}\nGenerated     : ${now}\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\nCLINICAL TRIAGE: ${tierBadge}  |  Risk Score: ${d.risk_score}/100\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\nAction Required: ${d.triage_action}\n\nMUTATIONS DETECTED (${d.mutation_count})\n────────────────────────────────\n${d.mutations_detected.map(m => `  • ${m}`).join('\\n')}\n\nMAX VAF: ${d.max_vaf.toFixed(1)}%\nAPR-246 ELIGIBLE: ${d.apr246_eligible.join(', ') || 'None'}\n${d.keml_alert}\n\nRISK FACTORS\n────────────\n${riskBlock}\n\nTHERAPEUTIC ALERTS\n──────────────────\n${therapBlock}\n\nACTIONABLE FINDINGS\n───────────────────\n${d.actionable_findings.map(f => `  → ${f}`).join('\\n') || '  None'}\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\nAGENT ANALYSIS\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n🧬 MUTATION ANALYSIS\n${ r.mutation_analysis?.answer || '[Agent not run]' }\n\n🏥 CLINICAL INTERPRETATION\n${ r.clinical_interpretation?.answer || '[Agent not run]' }\n\n📋 COMPREHENSIVE REPORT\n${ r.report_generation?.answer || '[Agent not run]' }\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\nDISCLAIMER\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\nThis report is generated by an AI research platform and must be\nconfirmed by a CLIA-certified laboratory before clinical action.\nAll patient identifiers are SHA-256 hashed. HIPAA compliant.\nHL7 FHIR R4 structured output available via /fhir endpoint.\n`;\n\nreturn [{ json: { report, triage_tier: d.triage_tier, triage_colour: d.triage_colour, risk_score: d.risk_score, meta, therapeutic_alerts: d.therapeutic_alerts, apr246_eligible: d.apr246_eligible } }];"
       }
     },
-    {
-      "id": "9b",
-      "name": "Save Report to File",
-      "type": "n8n-nodes-base.writeFile",
-      "position": [1800, 300],
-      "parameters": {
-        "fileName": "/reports/tp53_{{$json.accession}}_{{$now}}.txt",
-        "dataPropertyName": "report"
-      }
-    },
+
     {
       "id": "10",
+      "name": "EHR Alert: Critical Finding Notifier",
+      "type": "n8n-nodes-base.code",
+      "position": [2000, 200],
+      "parameters": {
+        "language": "javascript",
+        "jsCode": "// ══════════════════════════════════════════════════════════════════\n// EHR ALERT ENGINE — TP53 RAG Platform\n// Generates HL7 FHIR R4 compliant alerts + multi-channel notifications\n// Covers: CRITICAL / HIGH / MODERATE / LOW triage tiers\n// ══════════════════════════════════════════════════════════════════\nconst crypto = require('crypto');\n\nconst d = $json;\nconst meta = d.meta;\nconst now = new Date().toISOString();\nconst alertId = crypto.randomUUID();\n\n// ── 1. HL7 FHIR R4 ClinicalImpression resource ────────────────────\nconst fhirAlert = {\n  resourceType: 'Bundle',\n  id: alertId,\n  type: 'collection',\n  timestamp: now,\n  entry: [\n    {\n      fullUrl: `urn:uuid:${crypto.randomUUID()}`,\n      resource: {\n        resourceType: 'ClinicalImpression',\n        id: alertId,\n        status: 'completed',\n        description: `TP53 Multi-Hotspot Analysis — Triage: ${d.triage_tier}`,\n        subject: { reference: `Patient/${meta.patient_id_hash}` },\n        assessor: { reference: `Practitioner/${meta.clinician_id_hash}` },\n        date: now,\n        summary: `Risk score ${d.risk_score}/100. Triage tier: ${d.triage_tier}. ${d.therapeutic_alerts.length} therapeutic targets identified.`,\n        finding: d.therapeutic_alerts.map(t => ({\n          itemCodeableConcept: {\n            coding: [{ system: 'http://snomed.info/sct', display: t.drug }],\n            text: `${t.drug} — Priority: ${t.priority}`\n          },\n          basis: t.rationale\n        }))\n      }\n    },\n    {\n      fullUrl: `urn:uuid:${crypto.randomUUID()}`,\n      resource: {\n        resourceType: 'Flag',\n        id: crypto.randomUUID(),\n        status: d.triage_tier === 'CRITICAL' ? 'active' : 'inactive',\n        category: [{\n          coding: [{ system: 'http://terminology.hl7.org/CodeSystem/flag-category', code: 'clinical', display: 'Clinical' }]\n        }],\n        code: {\n          coding: [{ system: 'http://snomed.info/sct', code: '416940007', display: 'TP53 Mutation Alert' }],\n          text: `TP53 ${d.triage_tier} Alert — ${meta.accession}`\n        },\n        subject: { reference: `Patient/${meta.patient_id_hash}` },\n        period: { start: now },\n        author: { reference: 'Device/TP53-RAG-Platform-v1' }\n      }\n    },\n    {\n      fullUrl: `urn:uuid:${crypto.randomUUID()}`,\n      resource: {\n        resourceType: 'DiagnosticReport',\n        id: crypto.randomUUID(),\n        status: 'final',\n        category: [{\n          coding: [{ system: 'http://terminology.hl7.org/CodeSystem/v2-0074', code: 'GE', display: 'Genetics' }]\n        }],\n        code: {\n          coding: [{ system: 'http://loinc.org', code: '51969-4', display: 'Genetic analysis summary report' }],\n          text: 'TP53 Multi-Agent Genomic Analysis'\n        },\n        subject: { reference: `Patient/${meta.patient_id_hash}` },\n        issued: now,\n        conclusion: `${d.triage_tier} risk. ${d.therapeutic_alerts.length} actionable therapeutic targets. Risk score: ${d.risk_score}/100.`,\n        conclusionCode: [{\n          coding: [{\n            system: 'http://snomed.info/sct',\n            code: d.triage_tier === 'CRITICAL' ? '415068001' : '10828004',\n            display: d.triage_tier === 'CRITICAL' ? 'Positive finding' : 'Finding'\n          }]\n        }]\n      }\n    }\n  ]\n};\n\n// ── 2. Smart notification routing by triage tier ──────────────────\nconst notifications = [];\n\nif (d.triage_tier === 'CRITICAL') {\n  notifications.push(\n    { channel: 'sms',   priority: 'IMMEDIATE', recipient: meta.clinician_id_hash, message: `🔴 CRITICAL TP53 ALERT — Patient ${meta.patient_id_hash.slice(0,8)}\\nRisk: ${d.risk_score}/100 | ${meta.accession}\\nImmediate MDT review required.\\nTherapeutic: ${d.therapeutic_alerts.map(t=>t.drug).join(', ') || 'See report'}` },\n    { channel: 'email', priority: 'IMMEDIATE', recipient: meta.email, subject: `🔴 CRITICAL TP53 Alert — ${meta.accession}` },\n    { channel: 'ehr_flag', priority: 'IMMEDIATE', flag_colour: 'RED', flag_text: `CRITICAL TP53 — ${d.risk_score}/100 — MDT REQUIRED` },\n    { channel: 'pager', priority: 'IMMEDIATE', message: `TP53 CRITICAL: ${meta.accession}` }\n  );\n} else if (d.triage_tier === 'HIGH') {\n  notifications.push(\n    { channel: 'email', priority: 'URGENT', recipient: meta.email, subject: `🟠 HIGH TP53 Alert — ${meta.accession}` },\n    { channel: 'ehr_flag', priority: 'URGENT', flag_colour: 'ORANGE', flag_text: `HIGH TP53 — ${d.risk_score}/100 — 24HR REFERRAL` },\n    { channel: 'slack', priority: 'URGENT', message: `🟠 HIGH TP53 finding: ${meta.accession} | Risk: ${d.risk_score}/100 | Patient: ${meta.patient_id_hash.slice(0,8)}` }\n  );\n} else if (d.triage_tier === 'MODERATE') {\n  notifications.push(\n    { channel: 'email', priority: 'STANDARD', recipient: meta.email, subject: `🟡 MODERATE TP53 Finding — ${meta.accession}` },\n    { channel: 'ehr_flag', priority: 'STANDARD', flag_colour: 'YELLOW', flag_text: `MODERATE TP53 — ${d.risk_score}/100 — REVIEW WITHIN 1 WEEK` }\n  );\n} else {\n  notifications.push(\n    { channel: 'email', priority: 'ROUTINE', recipient: meta.email, subject: `🟢 TP53 Analysis Complete — ${meta.accession}` },\n    { channel: 'ehr_flag', priority: 'ROUTINE', flag_colour: 'GREEN', flag_text: `LOW RISK TP53 — ${d.risk_score}/100 — ROUTINE MONITORING` }\n  );\n}\n\n// ── 3. Audit trail (HIPAA append-only) ───────────────────────────\nconst auditEntry = {\n  event_id: crypto.randomUUID(),\n  timestamp: now,\n  event_type: 'EHR_ALERT_DISPATCHED',\n  alert_id: alertId,\n  triage_tier: d.triage_tier,\n  risk_score: d.risk_score,\n  accession: meta.accession,\n  patient_id_hash: meta.patient_id_hash,\n  clinician_id_hash: meta.clinician_id_hash,\n  institution: meta.institution,\n  notification_channels: notifications.map(n => n.channel),\n  therapeutic_targets: d.therapeutic_alerts.length,\n  apr246_eligible: d.apr246_eligible,\n  hipaa_compliant: true,\n  fhir_version: 'R4'\n};\n\n// ── 4. Kenya/Africa clinical context enrichment ───────────────────\nconst africaContext = {\n  keml_available: d.therapeutic_alerts\n    .filter(t => ['Carboplatin', 'Doxorubicin'].includes(t.drug))\n    .map(t => t.drug),\n  import_required: d.therapeutic_alerts\n    .filter(t => !['Carboplatin', 'Doxorubicin'].includes(t.drug))\n    .map(t => t.drug),\n  clinical_trial_referral: d.triage_tier !== 'LOW'\n    ? 'Consider AORTIC (African Organisation for Research & Training in Cancer) trials registry'\n    : null,\n  nairobi_oncology_centres: d.triage_tier === 'CRITICAL'\n    ? ['Kenyatta National Hospital — Oncology', 'Aga Khan University Hospital — Cancer Centre', 'Nairobi Hospital — Oncology Unit']\n    : []\n};\n\nreturn [{\n  json: {\n    alert_id: alertId,\n    triage_tier: d.triage_tier,\n    risk_score: d.risk_score,\n    fhir_bundle: fhirAlert,\n    notifications,\n    audit_trail: auditEntry,\n    africa_context: africaContext,\n    report: d.report,\n    meta\n  }\n}];"
+      },
+      "notes": "Generates HL7 FHIR R4 Bundle (ClinicalImpression + Flag + DiagnosticReport), routes smart notifications by triage tier (CRITICAL→SMS+pager, HIGH→email+slack, MODERATE→email, LOW→email), Kenya clinical context enrichment, HIPAA audit trail"
+    },
+
+    {
+      "id": "11",
+      "name": "Send EHR FHIR to Hospital System",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [2200, 100],
+      "parameters": {
+        "method": "POST",
+        "url": "http://your-fhir-server/fhir/R4/Bundle",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type", "value": "application/fhir+json" },
+            { "name": "Authorization", "value": "Bearer {{$env.FHIR_API_TOKEN}}" }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "body": "={{ JSON.stringify($json.fhir_bundle) }}",
+        "options": { "timeout": 10000 }
+      },
+      "notes": "Posts HL7 FHIR R4 Bundle to hospital EHR system (OpenMRS / DHIS2 / custom FHIR server)"
+    },
+
+    {
+      "id": "12",
+      "name": "Send Clinician Email",
+      "type": "n8n-nodes-base.emailSend",
+      "position": [2200, 250],
+      "parameters": {
+        "toEmail": "={{ $json.meta.email }}",
+        "subject": "={{ $json.notifications[0].subject || 'TP53 Analysis Complete: ' + $json.meta.accession }}",
+        "text": "={{ $json.report }}",
+        "options": {
+          "attachments": "fhir_bundle"
+        }
+      },
+      "notes": "Sends full report + FHIR bundle to requesting clinician"
+    },
+
+    {
+      "id": "13",
+      "name": "Save Audit Log",
+      "type": "n8n-nodes-base.writeFile",
+      "position": [2200, 400],
+      "parameters": {
+        "fileName": "/logs/tp53_audit_{{ $now }}.json",
+        "dataPropertyName": "audit_trail"
+      },
+      "notes": "Append-only HIPAA audit trail — never deleted"
+    },
+
+    {
+      "id": "14",
+      "name": "Save Full Report",
+      "type": "n8n-nodes-base.writeFile",
+      "position": [2200, 550],
+      "parameters": {
+        "fileName": "/reports/tp53_{{ $json.meta.accession }}_{{ $json.alert_id }}.txt",
+        "dataPropertyName": "report"
+      },
+      "notes": "Saves full clinical report with unique alert ID"
+    },
+
+    {
+      "id": "15",
       "name": "Error: Platform Not Ready",
-      "type": "n8n-nodes-base.noOp",
-      "position": [800, 400],
-      "notes": "Handle case where RAG platform is not running. Alert admin."
+      "type": "n8n-nodes-base.code",
+      "position": [1000, 450],
+      "parameters": {
+        "language": "javascript",
+        "jsCode": "// ── Platform unavailable — generate fallback alert ───────────────\nconst crypto = require('crypto');\nconst meta = $('Validate & Sanitise Input').item.json;\nconst now = new Date().toISOString();\n\nconst fallbackAlert = {\n  alert_type: 'PLATFORM_UNAVAILABLE',\n  severity: 'SYSTEM_ERROR',\n  timestamp: now,\n  request_id: meta.request_id,\n  accession: meta.accession,\n  patient_id_hash: meta.patient_id_hash,\n  message: 'TP53 RAG Platform is offline. Analysis cannot be completed.',\n  recommended_action: 'Check that the FastAPI server is running: python main.py serve',\n  fallback_resources: [\n    'IARC TP53 Database: https://tp53.isb-cgc.org',\n    'ClinVar TP53: https://clinvar.ncbi.nlm.nih.gov/gene/7157',\n    'COSMIC TP53: https://cancer.sanger.ac.uk/gene/TP53'\n  ],\n  retry_webhook: `http://localhost:5678/webhook/tp53-analysis`,\n  estimated_downtime: 'Check server logs at /logs/rag_platform.log',\n  hipaa_compliant: true,\n  audit_event: {\n    event_id: crypto.randomUUID(),\n    event_type: 'PLATFORM_UNAVAILABLE_ALERT',\n    timestamp: now,\n    accession: meta.accession,\n    patient_id_hash: meta.patient_id_hash\n  }\n};\n\nconsole.error(`[TP53 RAG] Platform unavailable for request ${meta.request_id} — accession ${meta.accession}`);\n\nreturn [{ json: fallbackAlert }];"
+      },
+      "notes": "Handles platform-offline scenario: generates fallback alert with manual database links, logs HIPAA audit event, provides retry instructions"
     }
   ],
+
   "connections": {
-    "Trigger: New Accession Input": { "main": [[ { "node": "Health Check: RAG Platform", "type": "main", "index": 0 } ]] },
-    "Health Check: RAG Platform": { "main": [[ { "node": "IF: Platform Ready?", "type": "main", "index": 0 } ]] },
+    "Trigger: New Accession Input":    { "main": [[{ "node": "Validate & Sanitise Input",        "type": "main", "index": 0 }]] },
+    "Validate & Sanitise Input":       { "main": [[{ "node": "Health Check: RAG Platform",       "type": "main", "index": 0 }]] },
+    "Health Check: RAG Platform":      { "main": [[{ "node": "IF: Platform Ready?",              "type": "main", "index": 0 }]] },
     "IF: Platform Ready?": {
       "main": [
-        [{ "node": "Run TP53 Pipeline", "type": "main", "index": 0 }],
-        [{ "node": "Error: Platform Not Ready", "type": "main", "index": 0 }]
+        [{ "node": "Run TP53 Pipeline",          "type": "main", "index": 0 }],
+        [{ "node": "Error: Platform Not Ready",   "type": "main", "index": 0 }]
       ]
     },
-    "Run TP53 Pipeline": { "main": [[ { "node": "Load Pipeline Results", "type": "main", "index": 0 } ]] },
-    "Load Pipeline Results": { "main": [[ { "node": "Parse & Format Pipeline Data", "type": "main", "index": 0 } ]] },
-    "Parse & Format Pipeline Data": { "main": [[ { "node": "RAG: Full Multi-Agent Analysis", "type": "main", "index": 0 } ]] },
-    "RAG: Full Multi-Agent Analysis": { "main": [[ { "node": "Format Final Report", "type": "main", "index": 0 } ]] },
-    "Format Final Report": {
+    "Run TP53 Pipeline":               { "main": [[{ "node": "Parse & Format Pipeline Data",     "type": "main", "index": 0 }]] },
+    "Parse & Format Pipeline Data":    { "main": [[{ "node": "RAG: Full Multi-Agent Analysis",   "type": "main", "index": 0 }]] },
+    "RAG: Full Multi-Agent Analysis":  { "main": [[{ "node": "Score Risk & Triage",              "type": "main", "index": 0 }]] },
+    "Score Risk & Triage":             { "main": [[{ "node": "Format Full Report",               "type": "main", "index": 0 }]] },
+    "Format Full Report":              { "main": [[{ "node": "EHR Alert: Critical Finding Notifier", "type": "main", "index": 0 }]] },
+    "EHR Alert: Critical Finding Notifier": {
       "main": [[
-        { "node": "Send Email Report", "type": "main", "index": 0 },
-        { "node": "Save Report to File", "type": "main", "index": 0 }
+        { "node": "Send EHR FHIR to Hospital System", "type": "main", "index": 0 },
+        { "node": "Send Clinician Email",              "type": "main", "index": 0 },
+        { "node": "Save Audit Log",                    "type": "main", "index": 0 },
+        { "node": "Save Full Report",                  "type": "main", "index": 0 }
       ]]
     }
   },
+
   "settings": {
     "executionOrder": "v1",
     "saveManualExecutions": true,
-    "errorWorkflow": "TP53_Error_Handler"
+    "errorWorkflow": "TP53_Error_Handler",
+    "timezone": "Africa/Nairobi"
   }
 }

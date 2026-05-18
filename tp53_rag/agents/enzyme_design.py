@@ -32,7 +32,7 @@ log = logging.getLogger(__name__)
 
 # ── Optional deps ─────────────────────────────────────────────────────────────
 try:
-    from utils.llm_cache import get_cache
+    from utils.rag_cache import get_cache
     _CACHE_AVAILABLE = True
 except ImportError:
     _CACHE_AVAILABLE = False

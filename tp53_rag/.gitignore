@@ -36,3 +36,13 @@ htmlcov/
 # OS files
 .DS_Store
 Thumbs.db
+
+#claude files
+CLAUDE.local.md
+progress.md
+.claude/
+
+#llama files
+models/*.gguf
+models/*.exe
+models/*.bin
