@@ -1,0 +1,10 @@
+[server]
+port = 8502
+address = "localhost"
+headless = false
+runOnSave = true
+
+[browser]
+gatherUsageStats = false
+serverAddress = "localhost"
+serverPort = 8502

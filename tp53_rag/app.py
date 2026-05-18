@@ -1,35 +1,23 @@
 """
-============================================================
-TP53 RAG Platform — Streamlit Web App (8 Tabs)
-tp53_rag/app.py
-============================================================
-Production-grade Streamlit interface with:
-- Multi-agent orchestration
-- Real-time streaming
-- HIPAA-compliant output
-- 3D structure visualization (Mol*, p53 domain map, VAF timeline)
-- Voice input (Whisper) + text
-- Enterprise dossier export
+TP53 RAG Platform — Streamlit Web App
+Clean rebuild — no streamlit_option_menu dependency
 """
-
 import os
 import sys
 import json
 import logging
 import tempfile
 from pathlib import Path
-from typing import Dict, List, Optional, Any
+from datetime import datetime
 
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import streamlit as st
-from streamlit_option_menu import option_menu
+import streamlit.components.v1 as components
+import pandas as pd
 import plotly.express as px
-import plotly.graph_objects as go
-from datetime import datetime
 
-# Configure Streamlit page
 st.set_page_config(
     page_title="TP53 RAG Platform",
     page_icon="🧬",
@@ -37,545 +25,465 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# Configure logging
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
 
-# ── Import RAG & agents ───────────────────────────────────────────
+# ── Import RAG modules ────────────────────────────────────────────
+RAG_AVAILABLE = False
 try:
     from agents.rag_chain import TP53RAGChain
     from agents.dispatcher import AgentDispatcher
     from knowledge_base.vector_store import TP53VectorStore
-    from utils.pii_scrubber import scrub_dict, PIIScrubber
+    RAG_AVAILABLE = True
 except ImportError as e:
-    st.error(f"Failed to import RAG modules: {e}")
-    st.stop()
+    st.error(f"RAG modules not found: {e}. Run: python main.py build")
 
-# ═══════════════════════════════════════════════════════════════════
-# Session state initialization
-# ═══════════════════════════════════════════════════════════════════
-
+# ── Session state ─────────────────────────────────────────────────
 @st.cache_resource
 def init_rag_system():
-    """Initialize RAG chain and vector store once."""
+    if not RAG_AVAILABLE:
+        return None, None
     try:
         store = TP53VectorStore()
         if not store.is_built():
-            st.warning("Knowledge base not built. Run: `python main.py build`")
             return None, None
         store.load()
         rag = TP53RAGChain(vector_store=store)
         return rag, store
     except Exception as e:
-        st.error(f"Failed to initialize RAG system: {e}")
+        log.error(f"RAG init failed: {e}")
         return None, None
 
-# Initialize
 if "rag" not in st.session_state:
     st.session_state.rag, st.session_state.store = init_rag_system()
-
 if "messages" not in st.session_state:
     st.session_state.messages = []
-
 if "pipeline_data" not in st.session_state:
     st.session_state.pipeline_data = {}
 
-# ═══════════════════════════════════════════════════════════════════
-# Helper functions
-# ═══════════════════════════════════════════════════════════════════
-
-def render_markdown_safe(text: str):
-    """Render text safely, handling special chars."""
+# ── Helper functions ──────────────────────────────────────────────
+def safe_query(question: str, agent_type=None) -> dict:
+    if not st.session_state.rag:
+        return {
+            "answer": "RAG system offline. Run: python main.py build",
+            "agent_used": "offline",
+            "sources": [],
+            "cache_hit": False,
+            "retries": 0,
+        }
     try:
-        st.markdown(text)
-    except Exception as e:
-        st.text(text)
-
-def render_json_output(data: Dict):
-    """Render JSON with syntax highlighting."""
-    st.json(data)
-
-def safe_query(rag: TP53RAGChain, question: str, agent_type: Optional[str] = None) -> Dict:
-    """Execute RAG query with error handling."""
-    try:
-        result = rag.query(
+        return st.session_state.rag.query(
             question=question,
-            pipeline_data=st.session_state.pipeline_data if st.session_state.pipeline_data else None,
+            pipeline_data=st.session_state.pipeline_data or None,
             agent_type=agent_type,
         )
-        return result
     except Exception as e:
-        log.error(f"Query failed: {e}")
         return {
-            "answer": f"Error during query execution: {str(e)[:200]}",
+            "answer": f"Query error: {str(e)[:300]}",
             "agent_used": agent_type or "error",
             "sources": [],
             "cache_hit": False,
             "retries": 0,
         }
 
-def format_sources(sources: List[Dict]) -> str:
-    """Format sources for display."""
+def format_sources(sources: list) -> str:
     if not sources:
-        return "*(No sources retrieved)*"
+        return "*No sources retrieved*"
     lines = []
     for i, src in enumerate(sources[:5], 1):
-        relevance = src.get("relevance_score", 0)
-        category = src.get("category", "general")
-        source = src.get("source", "unknown")
-        lines.append(f"**{i}. [{category}]** {source} (relevance: {relevance:.2f})")
+        lines.append(
+            f"**{i}.** [{src.get('category','?')}] "
+            f"{src.get('source','?')} "
+            f"(score: {src.get('relevance_score', 0):.2f})"
+        )
     return "\n".join(lines)
 
-# ═══════════════════════════════════════════════════════════════════
-# Sidebar
-# ═══════════════════════════════════════════════════════════════════
-
+# ── Sidebar ───────────────────────────────────────────────────────
 with st.sidebar:
-    st.markdown("## TP53 RAG Platform")
+    st.markdown("## 🧬 TP53 RAG Platform")
     st.markdown("**Multi-agent oncology bioinformatics**")
     st.divider()
-    
-    st.markdown("### 🔧 Settings")
-    
-    # RAG status
-    if st.session_state.rag and st.session_state.store:
+
+    if st.session_state.rag:
         st.success("✅ RAG system ready")
-        stats = st.session_state.rag.cache_stats()
-        st.caption(f"Cache: {stats['hits']} hits, {stats['misses']} misses")
+        try:
+            stats = st.session_state.rag.cache_stats()
+            st.caption(f"Cache: {stats.get('hits',0)} hits, {stats.get('misses',0)} misses")
+        except Exception:
+            pass
     else:
-        st.error("❌ RAG system offline")
-    
+        st.error("❌ RAG offline — run: python main.py build")
+
     st.divider()
-    
-    # Agent selector
     agents = [
-        "mutation_analysis",
-        "drug_discovery",
-        "clinical_interpretation",
-        "liquid_biopsy",
-        "gene_expression",
-        "enzyme_design",
-        "orf_analysis",
-        "phylogenetic_analysis",
-        "domain_annotation",
+        "mutation_analysis", "drug_discovery", "clinical_interpretation",
+        "liquid_biopsy", "gene_expression", "orf_analysis",
+        "phylogenetic_analysis", "domain_annotation",
     ]
-    
     selected_agent = st.selectbox(
         "Force agent type:",
         ["auto-detect"] + agents,
-        help="Leave 'auto-detect' to let the system choose"
     )
-    
     forced_agent = None if selected_agent == "auto-detect" else selected_agent
-    
+
     st.divider()
-    
-    # Cache control
-    col1, col2 = st.columns(2)
-    with col1:
-        if st.button("🔄 Clear cache"):
-            if st.session_state.rag:
-                st.session_state.rag.cache.reset_stats()
-                st.success("Cache cleared")
-    with col2:
-        if st.button("📊 Show stats"):
-            st.json(st.session_state.rag.cache_stats() if st.session_state.rag else {})
-    
-    st.divider()
-    st.markdown("### 📋 About")
     st.markdown("""
-    - **Model**: Gemma 4 2B (Q4_K_M)
-    - **Backend**: llama.cpp CPU-optimized
-    - **RAM**: ~4GB local inference
-    - **Latency**: <5s per query
-    """)
+**Model:** Gemma 4 2B (Q4_K_M)  
+**Backend:** llama.cpp CPU  
+**RAM:** ~4GB local inference  
+**Privacy:** 100% local — no cloud
+""")
 
-# ═══════════════════════════════════════════════════════════════════
-# Main tabs
-# ═══════════════════════════════════════════════════════════════════
-
+# ── Tabs ──────────────────────────────────────────────────────────
 tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
-    "🧬 Query",
-    "🎯 Analysis",
+    "🔍 Query",
+    "🧬 Analysis",
     "💊 Drug Discovery",
     "📊 Visualization",
-    "📄 Report",
+    "📋 Report",
     "🔬 Structure",
-    "🗣️ Voice (Beta)",
-    "⚙️ Debug",
+    "🎤 Voice",
+    "🛠 Debug",
 ])
 
-# ─────────────────────────────────────────────────────────────────
-# TAB 1: Query (main Q&A interface)
-# ─────────────────────────────────────────────────────────────────
-
+# ── TAB 1: Query ──────────────────────────────────────────────────
 with tab1:
-    st.markdown("## 🧬 TP53 Knowledge Query")
-    st.markdown("Ask any question about TP53 mutations, drug targets, clinical significance, etc.")
-    
-    # Query input
+    st.markdown("## 🔍 TP53 Knowledge Query")
+    st.markdown("Ask any question about TP53 mutations, drug targets, or clinical significance.")
+
     question = st.text_area(
         "Your question:",
         placeholder="e.g., What are the clinical implications of R175H mutation?",
         height=100,
     )
-    
-    col1, col2, col3 = st.columns([2, 1, 1])
+
+    col1, col2 = st.columns([3, 1])
     with col1:
-        submit = st.button("🔍 Query (Force Agent: {})".format(forced_agent or "auto"), use_container_width=True)
+        submit = st.button("🚀 Ask Gemma 4", use_container_width=True)
     with col2:
-        clear_history = st.button("🗑️ Clear chat")
-    with col3:
-        pass
-    
-    if clear_history:
-        st.session_state.messages = []
-        st.success("Chat history cleared")
-    
-    # Execute query
+        if st.button("🗑 Clear", use_container_width=True):
+            st.session_state.messages = []
+            st.success("Cleared")
+
     if submit and question:
-        with st.spinner("🤔 Thinking..."):
-            result = safe_query(st.session_state.rag, question, agent_type=forced_agent)
-        
-        # Add to chat history
+        with st.spinner("Querying Gemma 4 via RAG..."):
+            result = safe_query(question, agent_type=forced_agent)
+
         st.session_state.messages.append({"role": "user", "content": question})
         st.session_state.messages.append({"role": "assistant", "content": result["answer"]})
-        
-        # Display result
+
         st.markdown("### Answer")
         st.markdown(result["answer"])
-        
-        st.markdown("---")
-        
-        # Agent & metadata
-        col1, col2, col3, col4 = st.columns(4)
-        with col1:
-            st.metric("Agent", result["agent_used"])
-        with col2:
-            st.metric("Retries", result["retries"])
-        with col3:
-            st.metric("Cache hit", "✅ Yes" if result["cache_hit"] else "❌ No")
-        with col4:
-            st.metric("Sources", len(result["sources"]))
-        
-        # Sources
-        st.markdown("### 📚 Sources")
-        st.markdown(format_sources(result["sources"]))
-        
-        # JSON export
+        st.divider()
+
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("Agent", result.get("agent_used", "?"))
+        c2.metric("Retries", result.get("retries", 0))
+        c3.metric("Cache Hit", "✅" if result.get("cache_hit") else "❌")
+        c4.metric("Sources", len(result.get("sources", [])))
+
+        st.markdown("### Sources")
+        st.markdown(format_sources(result.get("sources", [])))
+
         if st.checkbox("Show raw JSON"):
-            render_json_output(result)
-    
-    # Chat history display
+            st.json(result)
+
     if st.session_state.messages:
-        st.markdown("### 💬 Chat History")
+        st.divider()
+        st.markdown("### Chat History")
         for msg in st.session_state.messages[-10:]:
-            if msg["role"] == "user":
-                st.markdown(f"**You**: {msg['content'][:200]}")
-            else:
-                st.markdown(f"**Assistant**: {msg['content'][:200]}")
+            prefix = "**You**" if msg["role"] == "user" else "**Gemma 4**"
+            st.markdown(f"{prefix}: {msg['content'][:300]}")
 
-# ─────────────────────────────────────────────────────────────────
-# TAB 2: Analysis (multi-agent orchestration)
-# ─────────────────────────────────────────────────────────────────
-
+# ── TAB 2: Analysis ───────────────────────────────────────────────
 with tab2:
-    st.markdown("## 🎯 Multi-Agent Analysis")
-    st.markdown("Run multiple agents in parallel for comprehensive TP53 analysis")
-    
-    # Input mutation
-    mutation = st.text_input(
-        "TP53 Mutation (HGVS notation):",
-        placeholder="e.g., R175H, R248W, R273H",
-        value="R175H"
-    )
-    
-    # Input cancer type
-    cancer = st.selectbox(
-        "Cancer type:",
-        ["Colorectal", "Breast", "Ovarian", "Lung", "Gastric", "Other"]
-    )
-    
-    # Input VAF (optional)
-    vaf = st.number_input(
-        "Variant Allele Frequency (%):",
-        min_value=0.0, max_value=100.0,
-        value=50.0,
-        help="Optional: leave at 50 if unknown"
-    )
-    
-    if st.button("🚀 Run Analysis", use_container_width=True):
+    st.markdown("## 🧬 Multi-Agent Analysis")
+
+    mutation = st.text_input("TP53 Mutation:", placeholder="e.g., R175H", value="R175H")
+    cancer = st.selectbox("Cancer type:", ["Colorectal", "Breast", "Ovarian", "Lung", "Gastric"])
+    vaf = st.number_input("Variant Allele Frequency (%):", 0.0, 100.0, 50.0)
+
+    if st.button("🧬 Run Multi-Agent Analysis", use_container_width=True):
         st.session_state.pipeline_data = {
             "mutation": mutation,
             "cancer_type": cancer,
             "vaf": vaf,
             "timestamp": datetime.now().isoformat(),
         }
-        
-        # Run agents
+
         agent_queries = {
-            "mutation_analysis": f"Explain the clinical significance of {mutation} in {cancer} cancer",
-            "drug_discovery": f"What drugs are effective for {mutation}? Include Kenya/KEML availability",
-            "clinical_interpretation": f"How should {mutation} be classified clinically? What's the prognosis?",
-            "liquid_biopsy": f"What VAF thresholds matter for {mutation}? Current VAF: {vaf}%",
+            "mutation_analysis": f"Clinical significance of {mutation} in {cancer} cancer",
+            "drug_discovery":    f"Best drugs for {mutation} mutation — include Kenya/KEML availability",
+            "clinical_interpretation": f"Classify {mutation} clinically. Prognosis for {cancer}?",
+            "liquid_biopsy":    f"VAF thresholds for {mutation}. Current VAF: {vaf}%",
         }
-        
-        results = {}
+
         cols = st.columns(2)
-        
         for idx, (agent, query) in enumerate(agent_queries.items()):
-            with st.spinner(f"🔄 {agent}..."):
-                result = safe_query(st.session_state.rag, query, agent_type=agent)
-                results[agent] = result
-                
-                with cols[idx % 2]:
-                    with st.expander(f"✅ {agent.replace('_', ' ').title()}", expanded=(idx < 2)):
-                        st.markdown(result["answer"][:500] + "..." if len(result["answer"]) > 500 else result["answer"])
-                        st.caption(f"Sources: {len(result['sources'])}")
-        
-        # Save results
-        if st.button("💾 Save as JSON"):
-            json_str = json.dumps(results, indent=2)
+            with st.spinner(f"Running {agent}..."):
+                result = safe_query(query, agent_type=agent)
+            with cols[idx % 2]:
+                with st.expander(f"🔬 {agent.replace('_', ' ').title()}", expanded=(idx < 2)):
+                    answer = result["answer"]
+                    st.markdown(answer[:500] + "..." if len(answer) > 500 else answer)
+                    st.caption(f"Sources: {len(result.get('sources', []))}")
+
+        if st.button("💾 Download JSON"):
             st.download_button(
-                label="Download JSON",
-                data=json_str,
-                file_name=f"tp53_analysis_{mutation}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
-                mime="application/json"
+                "Download",
+                json.dumps({"mutation": mutation, "cancer": cancer}, indent=2),
+                f"tp53_{mutation}_{datetime.now().strftime('%Y%m%d')}.json",
+                "application/json",
             )
 
-# ─────────────────────────────────────────────────────────────────
-# TAB 3: Drug Discovery
-# ─────────────────────────────────────────────────────────────────
-
+# ── TAB 3: Drug Discovery ─────────────────────────────────────────
 with tab3:
     st.markdown("## 💊 Drug Discovery & Targeting")
-    
-    mutation_input = st.text_input("Mutation for drug search:", value="R175H")
-    
-    if st.button("🔬 Find therapeutic targets"):
+
+    mut_input = st.text_input("Mutation for drug search:", value="R175H")
+
+    if st.button("🔍 Find Therapeutic Targets", use_container_width=True):
         with st.spinner("Searching drug databases..."):
             result = safe_query(
-                st.session_state.rag,
-                f"What are the best drug candidates for {mutation_input}? Focus on mechanism and Kenya availability.",
+                f"Best drug candidates for {mut_input}? Focus on mechanism and Kenya/KEML availability.",
                 agent_type="drug_discovery"
             )
-        
         st.markdown(result["answer"])
-        
-        # Mock drug table (for demo)
-        st.markdown("### 📋 Known TP53-targeted drugs")
-        drug_data = {
-            "Drug": ["APR-246", "Idasanutlin", "Carboplatin", "Vorinostat"],
-            "Mechanism": ["Refolding", "MDM2 inhibitor", "DNA cross-link", "HDAC inhibitor"],
-            "Clinical stage": ["Phase III", "Phase II", "Approved", "Approved"],
-            "KEML available": ["Yes", "Limited", "Yes", "Limited"],
-        }
-        st.dataframe(drug_data, use_container_width=True)
 
-# ─────────────────────────────────────────────────────────────────
-# TAB 4: Visualization
-# ─────────────────────────────────────────────────────────────────
+    st.markdown("### Known TP53-Targeted Drugs")
+    drug_df = pd.DataFrame({
+        "Drug":           ["APR-246", "Idasanutlin", "Carboplatin", "Vorinostat"],
+        "Mechanism":      ["p53 refolding", "MDM2 inhibitor", "DNA cross-link", "HDAC inhibitor"],
+        "Clinical Stage": ["Phase III", "Phase II", "Approved", "Approved"],
+        "KEML Available": ["Yes", "Limited", "Yes", "Limited"],
+    })
+    st.dataframe(drug_df, use_container_width=True, hide_index=True)
 
+# ── TAB 4: Visualization ──────────────────────────────────────────
 with tab4:
     st.markdown("## 📊 Visualization & Metrics")
-    
+
     col1, col2 = st.columns(2)
-    
     with col1:
-        st.markdown("### VAF Timeline (mock data)")
-        vaf_data = {
-            "Day": list(range(0, 30, 5)),
+        st.markdown("### ctDNA VAF Timeline")
+        vaf_df = pd.DataFrame({
+            "Day":    [0, 5, 10, 15, 20, 25],
             "VAF (%)": [50, 48, 45, 42, 38, 35],
-        }
-        fig = px.line(vaf_data, x="Day", y="VAF (%)", markers=True, title="ctDNA Variant Allele Frequency")
+        })
+        fig = px.line(vaf_df, x="Day", y="VAF (%)", markers=True,
+                      title="Variant Allele Frequency Over Treatment")
+        fig.update_layout(template="plotly_dark")
         st.plotly_chart(fig, use_container_width=True)
-    
+
     with col2:
-        st.markdown("### TP53 Mutation Hotspots")
-        hotspots = {
-            "Codon": ["175", "248", "273", "249", "282", "220"],
-            "Frequency (%)": [8.0, 7.5, 7.0, 6.5, 4.0, 3.5],
-        }
-        fig = px.bar(hotspots, x="Codon", y="Frequency (%)", title="Known TP53 Hotspots", color="Frequency (%)")
-        st.plotly_chart(fig, use_container_width=True)
-    
-    # Domain diagram (simplified)
-    st.markdown("### 🧬 TP53 Protein Domain Map")
-    domain_info = """
-    | Domain | Residues | Function |
-    |--------|----------|----------|
-    | TAD1 | 1-40 | Trans-activation |
-    | TAD2 | 40-67 | Trans-activation |
-    | PRD | 67-98 | Proline-rich |
-    | DBD | 94-292 | DNA-binding core |
-    | NLS | 316-325 | Nuclear localization |
-    | TET | 323-356 | Tetramer formation |
-    | REG | 364-393 | Regulatory |
-    """
-    st.markdown(domain_info)
+        st.markdown("### TP53 Hotspot Frequency")
+        hotspot_df = pd.DataFrame({
+            "Codon":          ["175", "248", "273", "249", "282", "220"],
+            "Frequency (%)":  [8.0, 7.5, 7.0, 6.5, 4.0, 3.5],
+        })
+        fig2 = px.bar(hotspot_df, x="Codon", y="Frequency (%)",
+                      title="Known TP53 Hotspot Mutations",
+                      color="Frequency (%)", color_continuous_scale="Reds")
+        fig2.update_layout(template="plotly_dark")
+        st.plotly_chart(fig2, use_container_width=True)
 
-# ─────────────────────────────────────────────────────────────────
-# TAB 5: Report Generation
-# ─────────────────────────────────────────────────────────────────
+    st.markdown("### TP53 Protein Domain Map")
+    domain_df = pd.DataFrame({
+        "Domain":   ["TAD1", "TAD2", "PRD", "DBD", "NLS", "TET", "REG"],
+        "Start":    [1, 40, 67, 94, 316, 323, 364],
+        "End":      [40, 67, 98, 292, 325, 356, 393],
+        "Function": ["Transactivation", "Transactivation", "Proline-rich",
+                     "DNA-binding (hotspot region)", "Nuclear signal",
+                     "Tetramerization", "Regulatory"],
+    })
+    st.dataframe(domain_df, use_container_width=True, hide_index=True)
 
+# ── TAB 5: Report ─────────────────────────────────────────────────
 with tab5:
-    st.markdown("## 📄 Clinical Report Generator")
-    
-    # Input patient data
-    patient_id = st.text_input("Patient ID (will be hashed)", value="DEMO-001")
-    mutation = st.text_input("Mutation", value="R175H")
-    vaf = st.slider("VAF (%)", 0, 100, 50)
-    cancer_type = st.selectbox("Cancer type:", ["Colorectal", "Breast", "Ovarian", "Lung"])
+    st.markdown("## 📋 Clinical Report Generator")
+
+    patient_id   = st.text_input("Patient ID (will be hashed):", value="DEMO-001")
+    rep_mutation = st.text_input("Mutation:", value="R175H")
+    rep_vaf      = st.slider("VAF (%):", 0, 100, 50)
+    rep_cancer   = st.selectbox("Cancer:", ["Colorectal", "Breast", "Ovarian", "Lung"])
     include_keml = st.checkbox("Include Kenya/KEML resources", value=True)
-    
-    if st.button("📝 Generate Report"):
-        with st.spinner("Generating comprehensive report..."):
-            report_query = f"""
-            Generate a comprehensive clinical report for:
-            - Patient: {patient_id}
-            - Mutation: {mutation}
-            - VAF: {vaf}%
-            - Cancer: {cancer_type}
-            {"- Include Kenya drug availability" if include_keml else ""}
-            
-            Include: Executive summary, mutation significance, drug options, clinical recommendations.
-            """
-            result = safe_query(
-                st.session_state.rag,
-                report_query,
-                agent_type="clinical_interpretation"
+
+    if st.button("📋 Generate Clinical Report", use_container_width=True):
+        with st.spinner("Generating comprehensive report via Gemma 4..."):
+            query = (
+                f"Generate a comprehensive clinical report for: "
+                f"Mutation: {rep_mutation}, VAF: {rep_vaf}%, Cancer: {rep_cancer}. "
+                f"{'Include Kenya drug availability.' if include_keml else ''} "
+                f"Include: Executive summary, mutation significance, drug options, recommendations."
             )
-        
+            result = safe_query(query, agent_type="clinical_interpretation")
+
         st.markdown("### Clinical Report")
         st.markdown(result["answer"])
-        
-        # Export options
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            if st.button("📥 Download as markdown"):
-                st.download_button(
-                    "Download",
-                    result["answer"],
-                    file_name=f"report_{patient_id}_{datetime.now().strftime('%Y%m%d')}.md"
-                )
-        with col2:
-            if st.button("📋 Copy to clipboard"):
-                st.success("📋 (Copy functionality for real deployment)")
-        with col3:
-            pass
 
-# ─────────────────────────────────────────────────────────────────
-# TAB 6: Structure Visualization
-# ─────────────────────────────────────────────────────────────────
+        st.download_button(
+            "⬇️ Download Report",
+            result["answer"],
+            file_name=f"report_{rep_mutation}_{datetime.now().strftime('%Y%m%d')}.md",
+        )
 
+# ── TAB 6: Structure ──────────────────────────────────────────────
 with tab6:
     st.markdown("## 🔬 3D Structure Visualization")
-    
-    st.markdown("""
-    ### p53 DNA-Binding Domain (DBD)
-    
-    This tab embeds interactive Mol* viewer or Py3Dmol for structure visualization.
-    For production, integrate:
-    - RCSB PDB viewer (p53 structures: 1TUP, 1H3F, 1TSR)
-    - AlphaFold predicted structures for mutations
-    - Pocket visualization (cavity detection for drug binding)
-    """)
-    
-    st.markdown("**Note**: Structure viewer requires Mol* or Py3Dmol integration (can be added)")
-    
-    # Placeholder: interactive domain map
-    st.markdown("### Interactive Protein Domain Model")
-    st.text("""
-    TP53 (protein)
-    |---TAD1---+---TAD2---+---PRD---+------- DBD (Core) -------+---TET---+---REG---|
-    1-40     40-67    67-98     94-292                323-356  364-393
-    
-    Hotspot mutations: R175(TAD), R248(DBD-contact), R273(DBD-contact), R282(DBD-contact)
-    """)
+    st.markdown("Interactive p53 protein structure — powered by Mol* viewer")
 
-# ─────────────────────────────────────────────────────────────────
-# TAB 7: Voice Input (Beta)
-# ─────────────────────────────────────────────────────────────────
+    col1, col2 = st.columns([2, 1])
 
-with tab7:
-    st.markdown("## 🗣️ Voice Input (Beta)")
-    st.markdown("*Voice recognition via Whisper (requires audio input)*")
-    
-    # Audio input
-    audio_bytes = st.audio_input("Record your question (max 30s):", disabled=False)
-    
-    if audio_bytes:
-        st.info("🎤 Voice input received. Transcription would happen here using Whisper.")
-        st.markdown("*In production*: Send audio → Whisper → transcribe → query RAG")
-    else:
-        st.markdown("**Usage**: Click the mic icon to record a question")
-    
-    # Or paste audio
-    st.markdown("### Alternative: Text input")
-    voice_query = st.text_area(
-        "Or paste your question here:",
-        placeholder="e.g., What is the prognosis for R175H?",
-        height=100
-    )
-    
-    if st.button("🎙️ Process voice query"):
-        if voice_query:
-            with st.spinner("Processing..."):
-                result = safe_query(st.session_state.rag, voice_query)
+    with col1:
+        pdb_options = {
+            "2OCJ — p53 DBD wildtype":   "2OCJ",
+            "1TUP — p53 bound to DNA":   "1TUP",
+            "2OCO — p53 R175H mutant":   "2OCO",
+            "2J1X — p53 R248W mutant":   "2J1X",
+        }
+        selected_pdb = st.selectbox("Select structure:", list(pdb_options.keys()))
+        pdb_id = pdb_options[selected_pdb]
+
+        highlight = st.text_input("Highlight residue:", value="175")
+
+        st.markdown(f"**Structure:** `{pdb_id}` — [Open in RCSB](https://www.rcsb.org/structure/{pdb_id})")
+
+        # Mol* viewer embed
+        components.iframe(
+            f"https://molstar.org/viewer/?pdb={pdb_id}",
+            height=480,
+            scrolling=False,
+        )
+
+    with col2:
+        st.markdown("### Domain Reference")
+        domain_ref = pd.DataFrame({
+            "Domain":   ["TAD", "PRD", "DBD", "TET", "REG"],
+            "Residues": ["1–67", "67–98", "94–292", "323–356", "364–393"],
+            "Function": ["Transactivation", "Proline-rich",
+                         "DNA-binding ⚠️", "Tetramerization", "Regulatory"],
+        })
+        st.dataframe(domain_ref, use_container_width=True, hide_index=True)
+
+        st.markdown("### Hotspot Positions")
+        hotspot_ref = pd.DataFrame({
+            "Mutation": ["R175H", "R248W", "R248Q", "R273H", "R273C", "R282W"],
+            "Residue":  [175, 248, 248, 273, 273, 282],
+            "Type":     ["Conform.", "Contact", "Contact",
+                         "Contact", "Contact", "Conform."],
+        })
+        st.dataframe(hotspot_ref, use_container_width=True, hide_index=True)
+
+        st.markdown("### RAG Narration")
+        if st.button("🧠 Explain structure"):
+            with st.spinner("Querying Gemma 4..."):
+                result = safe_query(
+                    f"Explain the 3D structure of p53 PDB {pdb_id}. "
+                    f"Focus on the DNA-binding domain and residue {highlight}.",
+                    agent_type="domain_annotation"
+                )
             st.markdown(result["answer"])
 
-# ─────────────────────────────────────────────────────────────────
-# TAB 8: Debug & Admin
-# ─────────────────────────────────────────────────────────────────
+# ── TAB 7: Voice ──────────────────────────────────────────────────
+with tab7:
+    st.markdown("## 🎤 Voice Input (Beta)")
+    st.markdown("Speak your question — transcribed locally via Whisper")
 
+    WHISPER_AVAILABLE = False
+    try:
+        import whisper
+        WHISPER_AVAILABLE = True
+        st.success("✅ Whisper ready")
+    except ImportError:
+        st.warning("⚠️ Install Whisper: `pip install openai-whisper`")
+
+    @st.cache_resource
+    def load_whisper():
+        import whisper
+        return whisper.load_model("tiny")
+
+    def transcribe(audio_bytes) -> str:
+        model = load_whisper()
+        tmp_path = Path(__file__).parent / "temp_audio.wav"
+        try:
+            with open(str(tmp_path), "wb") as f:
+                if hasattr(audio_bytes, "getvalue"):
+                    f.write(audio_bytes.getvalue())
+                elif hasattr(audio_bytes, "read"):
+                    f.write(audio_bytes.read())
+                else:
+                    f.write(bytes(audio_bytes))
+            result = model.transcribe(str(tmp_path), language="en", fp16=False)
+            return result["text"].strip()
+        except Exception as e:
+            return f"Transcription error: {e}"
+        finally:
+            if tmp_path.exists():
+                tmp_path.unlink()
+
+    audio_bytes = st.audio_input("🎙️ Record your question (max 30s):")
+
+    if audio_bytes and WHISPER_AVAILABLE:
+        with st.spinner("Transcribing with Whisper..."):
+            text = transcribe(audio_bytes)
+        if not text.startswith("Transcription error"):
+            st.success(f"**Transcribed:** {text}")
+            with st.spinner("Querying Gemma 4..."):
+                result = safe_query(text, agent_type=forced_agent)
+            st.markdown("### Answer")
+            st.markdown(result["answer"])
+        else:
+            st.error(text)
+
+    st.divider()
+    st.markdown("### ⌨️ Or Type Your Question")
+    voice_text = st.text_area("Type here:", height=100,
+                              placeholder="e.g., What is the prognosis for R175H?")
+    if st.button("🚀 Submit", use_container_width=True):
+        if voice_text:
+            with st.spinner("Processing..."):
+                result = safe_query(voice_text, agent_type=forced_agent)
+            st.markdown(result["answer"])
+
+# ── TAB 8: Debug ──────────────────────────────────────────────────
 with tab8:
-    st.markdown("## ⚙️ Debug & Admin Panel")
-    
-    # System info
-    st.markdown("### 📊 System Status")
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        status = "🟢 Online" if (st.session_state.rag and st.session_state.store) else "🔴 Offline"
-        st.metric("RAG System", status)
-    with col2:
-        if st.session_state.rag:
-            stats = st.session_state.rag.cache_stats()
-            st.metric("Cache hit rate", f"{stats.get('hit_rate', 0):.1%}")
-    with col3:
-        st.metric("Environment", "Streamlit")
-    
-    # Backend health
-    st.markdown("### 🏥 Backend Health")
+    st.markdown("## 🛠 Debug & Admin")
+
+    c1, c2, c3 = st.columns(3)
+    c1.metric("RAG System", "✅ Online" if st.session_state.rag else "❌ Offline")
+    c2.metric("RAG Available", str(RAG_AVAILABLE))
+    c3.metric("Messages", len(st.session_state.messages))
+
     if st.session_state.rag:
-        backend = st.session_state.rag._get_backend()
-        if hasattr(backend, 'health'):
-            health = backend.health()
-            st.success("✅ llama.cpp online" if health else "⚠️ llama.cpp offline — using fallback")
-    
-    # Test query
-    st.markdown("### 🧪 Test Query")
+        try:
+            stats = st.session_state.rag.cache_stats()
+            st.markdown("### Cache Stats")
+            st.json(stats)
+        except Exception:
+            pass
+
+    st.markdown("### Test Query")
     test_q = st.text_input("Test question:", value="What is R175H?")
     if st.button("Run test"):
         with st.spinner("Testing..."):
-            result = safe_query(st.session_state.rag, test_q)
+            result = safe_query(test_q)
         st.json(result)
-    
-    # Cache stats
-    st.markdown("### 📈 Cache Statistics")
-    if st.session_state.rag:
-        stats = st.session_state.rag.cache_stats()
-        st.json(stats)
-    
-    # Pipeline data
-    st.markdown("### 🔄 Pipeline Data")
+
+    st.markdown("### Pipeline Data")
     st.json(st.session_state.pipeline_data if st.session_state.pipeline_data else {"empty": True})
 
-# ═══════════════════════════════════════════════════════════════════
-# Footer
-# ═══════════════════════════════════════════════════════════════════
+    if st.button("🗑 Clear cache"):
+        try:
+            st.session_state.rag.cache.reset_stats()
+            st.success("Cache cleared")
+        except Exception:
+            st.session_state.messages = []
+            st.success("Session cleared")
 
+# ── Footer ────────────────────────────────────────────────────────
 st.divider()
-st.markdown("""
----
-**TP53 RAG Platform** | Powered by Gemma 4 2B + llama.cpp | HIPAA-compliant local inference | Kenya/KEML context
-""")
+st.markdown(
+    "**TP53 RAG Platform** | Gemma 4 2B + llama.cpp | "
+    "100% local inference | Kenya/KEML clinical context | "
+    "[GitHub](https://github.com/mbote-droid/tp53_analysis)"
+)
