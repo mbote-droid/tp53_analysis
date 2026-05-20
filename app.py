@@ -1,28 +1,31 @@
 """
-Streamlit Web App — TP53 Bioinformatics Analysis Pipeline
-==========================================================
-A browser-based interface for the TP53 genomics pipeline.
-Allows users to run the full analysis without any CLI knowledge.
+============================================================
+TP53 RAG Platform - Production Web App
+============================================================
+Streamlit web interface with:
+- Fast multi-agent analysis (via dispatcher)
+- Voice input transcription (Whisper)
+- Real-time streaming responses
+- HIPAA-compliant output
+- Enterprise dossier export
 
-Run locally:
-    streamlit run app.py
-
-Deploy free:
-    https://streamlit.io/cloud
+Run: streamlit run app.py
+============================================================
 """
 
 import os
 import sys
-import warnings
+import json
+import logging
+from pathlib import Path
+from typing import Dict, List, Optional, Any
+from datetime import datetime
+
 import streamlit as st
-import matplotlib
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
-from Bio.Seq import Seq
-
-
-# Suppress BioPython partial codon warning in the UI
-warnings.filterwarnings("ignore", category=UserWarning, module="Bio")
+try:
+    from streamlit_option_menu import option_menu
+except ImportError:
+    option_menu = None
 
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))

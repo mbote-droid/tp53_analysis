@@ -749,9 +749,9 @@ RULES: Only answer questions about TP53, p53 protein, or related oncology topics
 
 class IntentRouter:
     _KEYWORDS: Dict[str, List[str]] = {
-        "mutation_analysis":     ["mutation", "variant", "hotspot", "r175h", "r248w", "r273h", "g245s", "r249s", "r282w", "codon", "snp", "missense", "nonsense"],
+        "mutation_analysis":     ["mutation", "variant", "snv", "hotspot", "r175h", "r248w", "r273h", "g245s", "r249s", "r282w", "codon", "snp", "missense", "nonsense"],
         "orf_analysis":          ["orf", "isoform", "reading frame", "p53α", "p53β", "δ40", "δ133", "alternative transcript"],
-        "phylogenetic_analysis": ["phylogen", "conservation", "cross-species", "evolution", "homolog", "ortholog"],
+        "phylogenetic_analysis": ["phylogen", "conserv", "cross-species", "evolution", "homolog", "ortholog"],
         "domain_annotation":     ["domain", "dbd", "tad", "tetramer", "nls", "zinc", "structural", "fold"],
         "clinical_interpretation":["clinical", "pathogenic", "vus", "prognosis", "cancer", "tumour", "tumor", "li-fraumeni", "lfs"],
         "drug_discovery":        ["drug", "therapy", "treatment", "inhibitor", "apr-246", "prima-1", "idasanutlin", "mdm2", "parp", "keml", "chemotherapy"],
@@ -892,6 +892,26 @@ class TP53RAGChain:
             if self._backend is None:
                 self._backend = _build_backend()
         return self._backend
+
+    def _format_pipeline_data(self, data: Dict[str, Any]) -> str:
+        """Format pipeline data (mutations, ORFs, etc.) into a readable context string."""
+        if not data:
+            return ""
+        parts = []
+        if "mutations" in data and data["mutations"]:
+            parts.append("Mutations detected:")
+            for mut in data["mutations"]:
+                if isinstance(mut, dict):
+                    pos = mut.get("position", "?")
+                    change = mut.get("amino_acid_change", "?")
+                    parts.append(f"  - Position {pos}: {change}")
+        if "orfs" in data and data["orfs"]:
+            parts.append("Open Reading Frames:")
+            for orf in data["orfs"]:
+                parts.append(f"  - {orf}")
+        if "structure" in data:
+            parts.append(f"Structure: {data['structure']}")
+        return "\n".join(parts)
 
     def query(
         self,

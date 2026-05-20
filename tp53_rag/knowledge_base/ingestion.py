@@ -51,11 +51,22 @@ Cys238, Cys242 and six hotspot codons: R175, G245, R248, R249, R273, R282)
         "content": """TP53 Hotspot Mutations in Cancer:
         R175H (c.524G>A): Conformational mutant. Loss of DNA binding. Gain-of-function (GOF) activity.
         R248W (c.742C>T): Contact mutant. lost DNA major groove contact. Common in Li-Fraumeni syndrome.
+        R248Q (c.742C>A): Contact mutant. Similar to R248W but different kinetics.
         R273H (c.818G>A): Contact mutant. Loss of DNA backbone phosphate contact.
+        R273C (c.818G>T): Contact mutant. Loss of DNA backbone phosphate contact. Biochemically conservative substitution.
         G245S (c.733G>A): Conformational mutant. Disrupts L3 loop conformation.
         R249S (c.747G>C): Conformational mutant. Enriched in hepatocellular carcinoma from aflatoxin B1
 exposure.""",
         "metadata": {"source": "curated", "category": "mutations", "gene": "TP53", "priority": "critical"}
+    },
+    {
+        "content": """TP53 in Clinical Cancer Management:
+        Li-Fraumeni Syndrome (LFS): Germline TP53 mutations. Autosomal dominant inheritance. MDM2 inhibitors (idasanutlin, nutilin) restore p53 function.
+        Cancer Prognosis: TP53 mutations associated with poor prognosis, therapy resistance, aggressive phenotypes.
+        MDM2 Inhibition: Blocks p53-MDM2 interaction, allowing p53 accumulation and transcriptional activation.
+        Clinical Interpretation: Missense mutations show variable oncogenicity based on residue location and evolutionary conservation.
+        Therapeutic Targeting: Reactivation therapies (APR-246, PRIMA-1), immunotherapy combinations, synthetic lethality via PARP inhibition.""",
+        "metadata": {"source": "curated", "category": "clinical", "gene": "TP53", "priority": "critical"}
     }
 ]
 
@@ -116,9 +127,10 @@ class TP53DocumentIngester:
             log.warning(f"UniProt fallback initiated: {e}")
             return []
 
-    def load_user_documents(self) -> List[Document]:
+    def load_user_documents(self, directory: Optional[Path] = None) -> List[Document]:
+        """Load user documents from specified directory or DOCUMENTS_DIR."""
         docs = []
-        p = Path(DOCUMENTS_DIR)
+        p = directory or Path(DOCUMENTS_DIR)
         if not p.exists():
             return docs
         for file in p.glob("**/*"):
@@ -130,6 +142,10 @@ class TP53DocumentIngester:
             except Exception as e:
                 log.error(f"Failed loading file {file.name}: {e}")
         return docs
+
+    def chunk_documents(self, documents: List[Document]) -> List[Document]:
+        """Split documents into chunks using configured chunk size and overlap."""
+        return self.text_splitter.split_documents(documents)
 
     def ingest_all(
         self,

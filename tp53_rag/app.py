@@ -399,27 +399,51 @@ with tab7:
 
     @st.cache_resource
     def load_whisper():
-        import whisper
-        return whisper.load_model("tiny")
+        try:
+            import whisper
+            return whisper.load_model("tiny")
+        except Exception as e:
+            log.error(f"Failed to load Whisper: {e}")
+            return None
 
     def transcribe(audio_bytes) -> str:
         model = load_whisper()
+        if model is None:
+            return "Transcription error: Whisper model failed to load"
+        
         tmp_path = Path(__file__).parent / "temp_audio.wav"
         try:
+            # Handle different audio input types
             with open(str(tmp_path), "wb") as f:
                 if hasattr(audio_bytes, "getvalue"):
                     f.write(audio_bytes.getvalue())
                 elif hasattr(audio_bytes, "read"):
+                    # Reset stream position if possible
+                    if hasattr(audio_bytes, "seek"):
+                        audio_bytes.seek(0)
                     f.write(audio_bytes.read())
                 else:
                     f.write(bytes(audio_bytes))
-            result = model.transcribe(str(tmp_path), language="en", fp16=False)
-            return result["text"].strip()
+            
+            # Transcribe with explicit parameters
+            try:
+                result = model.transcribe(str(tmp_path), language="en", fp16=False)
+            except TypeError:
+                # Fallback for older whisper versions that don't support fp16
+                result = model.transcribe(str(tmp_path), language="en")
+            
+            return result.get("text", "").strip()
+        except FileNotFoundError as e:
+            return f"Transcription error: File not found - {e}"
         except Exception as e:
-            return f"Transcription error: {e}"
+            return f"Transcription error: {str(e)[:200]}"
         finally:
-            if tmp_path.exists():
-                tmp_path.unlink()
+            # Cleanup temp file
+            try:
+                if tmp_path.exists():
+                    tmp_path.unlink()
+            except Exception as cleanup_err:
+                log.warning(f"Failed to cleanup temp audio: {cleanup_err}")
 
     audio_bytes = st.audio_input("🎙️ Record your question (max 30s):")
 

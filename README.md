@@ -3,7 +3,7 @@
 ![Run Tests](https://github.com/mbote-droid/tp53_analysis/actions/workflows/tests.yml/badge.svg)
 ![Pylint](https://github.com/mbote-droid/tp53_analysis/actions/workflows/pylint.yml/badge.svg)
 
-[![Open in Streamlit](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://tp53analysis-dzu3mspufjp9b43o2rmmog.streamlit.app/)
+[![Open in Streamlit](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://tp53-analysis.streamlit.app/)
 
 A comprehensive bioinformatics pipeline for analyzing the TP53 gene (tumor suppressor protein p53) and its orthologs across species. This pipeline fetches sequences from NCBI, performs sequence analysis, detects mutations, discovers open reading frames, conducts multi-species phylogenetic comparisons, and annotates protein domains.
 
