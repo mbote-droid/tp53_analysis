@@ -30,7 +30,7 @@ jobs:
     
     - name: Run tests with pytest
       run: |
-        run: python -m pytest -v --cov=. --cov-report=xml
+        python -m pytest -v --cov=. --cov-report=xml
     
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v3
