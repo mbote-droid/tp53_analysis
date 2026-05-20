@@ -29,7 +29,9 @@ jobs:
         pip install pytest pytest-cov
     
     - name: Run tests with pytest
-      run: |
+      env:
+          PYTHONPATH: ${{ github.workspace }}/tp53_rag
+       run: |
         python -m pytest -v --cov=. --cov-report=xml
     
     - name: Upload coverage to Codecov
