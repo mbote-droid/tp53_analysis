@@ -24,6 +24,7 @@ __pycache__/
 # Logs
 logs/
 *.log
+test_output.txt
 
 # VS Code
 .vscode/
