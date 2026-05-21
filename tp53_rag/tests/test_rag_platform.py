@@ -133,12 +133,12 @@ class TestVectorStoreIntegration:
     """Integration tests for the vector store (require Ollama)."""
 
     @pytest.mark.integration
-    @patch('langchain_ollama.embeddings.OllamaEmbeddings.embed_documents') # 2. Intercept embedding requests
-    @patch('langchain_ollama.embeddings.OllamaEmbeddings.embed_query')  
+    @patch('langchain_ollama.embeddings.OllamaEmbeddings.embed_documents')
+    @patch('langchain_ollama.embeddings.OllamaEmbeddings.embed_query')
     def test_build_and_query(self, mock_embed_query, mock_embed_docs, tmp_path):
-     """Full build + query cycle. Requires Ollama running."""
+        """Full build + query cycle. Mocked for compatibility without a running Ollama server."""
         
-        # 5. Define fake vector dimensions (768 numbers long, which matches nomic-embed-text)
+        # Define fake vector dimensions (768 floats long)
         mock_embed_docs.return_value = [[0.1] * 768 for _ in range(20)]
         mock_embed_query.return_value = [0.1] * 768
         
@@ -146,13 +146,13 @@ class TestVectorStoreIntegration:
         from knowledge_base.vector_store import TP53VectorStore
         from config import settings
         settings.CHROMA_DIR = tmp_path / "chroma_test"
-
+    
         ingester = TP53DocumentIngester()
         docs = ingester.load_curated_knowledge()
         chunks = ingester.chunk_documents(docs)
-
+    
         store = TP53VectorStore()
-        store.build(chunks[:20])  # Use subset for speed
+        store.build(chunks[:20])
 
         results = store.similarity_search("R175H mutation cancer", k=3)
         assert len(results) > 0
