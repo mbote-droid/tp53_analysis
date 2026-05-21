@@ -135,8 +135,8 @@ class TestVectorStoreIntegration:
     @pytest.mark.integration
     @patch('langchain_ollama.embeddings.OllamaEmbeddings.embed_documents') # 2. Intercept embedding requests
     @patch('langchain_ollama.embeddings.OllamaEmbeddings.embed_query')  
-    def test_build_and_query(self, tmp_path):
-        """Full build + query cycle. Requires Ollama running."""
+    def test_build_and_query(self, mock_embed_query, mock_embed_docs, tmp_path):
+     """Full build + query cycle. Requires Ollama running."""
         
         # 5. Define fake vector dimensions (768 numbers long, which matches nomic-embed-text)
         mock_embed_docs.return_value = [[0.1] * 768 for _ in range(20)]
