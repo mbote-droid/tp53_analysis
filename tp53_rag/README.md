@@ -1,6 +1,6 @@
 # 🧬 TP53 RAG Platform — Multi-Omics AI for Precision Oncology
 
-> **Gemma 4 Good Hackathon Submission** — A local-first, privacy-preserving multi-agent AI platform for TP53 analysis
+ — A local-first, privacy-preserving multi-agent AI platform for TP53 analysis
 
 [![Gemma 4](https://img.shields.io/badge/Powered%20by-Gemma%204-blue)](https://ai.google.dev/gemma)
 [![Ollama](https://img.shields.io/badge/Runtime-Ollama-green)](https://ollama.com)
