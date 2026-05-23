@@ -3,7 +3,7 @@
 [![Run Tests](https://github.com)](https://github.com)
 [![Pylint](https://github.com/workflows/pylint.yml/badge.svg)](https://github.com)
 
-[![Open in Streamlit](https://streamlit.io)](https://tp53_analysis-zebgtmrcfjuvkfkcedgsyw.streamlit.app/)
+[![Open in Streamlit](https://streamlit.io)](https://tp53analysis-zebgtmrcfjuvkfkcedgsyw.streamlit.app/)
 
 A comprehensive bioinformatics pipeline for analyzing the TP53 gene (tumor suppressor protein p53) and its orthologs across species. This pipeline fetches sequences from NCBI, performs sequence analysis, detects mutations, discovers open reading frames, conducts multi-species phylogenetic comparisons, and annotates protein domains.
 
