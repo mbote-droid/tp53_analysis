@@ -1,7 +1,7 @@
 # TP53 Bioinformatics Analysis Pipeline
 
-![Run Tests](https://github.com/mbote-droid/tp53_analysis/actions/workflows/tests.yml/badge.svg)
-![Pylint](https://github.com/mbote-droid/tp53_analysis/actions/workflows/pylint.yml/badge.svg)
+[![Run Tests](https://github.com)](https://github.com)
+[![Pylint](https://github.com/workflows/pylint.yml/badge.svg)](https://github.com)
 
 [![Open in Streamlit](https://streamlit.io)](https://tp53analysis-zebgtmrcfjuvkfkcedgsyw.streamlit.app/)
 
