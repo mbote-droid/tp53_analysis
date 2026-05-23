@@ -1,0 +1,57 @@
+# ============================================================
+# TP53 RAG Platform — Streamlit Cloud Requirements
+# IMPORTANT: This file is for cloud deployment ONLY.
+# Heavy local packages (torch, llama-cpp-python, transformers)
+# are intentionally excluded — they run on your local machine.
+# Point Streamlit Cloud to THIS file, not requirements.txt
+# ============================================================
+
+# UI
+streamlit>=1.32.0
+
+# RAG & Vector DB
+chromadb>=0.5.3
+langchain>=0.3.0
+langchain-core>=0.2.0
+langchain-community>=0.3.0
+langchain-chroma>=0.1.4
+
+# Document Processing
+pypdf>=4.2.0
+beautifulsoup4>=4.12.3
+requests>=2.32.3
+
+# Embeddings
+sentence-transformers>=3.0.1
+
+# Bioinformatics
+biopython>=1.83
+
+# Data & Visualization
+pandas>=2.2.2
+numpy>=1.26.4,<2.0.0
+plotly>=5.22.0
+matplotlib>=3.8.0
+
+# Search & Ranking
+rank-bm25>=0.2.1
+scipy>=1.10.0
+scikit-learn>=1.3.0
+
+# API
+fastapi>=0.111.0
+uvicorn>=0.30.1
+httpx>=0.27.0
+python-multipart>=0.0.9
+
+# Utilities
+python-dotenv>=1.0.1
+pydantic>=2.7.1,<3.0.0
+rich>=13.7.1
+tqdm>=4.66.4
+loguru>=0.7.2
+
+# Dependency conflict fixes — allow resolver room to find compatible versions
+pygments>=2.15.0
+markdown-it-py>=3.0.0
+mdurl>=0.1.0

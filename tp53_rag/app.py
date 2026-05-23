@@ -54,6 +54,21 @@ def init_rag_system():
         log.error(f"RAG init failed: {e}")
         return None, None
 
+# FIXED: wrapped in try/except so torch/torchvision failures on cloud don't crash the app
+@st.cache_resource
+def load_pathology_agent():
+    try:
+        from agents.pathology_vision import PathologyVisionAgent
+        return PathologyVisionAgent(
+            rag_chain=st.session_state.get("rag")
+        )
+    except ImportError as e:
+        log.warning(f"Pathology agent unavailable: {e}")
+        return None
+    except Exception as e:
+        log.warning(f"Pathology agent failed to load: {e}")
+        return None
+
 if "rag" not in st.session_state:
     st.session_state.rag, st.session_state.store = init_rag_system()
 if "messages" not in st.session_state:
@@ -62,6 +77,8 @@ if "pipeline_data" not in st.session_state:
     st.session_state.pipeline_data = {}
 
 # ── Helper functions ──────────────────────────────────────────────
+import threading
+_inference_lock = threading.Semaphore(2)
 def safe_query(question: str, agent_type=None) -> dict:
     if not st.session_state.rag:
         return {
@@ -135,7 +152,7 @@ with st.sidebar:
 """)
 
 # ── Tabs ──────────────────────────────────────────────────────────
-tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
+tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9 = st.tabs([
     "🔍 Query",
     "🧬 Analysis",
     "💊 Drug Discovery",
@@ -144,6 +161,7 @@ tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
     "🔬 Structure",
     "🎤 Voice",
     "🛠 Debug",
+    "🔬 Pathology",
 ])
 
 # ── TAB 1: Query ──────────────────────────────────────────────────
@@ -335,11 +353,15 @@ with tab6:
     col1, col2 = st.columns([2, 1])
 
     with col1:
+        # EXPANDED: added 3 more clinically relevant PDB structures
         pdb_options = {
-            "2OCJ — p53 DBD wildtype":   "2OCJ",
-            "1TUP — p53 bound to DNA":   "1TUP",
-            "2OCO — p53 R175H mutant":   "2OCO",
-            "2J1X — p53 R248W mutant":   "2J1X",
+            "2OCJ — p53 DBD wildtype":         "2OCJ",
+            "1TUP — p53 bound to DNA":          "1TUP",
+            "2OCO — p53 R175H mutant":          "2OCO",
+            "2J1X — p53 R248W mutant":          "2J1X",
+            "2LZH — p53 tetramerization domain":"2LZH",
+            "4HJE — p53 R248W (contact mutant)":"4HJE",
+            "6FF9 — p53 bound to MDM2":         "6FF9",
         }
         selected_pdb = st.selectbox("Select structure:", list(pdb_options.keys()))
         pdb_id = pdb_options[selected_pdb]
@@ -410,35 +432,30 @@ with tab7:
         model = load_whisper()
         if model is None:
             return "Transcription error: Whisper model failed to load"
-        
+
         tmp_path = Path(__file__).parent / "temp_audio.wav"
         try:
-            # Handle different audio input types
             with open(str(tmp_path), "wb") as f:
                 if hasattr(audio_bytes, "getvalue"):
                     f.write(audio_bytes.getvalue())
                 elif hasattr(audio_bytes, "read"):
-                    # Reset stream position if possible
                     if hasattr(audio_bytes, "seek"):
                         audio_bytes.seek(0)
                     f.write(audio_bytes.read())
                 else:
                     f.write(bytes(audio_bytes))
-            
-            # Transcribe with explicit parameters
+
             try:
                 result = model.transcribe(str(tmp_path), language="en", fp16=False)
             except TypeError:
-                # Fallback for older whisper versions that don't support fp16
                 result = model.transcribe(str(tmp_path), language="en")
-            
+
             return result.get("text", "").strip()
         except FileNotFoundError as e:
             return f"Transcription error: File not found - {e}"
         except Exception as e:
             return f"Transcription error: {str(e)[:200]}"
         finally:
-            # Cleanup temp file
             try:
                 if tmp_path.exists():
                     tmp_path.unlink()
@@ -503,6 +520,127 @@ with tab8:
         except Exception:
             st.session_state.messages = []
             st.success("Session cleared")
+
+# ── TAB 9: Pathology ──────────────────────────────────────────────
+with tab9:
+    st.markdown("## 🔬 Pathology Slide Analysis")
+    st.markdown(
+        "Upload an H&E stained pathology slide — "
+        "tissue classification powered by UNI/ResNet foundation model, "
+        "correlated with your TP53 pipeline findings."
+    )
+
+    col1, col2 = st.columns([2, 1])
+
+    with col1:
+        uploaded = st.file_uploader(
+            "Upload H&E slide image (JPG, PNG, TIFF):",
+            type=["jpg", "jpeg", "png", "tiff"]
+        )
+
+        if uploaded:
+            st.image(uploaded, caption="Uploaded slide", use_container_width=True)
+
+        if uploaded and st.button("🔬 Analyse Slide", use_container_width=True):
+            # FIXED: safe load with None check — won't crash on cloud if torch missing
+            agent = load_pathology_agent()
+
+            if agent is None:
+                st.error(
+                    "Pathology agent unavailable in this environment. "
+                    "torch/torchvision not installed. Run locally for full functionality."
+                )
+            else:
+                tmp = Path("temp_slide.jpg")
+                tmp.write_bytes(uploaded.getvalue())
+
+                with st.spinner("Analysing slide with pathology foundation model..."):
+                    result = agent.process_slide(
+                        str(tmp),
+                        mutation_data=st.session_state.pipeline_data
+                    )
+
+                if tmp.exists():
+                    tmp.unlink()
+
+                if result["success"]:
+                    st.success(f"✅ Top tissue: **{result['top_tissue']}**")
+                    st.divider()
+
+                    st.markdown("### Tissue Classifications")
+                    tissue_df = pd.DataFrame(result["tissue_classifications"])
+                    st.dataframe(tissue_df, use_container_width=True, hide_index=True)
+
+                    if result["mutation_correlations"]:
+                        st.markdown("### TP53 Mutation Correlation")
+                        for corr in result["mutation_correlations"]:
+                            st.markdown(f"**{corr['mutation']}** cancer associations:")
+                            for cancer, freq in corr["cancer_correlations"].items():
+                                st.progress(freq, text=f"{cancer}: {freq:.0%}")
+
+                    st.divider()
+                    st.markdown("### 🧠 Gemma 4 Clinical Narration")
+                    st.markdown(result["llm_narration"])
+
+                    st.download_button(
+                        "⬇️ Download Report",
+                        data=result["llm_narration"],
+                        file_name="pathology_report.md",
+                        mime="text/markdown"
+                    )
+                else:
+                    st.error(f"Analysis failed: {result.get('error')}")
+
+        if not uploaded:
+            st.info("Upload an H&E slide image to begin")
+            st.markdown("""
+**Free slide datasets:**
+- [TCGA Portal](https://portal.gdc.cancer.gov)
+- [Kaggle Histopathology](https://www.kaggle.com/datasets?search=histopathology)
+""")
+
+    with col2:
+        st.markdown("### About This Agent")
+        st.markdown("""
+**Model:** UNI (Harvard/MGH) or ResNet fallback
+
+**Tissue classes detected:**
+- Tumor
+- Stroma
+- Inflammatory
+- Necrosis
+- Normal epithelium
+- Mucus
+- Smooth muscle
+- Adipose
+
+**TP53 correlations:**
+- R248W → Colorectal (90%)
+- R273H → Colorectal (88%)
+- R175H → Breast (85%)
+- R249S → Liver (95%)
+- G245S → Sarcoma (80%)
+""")
+
+        st.markdown("### Model Status")
+        # FIXED: safe check — no crash if torch missing on cloud
+        try:
+            agent_check = load_pathology_agent()
+            if agent_check is not None and agent_check.model:
+                st.success("✅ Model loaded")
+            elif agent_check is None:
+                st.warning("⚠️ Pathology agent unavailable (cloud mode)")
+            else:
+                st.error("❌ No model")
+        except Exception as e:
+            st.error(f"❌ {e}")
+
+        st.markdown("### Get UNI Access")
+        st.markdown(
+            "For best results request UNI model access: "
+            "[HuggingFace MahmoodLab/UNI](https://huggingface.co/MahmoodLab/UNI)\n\n"
+            "Set your token in `.env`: `HF_TOKEN=your_token`"
+        )
 
 # ── Footer ────────────────────────────────────────────────────────
 st.divider()

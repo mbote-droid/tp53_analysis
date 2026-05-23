@@ -29,6 +29,7 @@ from dataclasses import dataclass
 from agents.rag_chain import TP53RAGChain
 from knowledge_base.vector_store import TP53VectorStore
 from utils.logger import log
+from utils.shared_state import shared_state
 
 
 @dataclass
@@ -175,7 +176,8 @@ class AgentDispatcher:
         log.info("═" * 60)
 
         results = {}
-
+        shared_state.update("pipeline_data", pipeline_data)
+        
         for agent_type, question in self.AUTOMATIC_QUERIES.items():
             log.info(f"Dispatching to agent: {agent_type}")
             results[agent_type] = self.dispatch_single(
@@ -183,6 +185,10 @@ class AgentDispatcher:
                 pipeline_data=pipeline_data,
             )
 
+            shared_state.update_agent_output(
+                agent_type,
+                results[agent_type].__dict__
+            )
         # Final synthesis report
         if include_report:
             log.info("Generating synthesis report...")
