@@ -55,3 +55,4 @@ loguru>=0.7.2
 pygments>=2.15.0
 markdown-it-py>=3.0.0
 mdurl>=0.1.0
+cffi>=1.16.0,<1.17.0
