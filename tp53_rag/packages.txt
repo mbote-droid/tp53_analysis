@@ -1,2 +1,3 @@
 ffmpeg
 libgomp1
+libffi-dev
