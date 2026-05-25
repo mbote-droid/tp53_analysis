@@ -75,6 +75,10 @@ if "messages" not in st.session_state:
     st.session_state.messages = []
 if "pipeline_data" not in st.session_state:
     st.session_state.pipeline_data = {}
+if "tnm_result" not in st.session_state:
+    st.session_state.tnm_result = {}
+if "last_pathology_result" not in st.session_state:
+    st.session_state.last_pathology_result = {}
 
 # ── Helper functions ──────────────────────────────────────────────
 import threading
@@ -152,7 +156,7 @@ with st.sidebar:
 """)
 
 # ── Tabs ──────────────────────────────────────────────────────────
-tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9 = st.tabs([
+tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10 = st.tabs([
     "🔍 Query",
     "🧬 Analysis",
     "💊 Drug Discovery",
@@ -162,6 +166,7 @@ tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9 = st.tabs([
     "🎤 Voice",
     "🛠 Debug",
     "🔬 Pathology",
+    "📍 TNM Staging",
 ])
 
 # ── TAB 1: Query ──────────────────────────────────────────────────
@@ -564,6 +569,7 @@ with tab9:
                     tmp.unlink()
 
                 if result["success"]:
+                    st.session_state.last_pathology_result = result
                     st.success(f"✅ Top tissue: **{result['top_tissue']}**")
                     st.divider()
 
@@ -641,6 +647,154 @@ with tab9:
             "[HuggingFace MahmoodLab/UNI](https://huggingface.co/MahmoodLab/UNI)\n\n"
             "Set your token in `.env`: `HF_TOKEN=your_token`"
         )
+
+# ── TAB 10: TNM Staging ───────────────────────────────────────────
+with tab10:
+    st.markdown("## 📍 TNM Cancer Staging")
+    st.markdown(
+        "AJCC/UICC 8th Edition TNM staging from TP53 mutation profile + "
+        "pathology slide findings. Includes Kenya-contextualised clinical roadmap."
+    )
+
+    col1, col2 = st.columns([1, 1])
+
+    with col1:
+        st.markdown("### Input")
+        tnm_mutation = st.text_input("Primary mutation:", value="R175H", key="tnm_mutation")
+        tnm_cancer = st.selectbox(
+            "Cancer type:",
+            ["Colorectal", "Breast", "Lung", "Liver", "Ovarian", "Gastric"],
+            key="tnm_cancer"
+        )
+        tnm_vaf = st.number_input("VAF (%):", 0.0, 100.0, 47.3, key="tnm_vaf")
+        tnm_patient_id = st.text_input(
+            "Patient ID (will be hashed):", value="DEMO-KE-001", key="tnm_patient"
+        )
+        use_pathology = st.checkbox(
+            "Use pathology results from Pathology tab",
+            value=bool(st.session_state.last_pathology_result),
+        )
+
+        if st.button("📍 Run TNM Staging", use_container_width=True):
+            try:
+                from agents.tnm_staging import TNMStagingAgent
+                pipeline_input = {
+                    "mutations": [{"amino_acid_change": tnm_mutation, "position": 0}],
+                    "cancer_type": tnm_cancer,
+                    "vaf": tnm_vaf,
+                    "accession": "NM_000546",
+                    "patient_id": tnm_patient_id,
+                }
+                pathology_input = (
+                    st.session_state.last_pathology_result
+                    if use_pathology and st.session_state.last_pathology_result
+                    else {
+                        "success": False,
+                        "top_tissue": "Unknown",
+                        "tissue_classifications": [],
+                        "mutation_correlations": [],
+                    }
+                )
+                with st.spinner("Running TNM staging..."):
+                    tnm_agent = TNMStagingAgent(rag_chain=st.session_state.rag)
+                    result = tnm_agent.stage(
+                        pathology_result=pathology_input,
+                        pipeline_data=pipeline_input,
+                    )
+                    st.session_state.tnm_result = result
+            except ImportError:
+                st.error("TNM agent not found. Ensure agents/tnm_staging.py is in place.")
+            except Exception as e:
+                st.error(f"TNM staging failed: {e}")
+
+    with col2:
+        st.markdown("### About TNM Staging")
+        st.markdown("""
+**T — Primary Tumour**
+Size and extent of invasion into local tissues.
+
+**N — Regional Lymph Nodes**
+Absence or presence of regional lymph node metastasis.
+
+**M — Distant Metastasis**
+Absence or presence of distant metastasis.
+
+**Stage Groups**
+- Stage I — localised, curative intent
+- Stage II — local extension, surgery ± adjuvant
+- Stage III — regional spread, multimodal therapy
+- Stage IV — distant metastasis, palliative focus
+
+*Note: Definitive staging requires CT imaging and/or
+lymph node biopsy. This is AI-assisted clinical support,
+not a replacement for pathological staging.*
+""")
+
+    if st.session_state.tnm_result:
+        result = st.session_state.tnm_result
+        st.divider()
+
+        stage = result.get("stage_group", "?")
+        t_code = result.get("T", {}).get("code", "?")
+        n_code = result.get("N", {}).get("code", "?")
+        m_code = result.get("M", {}).get("code", "?")
+
+        stage_colors = {
+            "I": "🟢", "IIA": "🟡", "IIB": "🟡",
+            "IIIA": "🟠", "IIIB": "🟠", "IIIC": "🔴", "IV": "🔴"
+        }
+        badge = stage_colors.get(stage, "⚪")
+        st.markdown(f"## {badge} Stage **{stage}** — {t_code} {n_code} {m_code}")
+
+        equity = result.get("equity_flag")
+        if equity:
+            st.warning(equity)
+
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            st.markdown(f"**{t_code}**")
+            st.caption(result.get("T", {}).get("description", ""))
+        with c2:
+            st.markdown(f"**{n_code}**")
+            st.caption(result.get("N", {}).get("description", ""))
+        with c3:
+            st.markdown(f"**{m_code}**")
+            st.caption(result.get("M", {}).get("description", ""))
+
+        st.divider()
+        st.markdown("### 🧠 Clinical Narration")
+        st.markdown(result.get("llm_narration", ""))
+
+        st.divider()
+        st.markdown("### 📋 Clinical Roadmap (Kenya-Contextualised)")
+        for step in result.get("next_steps", []):
+            with st.expander(
+                f"**{step['priority']}.** {step['action']} — {step.get('timeframe', '')}",
+                expanded=(step["priority"] <= 2)
+            ):
+                st.markdown(step.get("detail", ""))
+                st.markdown(f"🏥 **Kenya Resource:** {step.get('kenya_resource', '')}")
+
+        st.divider()
+        col_img, col_mdt = st.columns(2)
+        with col_img:
+            st.markdown("### 🖥 Imaging Workup")
+            for img in result.get("imaging_workup", []):
+                st.markdown(f"- {img}")
+        with col_mdt:
+            st.markdown("### 👥 MDT Referrals")
+            for ref in result.get("mdt_referrals", []):
+                st.markdown(f"- {ref}")
+
+        st.divider()
+        st.download_button(
+            "⬇️ Download TNM Report (JSON)",
+            data=json.dumps(result, indent=2),
+            file_name=f"tnm_{result.get('mutation', 'unknown')}_{result.get('stage_group', 'unknown')}.json",
+            mime="application/json",
+        )
+        if st.checkbox("Show FHIR R4 ClinicalImpression resource"):
+            st.json(result.get("fhir_resource", {}))
 
 # ── Footer ────────────────────────────────────────────────────────
 st.divider()

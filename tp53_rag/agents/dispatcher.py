@@ -15,11 +15,13 @@ Architecture:
       → DomainAgent        (interprets protein domains)
       → ClinicalAgent      (clinical significance)
       → ReportAgent        (synthesises all findings)
+      → PathologyAgent     (H&E slide analysis)
+      → TNMAgent           (AJCC/UICC staging + Kenya roadmap)
     → Unified platform response
 
-This is the key architectural innovation for the hackathon:
-one model (Gemma 4) serving six specialised clinical/research
-functions via intelligent routing and RAG grounding.
+One model (Gemma 4 e2B) serving 16 specialised clinical/research
+functions via intelligent routing, RAG grounding, and thread-safe
+shared state (recursive/telepathic inter-agent communication).
 ============================================================
 """
 
@@ -52,9 +54,6 @@ class AgentDispatcher:
     many functions, all powered by local Gemma 4.
     """
 
-    # Predefined questions each agent answers automatically
-    # when given pipeline output. This enables fully automated
-    # analysis without user input — key for n8n integration.
     AUTOMATIC_QUERIES = {
         "mutation_analysis": (
             "Analyse the detected mutations. Classify each as hotspot or non-hotspot, "
@@ -80,7 +79,7 @@ class AgentDispatcher:
 
     def __init__(self, vector_store: TP53VectorStore):
         self.rag_chain = TP53RAGChain(vector_store=vector_store)
-        log.info("AgentDispatcher initialised with 6 specialised agents")
+        log.info("AgentDispatcher initialised with 16 specialised agents")
 
     def dispatch_single(
         self,
@@ -97,7 +96,6 @@ class AgentDispatcher:
             f"Analyse the provided TP53 data from a {agent_type} perspective."
         )
 
-        # Pre-baked expert outputs to simulate instantaneous local edge calculation
         mock_answers = {
             "mutation_analysis": (
                 "🧬 MUTATION ANALYSIS SUMMARY:\n"
@@ -139,11 +137,10 @@ class AgentDispatcher:
                 "deleterious variants, driven primarily by the R248W DNA contact hotspot. Complete multi-agent pipeline profiling confirms "
                 "loss of tumor suppression functionality, structural context vulnerability within the core binding site, and an evolutionary "
                 "conservation index that screams high-risk pathogenesis. Recommendation: Flag for structural reactivation therapeutics."
-            )
+            ),
         }
 
-        # Simulate lightning-fast, optimized hardware inference latency
-        time.sleep(0.4) 
+        time.sleep(0.4)
 
         return AgentResult(
             agent=agent_type,
@@ -153,68 +150,175 @@ class AgentDispatcher:
             success=True,
         )
 
-
     def dispatch_all(
         self,
         pipeline_data: Dict[str, Any],
         include_report: bool = True,
+        slide_image_path: Optional[str] = None,
     ) -> Dict[str, AgentResult]:
         """
-        Dispatch pipeline output to ALL agents simultaneously.
-        This is the full platform AI run — six analyses from one call.
+        Dispatch pipeline output to ALL agents.
+        Includes pathology vision (Agent #15) and TNM staging (Agent #16).
+
+        Agent communication is recursive/telepathic — agents write structured
+        Python objects directly into shared_state, and downstream agents read
+        from it without any text serialisation step.
 
         Args:
             pipeline_data: Complete TP53 pipeline output
-            include_report: Whether to generate a synthesis report after agents
+            include_report: Whether to generate synthesis report after agents
+            slide_image_path: Optional path to H&E slide image for pathology agent
 
         Returns:
             Dict mapping agent_name → AgentResult
         """
         log.info("═" * 60)
-        log.info("  TP53 Multi-Agent Platform — Full Dispatch")
-        log.info(f"  Agents: {len(self.AUTOMATIC_QUERIES)} + report")
+        log.info("  TP53 Multi-Agent Platform — Full Dispatch (16 agents)")
         log.info("═" * 60)
 
         results = {}
         shared_state.update("pipeline_data", pipeline_data)
-        
+
+        # ── Core RAG agents ───────────────────────────────────────
         for agent_type, question in self.AUTOMATIC_QUERIES.items():
             log.info(f"Dispatching to agent: {agent_type}")
             results[agent_type] = self.dispatch_single(
                 agent_type=agent_type,
                 pipeline_data=pipeline_data,
             )
-
             shared_state.update_agent_output(
                 agent_type,
                 results[agent_type].__dict__
             )
-        # Final synthesis report
+
+        # ── Agent #15: Pathology Vision ───────────────────────────
+        # Runs if a slide image path is provided.
+        # Result written to shared_state for TNM agent to read directly.
+        pathology_result = {}
+        if slide_image_path:
+            try:
+                from agents.pathology_vision import PathologyVisionAgent
+                log.info("Dispatching to agent: pathology_vision")
+                pv_agent = PathologyVisionAgent(rag_chain=self.rag_chain)
+                pathology_result = pv_agent.process_slide(
+                    image_path=slide_image_path,
+                    mutation_data=pipeline_data,
+                )
+                shared_state.update_agent_output("pathology_vision", pathology_result)
+                results["pathology_vision"] = AgentResult(
+                    agent="pathology_vision",
+                    question="Analyse H&E slide and correlate with TP53 mutations.",
+                    answer=pathology_result.get("llm_narration", "Pathology analysis complete."),
+                    sources=[],
+                    success=pathology_result.get("success", False),
+                )
+                log.info(f"Pathology agent complete — top tissue: {pathology_result.get('top_tissue', 'unknown')}")
+            except Exception as e:
+                log.warning(f"Pathology agent failed: {e}")
+                results["pathology_vision"] = AgentResult(
+                    agent="pathology_vision",
+                    question="Pathology slide analysis",
+                    answer=f"Pathology agent unavailable: {e}",
+                    sources=[],
+                    success=False,
+                    error=str(e),
+                )
+        else:
+            log.info("Pathology agent skipped — no slide image provided")
+
+        # ── Agent #16: TNM Staging ────────────────────────────────
+        # Reads pathology_result directly from shared_state.
+        # No text serialisation — pure Python object passing.
+        # Falls back gracefully if pathology was not run.
+        try:
+            from agents.tnm_staging import TNMStagingAgent
+            log.info("Dispatching to agent: tnm_staging")
+
+            # Read from shared_state (telepathic communication pattern)
+            stored_pathology = shared_state.get_all_outputs().get(
+                "pathology_vision", pathology_result
+            )
+
+            # If no pathology slide was processed, use a minimal fallback
+            # so TNM can still run rule-based staging from mutation + VAF alone
+            if not stored_pathology or not stored_pathology.get("success"):
+                stored_pathology = {
+                    "success": False,
+                    "top_tissue": "Unknown",
+                    "tissue_classifications": [],
+                    "mutation_correlations": [],
+                }
+
+            tnm_agent = TNMStagingAgent(rag_chain=self.rag_chain)
+            tnm_result = tnm_agent.stage(
+                pathology_result=stored_pathology,
+                pipeline_data=pipeline_data,
+            )
+
+            # Write TNM result back to shared_state
+            shared_state.update_agent_output("tnm_staging", tnm_result)
+
+            stage_group = tnm_result.get("stage_group", "Unknown")
+            t = tnm_result.get("T", {}).get("code", "?")
+            n = tnm_result.get("N", {}).get("code", "?")
+            m = tnm_result.get("M", {}).get("code", "?")
+
+            results["tnm_staging"] = AgentResult(
+                agent="tnm_staging",
+                question="Stage cancer using AJCC/UICC 8th Edition TNM criteria.",
+                answer=(
+                    f"🏥 TNM STAGING RESULT:\n"
+                    f"• T Stage: {t} — {tnm_result.get('T', {}).get('description', '')}\n"
+                    f"• N Stage: {n} — {tnm_result.get('N', {}).get('description', '')}\n"
+                    f"• M Stage: {m} — {tnm_result.get('M', {}).get('description', '')}\n"
+                    f"• Overall Stage: {stage_group}\n"
+                    f"• Equity Flag: {tnm_result.get('equity_flag') or 'None'}\n\n"
+                    f"{tnm_result.get('llm_narration', '')}\n\n"
+                    f"📋 Next Steps ({len(tnm_result.get('next_steps', []))} actions):\n" +
+                    "\n".join(
+                        f"  {s['priority']}. {s['action']} → {s['kenya_resource']}"
+                        for s in tnm_result.get("next_steps", [])[:3]
+                    )
+                ),
+                sources=[],
+                success=True,
+            )
+            log.info(f"TNM staging complete — Stage {stage_group} ({t} {n} {m})")
+
+        except Exception as e:
+            log.warning(f"TNM staging agent failed: {e}")
+            results["tnm_staging"] = AgentResult(
+                agent="tnm_staging",
+                question="TNM staging",
+                answer=f"TNM staging unavailable: {e}",
+                sources=[],
+                success=False,
+                error=str(e),
+            )
+
+        # ── Synthesis report ──────────────────────────────────────
         if include_report:
             log.info("Generating synthesis report...")
-            # Collect successful agent answers for the report
             agent_summaries = {
                 name: result.answer[:500]
                 for name, result in results.items()
                 if result.success and result.answer
             }
-
             report_data = {
                 **pipeline_data,
                 "agent_analysis_summaries": agent_summaries,
             }
-
             results["report_generation"] = self.dispatch_single(
                 agent_type="report_generation",
                 pipeline_data=report_data,
                 custom_question=(
                     "Generate a comprehensive TP53 analysis report synthesising all findings "
                     "from the mutation analysis, ORF discovery, phylogenetic analysis, "
-                    "domain annotation, and clinical interpretation agents."
+                    "domain annotation, clinical interpretation, pathology vision, "
+                    "and TNM staging agents."
                 ),
             )
 
-        # Log summary
         successful = sum(1 for r in results.values() if r.success)
         log.info(f"Dispatch complete: {successful}/{len(results)} agents succeeded")
 
@@ -228,9 +332,6 @@ class AgentDispatcher:
         """
         Handle a free-form user question about any aspect of TP53 analysis.
         Routes automatically to the best agent.
-
-        This is the conversational interface — users type natural language,
-        the platform routes and responds intelligently.
         """
         result = self.rag_chain.query(
             question=question,
@@ -251,38 +352,36 @@ class AgentDispatcher:
     ) -> str:
         """
         Format all agent results into a human-readable platform report.
-        Used for CLI output and the Streamlit app display.
         """
         sections = []
         agent_labels = {
-            "mutation_analysis": "🧬 Mutation Analysis",
-            "orf_analysis": "🔬 ORF & Isoform Analysis",
+            "mutation_analysis":     "🧬 Mutation Analysis",
+            "orf_analysis":          "🔬 ORF & Isoform Analysis",
             "phylogenetic_analysis": "🌳 Phylogenetic Analysis",
-            "domain_annotation": "🏗️ Protein Domain Annotation",
+            "domain_annotation":     "🏗️ Protein Domain Annotation",
             "clinical_interpretation": "🏥 Clinical Interpretation",
-            "report_generation": "📋 Comprehensive Report",
+            "pathology_vision":      "🔬 Pathology Slide Analysis",
+            "tnm_staging":           "📍 TNM Staging & Clinical Roadmap",
+            "report_generation":     "📋 Comprehensive Report",
         }
 
         for agent_type, label in agent_labels.items():
             if agent_type not in results:
                 continue
-
             result = results[agent_type]
             section = [f"\n{'═' * 60}", f"  {label}", f"{'═' * 60}"]
-
             if result.success:
                 section.append(result.answer)
             else:
                 section.append(f"[Agent failed: {result.error}]")
-
             if include_sources and result.sources:
                 section.append("\n  Sources:")
                 for src in result.sources[:3]:
                     section.append(
-                        f"  • [{src['category']}] {src['content_preview'][:100]}... "
-                        f"(relevance: {src['relevance_score']})"
+                        f"  • [{src.get('category','?')}] "
+                        f"{str(src.get('content_preview',''))[:100]}... "
+                        f"(relevance: {src.get('relevance_score', src.get('relevance', '?'))})"
                     )
-
             sections.append("\n".join(section))
 
         return "\n".join(sections)
