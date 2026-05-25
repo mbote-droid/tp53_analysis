@@ -2,10 +2,12 @@
 Agent #15 — Pathology Vision Agent
 Processes H&E slide images using UNI foundation model
 Correlates findings with TP53 mutation data
+
+CLOUD FIX: torch and timm are imported lazily inside _load_model()
+only when actually needed — not at module level.
+This prevents Streamlit Cloud from crashing on startup when torch
+is not installed.
 """
-import torch
-import timm
-from PIL import Image
 from pathlib import Path
 from typing import Dict, Any, Optional
 from utils.logger import log
@@ -25,11 +27,13 @@ MUTATION_TISSUE_CORRELATION = {
     "G245S": {"Sarcoma": 0.80, "Brain": 0.55},
 }
 
+
 class PathologyVisionAgent:
     """
     Agent #15 — Pathology slide analysis.
     Uses UNI foundation model for tissue embedding.
-    Falls back to simple classifier if UNI unavailable.
+    Falls back to ResNet if UNI unavailable.
+    Falls back gracefully (model=None) if torch not installed.
     """
 
     _cached_model = None  # module-level cache
@@ -37,6 +41,8 @@ class PathologyVisionAgent:
     def __init__(self, rag_chain=None):
         self.rag_chain = rag_chain
         self.device = "cpu"
+        self.model = None
+
         if PathologyVisionAgent._cached_model is None:
             self._load_model()
             PathologyVisionAgent._cached_model = self.model
@@ -45,8 +51,15 @@ class PathologyVisionAgent:
             log.info("Pathology model loaded from cache")
 
     def _load_model(self):
-        """Load UNI or fallback model."""
+        """
+        Load UNI or ResNet fallback.
+        torch and timm imported here — lazy, not at module level.
+        If torch not installed (Streamlit Cloud), self.model stays None
+        and process_slide() returns a graceful error.
+        """
         try:
+            # Lazy import — only runs when model is actually needed
+            import timm
             # UNI model — best option
             self.model = timm.create_model(
                 "hf-hub:MahmoodLab/uni",
@@ -59,13 +72,18 @@ class PathologyVisionAgent:
         except Exception as e:
             log.warning(f"UNI not available: {e}. Using ResNet fallback.")
             try:
+                import timm
                 self.model = timm.create_model(
                     "resnet50", pretrained=True, num_classes=len(TISSUE_CLASSES)
                 )
                 self.model.eval()
                 log.info("ResNet fallback loaded")
+            except ImportError:
+                log.warning("timm/torch not installed — pathology agent disabled on this deployment")
+                self.model = None
             except Exception as e2:
                 log.error(f"No model available: {e2}")
+                self.model = None
 
     def process_slide(
         self,
@@ -74,21 +92,24 @@ class PathologyVisionAgent:
     ) -> Dict[str, Any]:
         """
         Process a pathology slide image.
-        Args:
-            image_path: Path to H&E slide image (JPG/PNG/TIFF)
-            mutation_data: TP53 mutations from existing pipeline
-        Returns:
-            Dict with tissue classification, embeddings, correlations
+        Returns graceful error if model not available (cloud deployment).
         """
         if not self.model:
-            return {"error": "No model loaded", "success": False}
+            return {
+                "error": "Pathology model unavailable in this environment. Run locally for full functionality.",
+                "success": False
+            }
 
         try:
+            # Lazy imports inside method — safe for cloud
+            import torch
+            import torchvision.transforms as transforms
+            from PIL import Image
+
             # Load and preprocess image
             image = Image.open(image_path).convert("RGB")
             image = image.resize((224, 224))
 
-            import torchvision.transforms as transforms
             transform = transforms.Compose([
                 transforms.ToTensor(),
                 transforms.Normalize(
@@ -102,7 +123,7 @@ class PathologyVisionAgent:
             with torch.no_grad():
                 features = self.model(tensor)
 
-            # Classify tissue (simplified)
+            # Classify tissue
             probs = torch.softmax(features, dim=1).squeeze().tolist()
             if len(probs) == len(TISSUE_CLASSES):
                 classifications = sorted(
@@ -128,17 +149,22 @@ class PathologyVisionAgent:
             narration = self._get_narration(classifications, correlations, mutation_data)
 
             return {
-                "success":          True,
+                "success": True,
                 "tissue_classifications": [
                     {"tissue": t, "probability": round(p, 3)}
                     for t, p in classifications[:5]
                 ],
-                "top_tissue":       classifications[0][0] if classifications else "Unknown",
+                "top_tissue": classifications[0][0] if classifications else "Unknown",
                 "mutation_correlations": correlations,
-                "llm_narration":    narration,
-                "image_processed":  str(image_path),
+                "llm_narration": narration,
+                "image_processed": str(image_path),
             }
 
+        except ImportError:
+            return {
+                "error": "torch/torchvision not installed — run locally for pathology analysis",
+                "success": False
+            }
         except Exception as e:
             log.error(f"Slide processing failed: {e}")
             return {"error": str(e), "success": False}
@@ -168,5 +194,3 @@ class PathologyVisionAgent:
         except Exception as e:
             log.warning(f"Narration failed: {e}")
             return "Narration unavailable — RAG offline."
-
-
