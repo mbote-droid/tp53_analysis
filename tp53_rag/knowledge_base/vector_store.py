@@ -7,8 +7,8 @@ from pathlib import Path
 from typing import List, Optional, Tuple
 import chromadb
 from chromadb.config import Settings as ChromaSettings
+import os
 from langchain_chroma import Chroma
-from langchain_ollama import OllamaEmbeddings
 from langchain_core.documents import Document
 from config.settings import (
     CHROMA_DIR,
@@ -21,14 +21,53 @@ from config.settings import (
 from utils.logger import log
 
 
+def _get_embedding_model():
+    """
+    Get best available embedding model.
+    Priority:
+      1. Ollama local (INFERENCE_MODE=ollama/llamacpp)
+      2. HuggingFace Inference API (cloud, needs HF_TOKEN)
+      3. ChromaDB default (fallback)
+    """
+    inference_mode = os.getenv("INFERENCE_MODE", "ollama")
+
+    if inference_mode in ("ollama", "llamacpp"):
+        try:
+            from langchain_ollama import OllamaEmbeddings
+            log.info("Using Ollama embeddings (local mode)")
+            return OllamaEmbeddings(
+                model=OLLAMA_EMBEDDING_MODEL,
+                base_url=OLLAMA_BASE_URL,
+            )
+        except Exception as e:
+            log.warning(f"Ollama embeddings failed: {e} — falling back")
+
+    hf_token = os.getenv("HF_TOKEN", "")
+    if hf_token:
+        try:
+            from langchain_community.embeddings import HuggingFaceInferenceAPIEmbeddings
+            log.info("Using HuggingFace Inference API embeddings (cloud mode)")
+            return HuggingFaceInferenceAPIEmbeddings(
+                api_key=hf_token,
+                model_name="BAAI/bge-small-en-v1.5",
+            )
+        except Exception as e:
+            log.warning(f"HuggingFace embeddings failed: {e} — falling back")
+
+    try:
+        from chromadb.utils.embedding_functions import DefaultEmbeddingFunction
+        log.warning("Using ChromaDB default embeddings (fallback)")
+        return DefaultEmbeddingFunction()
+    except Exception as e:
+        log.error(f"All embedding models failed: {e}")
+        return None
+
+
 class TP53VectorStore:
     """Persistent local vector DB wrapper with cached connection parameters."""
 
     def __init__(self):
-        self.embedding_model = OllamaEmbeddings(
-            model=OLLAMA_EMBEDDING_MODEL,
-            base_url=OLLAMA_BASE_URL,
-        )
+        self.embedding_model = _get_embedding_model()
         self._vectorstore: Optional[Chroma] = None
 
         # Fixed: Establish a single persistent connection to stop thread locks
