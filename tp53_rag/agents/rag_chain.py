@@ -233,10 +233,18 @@ class CrossEncoderReranker:
     """
     Reranks retrieved documents using a cross-encoder.
     Falls back to score-based reranking if model unavailable.
+    Model loaded lazily on first use — not at startup.
     """
     def __init__(self):
         self._model = None
         self._available = False
+        self._load_attempted = False
+
+    def _ensure_loaded(self):
+        """Lazy load — only runs on first rerank call, not at startup."""
+        if self._load_attempted:
+            return
+        self._load_attempted = True
         try:
             from sentence_transformers import CrossEncoder
             self._model = CrossEncoder(
@@ -256,6 +264,8 @@ class CrossEncoderReranker:
     ) -> List[Tuple[Document, float]]:
         if not candidates:
             return []
+
+        self._ensure_loaded()
 
         if self._available and self._model:
             pairs  = [(query, doc.page_content[:512]) for doc, _ in candidates]
@@ -299,14 +309,18 @@ class SemanticCache:
         self._threshold  = threshold
         self._ttl        = ttl
         self._lock       = threading.Lock()
-        self._entries:   List[Dict] = []   # {embedding, answer, agent, ts}
+        self._entries:   List[Dict] = []
         self._embedder   = None
+        self._embedder_load_attempted = False
         self._hits       = 0
         self._misses     = 0
-        self._init_embedder()
         self._load_from_disk()
 
     def _init_embedder(self):
+        """Lazy load embedder — only on first use, not at startup."""
+        if self._embedder_load_attempted:
+            return
+        self._embedder_load_attempted = True
         try:
             from sentence_transformers import SentenceTransformer
             self._embedder = SentenceTransformer("all-MiniLM-L6-v2")
@@ -315,6 +329,7 @@ class SemanticCache:
             log.warning(f"Semantic cache embedder unavailable ({e})")
 
     def _embed(self, text: str) -> Optional[List[float]]:
+        self._init_embedder()  # lazy load on first use
         if not self._embedder:
             return None
         return self._embedder.encode(text, normalize_embeddings=True).tolist()
@@ -1215,4 +1230,3 @@ if __name__ == "__main__":
     print(f"\n=== {passed}/15 tests passed ===\n")
     if passed < 15:
         sys.exit(1)
-        
