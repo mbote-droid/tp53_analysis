@@ -238,13 +238,7 @@ tp53_analysis/
 3. **Finds synthetic lethal targets** (DepMap)
 4. **Screens drug candidates** (ChEMBL)
 5. **Predicts immune response** (TME profiling)
-6. **Generates enterprise dossiers** (FHIR R4 + PDF)
-
-**Why judges should care**:
-- ✅ **Privacy-first**: Runs locally — no data leaks to cloud
-- ✅ **Efficient**: Gemma 4 4B on 8GB RAM (edge-deployable)
-- ✅ **Marketable**: Pharma companies will pay for this
-- ✅ **Open-source**: LGPL license, fully reproducible
+6. **Generates enterprise dossiers** (FHIR R4 + PDF format)
 
 ## 📚 Key Publications Integrated
 
@@ -308,4 +302,3 @@ General Surgery Resident & Bioinformatics Developer
 
 ---
 
-**Built for the Gemma 4 Good Hackathon 2026** 🚀
