@@ -95,7 +95,7 @@ FHIR R4 + PDF + JSON REPORT
 ### Installation
 
 ```bash
-git clone https://github.com/yourusername/tp53_analysis.git
+git clone https://github.com/mbote-droid/tp53_analysis.git
 cd tp53_analysis
 
 # Create virtual environment

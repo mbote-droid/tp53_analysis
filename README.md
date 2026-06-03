@@ -1,8 +1,8 @@
 # TP53 Bioinformatics Analysis Pipeline
 
-[![Run Tests](https://github.com)](https://github.com)
-[![Pylint](https://github.com/workflows/pylint.yml/badge.svg)](https://github.com)
-[![Open in Streamlit](https://streamlit.io)](https://streamlit.app)
+[![Python](https://img.shields.io/badge/Python-3.11%2B-blue?logo=python&logoColor=white)](https://www.python.org)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://tp53analysis-dzu3mspufjp9b43o2rmmog.streamlit.app/)
 
 A comprehensive bioinformatics pipeline for analyzing the TP53 gene (tumor suppressor protein p53) and its orthologs across species. This pipeline fetches sequences from NCBI, performs sequence analysis, detects mutations, discovers open reading frames, conducts multi-species phylogenetic comparisons, and annotates protein domains.
 
@@ -32,7 +32,7 @@ A comprehensive bioinformatics pipeline for analyzing the TP53 gene (tumor suppr
 ### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/yourusername/tp53_analysis.git
+git clone https://github.com/mbote-droid/tp53_analysis.git
 cd tp53_analysis
 ```
 
