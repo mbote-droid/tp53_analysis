@@ -6,13 +6,12 @@ secondaryBackgroundColor = "#161b22"
 textColor = "#e6edf3"
 font = "sans serif"
 
+# NOTE: do NOT set server.port / server.address / headless=false here.
+# Those are local-only and break Streamlit Cloud (Cloud binds 0.0.0.0:8501
+# and probes :8501). headless=true also suppresses the first-run email prompt.
+# For a custom local port, run: streamlit run app.py --server.port 8502
 [server]
-port = 8502
-address = "localhost"
-headless = false
-runOnSave = true
+headless = true
 
 [browser]
 gatherUsageStats = false
-serverAddress = "localhost"
-serverPort = 8502
