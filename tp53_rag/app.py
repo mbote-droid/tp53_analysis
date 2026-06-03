@@ -585,7 +585,7 @@ with tab3:
         pocket = parse_residues(mut_input)  # mutation residue + canonical hotspots
         components.html(
             docking_pose_html("2OCJ", pocket, top["name"], top["affinity"]),
-            height=480,
+            height=540,
         )
         st.caption("Yellow cloud = proposed binding pocket on p53 (illustrative).")
 

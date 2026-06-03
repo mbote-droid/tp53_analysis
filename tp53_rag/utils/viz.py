@@ -651,32 +651,38 @@ def docking_pose_html(pdb_id: str, residues, drug_name: str = "",
     safe_name = "".join(ch for ch in str(drug_name) if ch.isalnum() or ch in " ()-+.")[:40]
     label = f"{safe_name} (~{float(affinity):.1f} kcal/mol)" if safe_name else "ligand"
     return f"""
-    <div id="dockview" style="width:100%;height:460px;background:#0d1117;
+    <div id="dockview" style="width:100%;height:520px;background:#0b1622;
          border-radius:8px;"></div>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/3Dmol/2.1.0/3Dmol-min.js"></script>
     <script>
       (function() {{
         try {{
           var el = document.getElementById('dockview');
-          var viewer = $3Dmol.createViewer(el, {{backgroundColor: '#0d1117'}});
+          // Slightly lighter background for contrast against the structure.
+          var viewer = $3Dmol.createViewer(el, {{backgroundColor: '#0b1622'}});
           $3Dmol.download('pdb:{safe_pdb}', viewer, {{}}, function() {{
-            viewer.setStyle({{}}, {{cartoon: {{color: '#3a4654', opacity: 0.55}}}});
+            // Brighter spectrum cartoon (was a dim flat grey at 0.55 opacity).
+            viewer.setStyle({{}}, {{cartoon: {{color: 'spectrum', opacity: 0.95}}}});
             var resi = [{resi_js}];
             resi.forEach(function(r) {{
+              // Bold cyan binding-site sticks.
               viewer.setStyle({{resi: r}},
-                {{cartoon: {{color: '#00d4ff'}},
-                 stick: {{colorscheme: 'cyanCarbon', radius: 0.25}}}});
-              // translucent 'ligand cloud' over the binding pocket
+                {{cartoon: {{color: '#00e0ff'}},
+                 stick: {{colorscheme: 'cyanCarbon', radius: 0.45}}}});
+              // Bright, more opaque 'ligand cloud' over the binding pocket.
               viewer.addStyle({{resi: r}},
-                {{sphere: {{color: '#ffcc33', radius: 1.6, opacity: 0.35}}}});
+                {{sphere: {{color: '#ffd23f', radius: 1.9, opacity: 0.6}}}});
             }});
             if (resi.length) {{
               viewer.addLabel('{label}', {{
-                inFront: true, fontSize: 12, fontColor: '#ffcc33',
-                backgroundColor: '#0d1117', backgroundOpacity: 0.75,
+                inFront: true, fontSize: 13, fontColor: '#ffd23f',
+                backgroundColor: '#0b1622', backgroundOpacity: 0.85,
+                borderColor: '#ffd23f', borderThickness: 0.5,
                 position: {{resi: resi[0]}}
               }});
+              // Zoom into the pocket with a little padding so it fills the view.
               viewer.zoomTo({{resi: resi.join(',')}});
+              viewer.zoom(0.85);
             }} else {{
               viewer.zoomTo();
             }}
