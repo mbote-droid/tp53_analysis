@@ -139,8 +139,13 @@ try:
     from agents.dispatcher import AgentDispatcher
     from knowledge_base.vector_store import TP53VectorStore
     RAG_AVAILABLE = True
-except ImportError as e:
+except Exception as e:  # surface the REAL chained cause, not just the final message
+    import traceback as _tb
+    _details = _tb.format_exc()
     st.error(f"RAG modules not found: {e}. Run: python main.py build")
+    with st.expander("🔍 Import error details (for debugging)"):
+        st.code(_details, language="text")
+    log.error("RAG import failed:\n%s", _details)
 
 # ── Session state ─────────────────────────────────────────────────
 @st.cache_resource
