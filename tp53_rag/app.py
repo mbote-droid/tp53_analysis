@@ -34,6 +34,10 @@ from utils.viz import (
     docking_affinity_chart,
     docking_pose_html,
     tnm_stage_bar,
+    pathogenicity_gauge,
+    tme_donut,
+    vaf_gauge,
+    pathway_diverging_bar,
 )
 
 st.set_page_config(
@@ -340,11 +344,24 @@ with st.sidebar:
     forced_agent = None if selected_agent == "auto-detect" else selected_agent
 
     st.divider()
-    st.markdown("""
-**Model:** Gemma 4 2B (Q4_K_M)  
-**Backend:** llama.cpp CPU  
-**RAM:** ~4GB local inference  
-**Privacy:** 100% local — no cloud
+    _mode = os.getenv("INFERENCE_MODE", "ollama").lower()
+    if _mode == "api":
+        _backend = "Google AI Studio API (cloud)"
+        _model = os.getenv("GOOGLE_MODEL", "gemma-4-26b-a4b-it")
+        _privacy = "Cloud inference — API mode"
+    elif _mode == "llamacpp":
+        _backend = "llama.cpp CPU (local)"
+        _model = "Gemma 4 (GGUF, Q4_K_M)"
+        _privacy = "100% local — no cloud"
+    else:
+        _backend = "Ollama (local)"
+        _model = os.getenv("OLLAMA_MODEL", "gemma4-lowmem")
+        _privacy = "100% local — no cloud"
+    st.markdown(f"""
+**Model:** {_model}
+**Backend:** {_backend}
+**Mode:** `INFERENCE_MODE={_mode}`
+**Privacy:** {_privacy}
 """)
 
 # ── Tabs ──────────────────────────────────────────────────────────
@@ -464,6 +481,52 @@ with tab2:
                     answer = result.get("answer", "")
                     st.markdown(answer[:500] + "..." if len(answer) > 500 else answer)
                     st.caption(f"Sources: {len(result.get('sources', []))}")
+
+        # ── Molecular profile (at-a-glance visuals from structured agents) ──
+        st.divider()
+        st.markdown("### 🔬 Molecular Profile")
+        st.caption("Rule-based structured outputs (no LLM) — instant, deterministic.")
+        mcol1, mcol2 = st.columns(2)
+
+        with mcol1:
+            try:  # Variant Curator → pathogenicity gauge
+                from agents.variant_curator import VariantCurator
+                c = VariantCurator().classify(mutation).get("classification", {})
+                st.plotly_chart(
+                    pathogenicity_gauge(c.get("clinical_significance"),
+                                        c.get("confidence_score")),
+                    use_container_width=True,
+                )
+            except Exception as e:
+                st.caption(f"Variant classification unavailable: {str(e)[:80]}")
+
+            try:  # Liquid Biopsy → VAF burden gauge (from the VAF input)
+                st.plotly_chart(vaf_gauge(vaf), use_container_width=True)
+            except Exception as e:
+                st.caption(f"VAF gauge unavailable: {str(e)[:80]}")
+
+        with mcol2:
+            try:  # Immunogenicity → TME donut
+                from agents.immunogenicity import ImmunogenicityPredictor
+                p = ImmunogenicityPredictor().predict(
+                    mutation, cancer_type=cancer, vaf=vaf).get("prediction", {})
+                st.plotly_chart(
+                    tme_donut(p.get("immune_infiltration_score", p.get("t_cell_fraction", 0.2)),
+                              p.get("immune_status", "")),
+                    use_container_width=True,
+                )
+            except Exception as e:
+                st.caption(f"Immunogenicity unavailable: {str(e)[:80]}")
+
+        try:  # Gene Expression → pathway diverging bar
+            from agents.gene_expression import get_expression_profile
+            prof = get_expression_profile(mutation)
+            st.plotly_chart(
+                pathway_diverging_bar(prof.pathways_activated, prof.pathways_suppressed),
+                use_container_width=True,
+            )
+        except Exception as e:
+            st.caption(f"Pathway profile unavailable for {mutation}: {str(e)[:80]}")
 
         if st.button("💾 Download JSON"):
             st.download_button(
@@ -1071,8 +1134,14 @@ not a replacement for pathological staging.*
 
 # ── Footer ────────────────────────────────────────────────────────
 st.divider()
+_fmode = os.getenv("INFERENCE_MODE", "ollama").lower()
+_finfo = ("Gemma 4 · Google AI Studio (cloud)" if _fmode == "api"
+          else "Gemma 4 · llama.cpp (local)" if _fmode == "llamacpp"
+          else "Gemma 4 · Ollama (local)")
 st.markdown(
-    "**TP53 RAG Platform** | Gemma 4 2B + llama.cpp | "
-    "100% local inference | Kenya/KEML clinical context | "
+    f"**TP53 RAG Platform** | {_finfo} | "
+    "Kenya/KEML clinical context | "
     "[GitHub](https://github.com/mbote-droid/tp53_analysis)"
 )
+st.caption("⚠️ Research & educational use only — not for clinical decisions. "
+           "Some visuals (e.g. docking affinities) are illustrative, not measured.")

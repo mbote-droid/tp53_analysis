@@ -367,6 +367,124 @@ def protein_viewer_html(pdb_id: str, residues) -> str:
     """
 
 
+def pathogenicity_gauge(significance: str, confidence: Optional[float] = None) -> go.Figure:
+    """Benign -> Pathogenic gauge for a variant classification. Never empty."""
+    pos = {
+        "benign": 8, "likely_benign": 28, "vus": 50,
+        "likely_pathogenic": 72, "pathogenic": 92,
+    }
+    s = str(significance or "").strip().lower().replace(" ", "_").replace("-", "_")
+    val = pos.get(s, 50)
+    label = s.replace("_", " ").title() if s else "Unknown"
+    title = f"{label}" + (f" · conf {confidence:.0%}" if isinstance(confidence, (int, float)) else "")
+    fig = go.Figure(go.Indicator(
+        mode="gauge+number",
+        value=val,
+        number={"suffix": "/100", "font": {"size": 22}},
+        title={"text": f"Pathogenicity — {title}", "font": {"size": 14}},
+        gauge={
+            "axis": {"range": [0, 100], "tickvals": [10, 30, 50, 72, 92],
+                     "ticktext": ["Benign", "Likely<br>benign", "VUS",
+                                  "Likely<br>path.", "Path."]},
+            "bar": {"color": "#e6edf3", "thickness": 0.25},
+            "steps": [
+                {"range": [0, 20], "color": "#2ecc71"},
+                {"range": [20, 40], "color": "#a9dfbf"},
+                {"range": [40, 60], "color": "#f1c40f"},
+                {"range": [60, 80], "color": "#e67e22"},
+                {"range": [80, 100], "color": "#e74c3c"},
+            ],
+            "threshold": {"line": {"color": "#00d4ff", "width": 4},
+                          "thickness": 0.8, "value": val},
+        },
+    ))
+    fig.update_layout(template="plotly_dark", height=240,
+                      margin=dict(l=20, r=20, t=50, b=10))
+    return fig
+
+
+def tme_donut(t_cell_fraction: float, immune_status: str = "") -> go.Figure:
+    """Tumour-microenvironment composition donut (T-cell vs other). Never empty."""
+    try:
+        t = float(t_cell_fraction)
+    except (TypeError, ValueError):
+        t = 0.0
+    t = max(0.0, min(1.0, t))
+    status = str(immune_status or "").lower()
+    hot = "#e74c3c" if "hot" in status else "#f39c12" if "inter" in status else "#3498db"
+    fig = go.Figure(go.Pie(
+        labels=["T-cell infiltrate", "Other / stroma"],
+        values=[round(t * 100, 1), round((1 - t) * 100, 1)],
+        hole=0.55, sort=False,
+        marker=dict(colors=[hot, "#2a3340"]),
+        textinfo="label+percent", textfont=dict(size=11),
+        hovertemplate="%{label}: %{value:.1f}%<extra></extra>",
+    ))
+    label = status.replace("-", " ").title() or "—"
+    fig.update_layout(
+        template="plotly_dark", height=300, showlegend=False,
+        title=dict(text=f"Tumour Microenvironment — {label}", font=dict(size=14)),
+        annotations=[dict(text=f"{t*100:.0f}%<br>T-cell", x=0.5, y=0.5,
+                          font=dict(size=14, color="#e6edf3"), showarrow=False)],
+        margin=dict(l=10, r=10, t=50, b=10),
+    )
+    return fig
+
+
+def vaf_gauge(vaf: float, mrd_threshold: float = 5.0) -> go.Figure:
+    """Current ctDNA VAF as a burden gauge against the MRD threshold. Never empty."""
+    try:
+        v = float(vaf)
+    except (TypeError, ValueError):
+        v = 0.0
+    v = max(0.0, min(100.0, v))
+    fig = go.Figure(go.Indicator(
+        mode="gauge+number",
+        value=round(v, 1),
+        number={"suffix": "%", "font": {"size": 22}},
+        title={"text": "ctDNA Tumour Burden (VAF)", "font": {"size": 14}},
+        gauge={
+            "axis": {"range": [0, 60]},
+            "bar": {"color": "#00d4ff", "thickness": 0.3},
+            "steps": [
+                {"range": [0, mrd_threshold], "color": "#1e3a2a"},
+                {"range": [mrd_threshold, 20], "color": "#3a3320"},
+                {"range": [20, 60], "color": "#3a1e1e"},
+            ],
+            "threshold": {"line": {"color": "#f39c12", "width": 4},
+                          "thickness": 0.85, "value": mrd_threshold},
+        },
+    ))
+    fig.update_layout(template="plotly_dark", height=240,
+                      margin=dict(l=20, r=20, t=50, b=10))
+    return fig
+
+
+def pathway_diverging_bar(activated, suppressed) -> go.Figure:
+    """Diverging bar of activated (red, +) vs suppressed (blue, -) p53 pathways."""
+    act = [str(p) for p in (activated or [])][:8]
+    sup = [str(p) for p in (suppressed or [])][:8]
+    if not act and not sup:
+        return _empty_fig("No pathway data")
+    fig = go.Figure()
+    if act:
+        fig.add_trace(go.Bar(
+            y=act, x=[1] * len(act), orientation="h", name="Activated",
+            marker_color="#e74c3c", hovertemplate="%{y} (activated)<extra></extra>"))
+    if sup:
+        fig.add_trace(go.Bar(
+            y=sup, x=[-1] * len(sup), orientation="h", name="Suppressed",
+            marker_color="#3498db", hovertemplate="%{y} (suppressed)<extra></extra>"))
+    fig.update_layout(
+        template="plotly_dark", height=max(240, 36 * (len(act) + len(sup)) + 60),
+        barmode="overlay", title=dict(text="p53 Pathway Dysregulation", font=dict(size=14)),
+        xaxis=dict(title="suppressed ← → activated", tickvals=[-1, 0, 1],
+                   ticktext=["Suppressed", "", "Activated"], range=[-1.4, 1.4]),
+        legend=dict(orientation="h", y=-0.2), margin=dict(l=10, r=10, t=50, b=10),
+    )
+    return fig
+
+
 def tnm_stage_bar(stage_group: str) -> go.Figure:
     """Horizontal stage-progression gauge (I → IV) with the patient's stage
     highlighted. Colour runs green (early) → red (advanced). Never empty.

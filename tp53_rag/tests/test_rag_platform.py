@@ -345,6 +345,28 @@ class TestVizHelpers:
         for s in ["I", "IIA", "IIB", "IIIA", "IIIB", "IIIC", "IV", "", "?"]:
             assert tnm_stage_bar(s).to_json()  # never empty, valid for any input
 
+    def test_pathogenicity_gauge(self):
+        from utils.viz import pathogenicity_gauge
+        for s in ["pathogenic", "likely_benign", "vus", "benign", "", "weird"]:
+            assert pathogenicity_gauge(s, 0.9).to_json()
+        assert pathogenicity_gauge("pathogenic", None).to_json()
+
+    def test_tme_donut(self):
+        from utils.viz import tme_donut
+        assert tme_donut(0.35, "immune-hot").to_json()
+        assert tme_donut("bad-input", "").to_json()   # non-numeric tolerated
+        assert tme_donut(2.0, "cold").to_json()        # clamped
+
+    def test_vaf_gauge(self):
+        from utils.viz import vaf_gauge
+        assert vaf_gauge(47.3).to_json()
+        assert vaf_gauge("x").to_json()                # non-numeric tolerated
+
+    def test_pathway_diverging_bar(self):
+        from utils.viz import pathway_diverging_bar
+        assert pathway_diverging_bar(["MDM2", "BAX"], ["CDKN1A"]).to_json()
+        assert pathway_diverging_bar([], []).to_json()  # never empty
+
 
 class TestBenchmarkScoring:
     """Pure scoring helpers in benchmarks/scoring.py."""
