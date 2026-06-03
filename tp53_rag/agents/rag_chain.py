@@ -71,7 +71,7 @@ _CACHE_DB    = Path("data/semantic_cache.db")
 _MODEL_PATH  = Path(os.getenv("LLAMA_MODEL_PATH", "models/gemma-2b-Q4_K_M.gguf"))
 
 # ── Runtime mode ──────────────────────────────────────────────────
-INFERENCE_MODE   = os.getenv("INFERENCE_MODE", "llamacpp")   # llamacpp | api | ollama
+INFERENCE_MODE   = os.getenv("INFERENCE_MODE", "ollama")   # ollama | llamacpp | api
 GOOGLE_API_KEY   = os.getenv("GOOGLE_API_KEY", "")
 GOOGLE_MODEL     = os.getenv("GOOGLE_MODEL", "gemma-4-26b-a4b-it")
 

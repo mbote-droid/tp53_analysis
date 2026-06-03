@@ -390,11 +390,11 @@ In the Streamlit app:
 
 ---
 
-## Hackathon Pitch
+## Platform Pitch
 
 **"Privacy-first multi-agent TP53 analysis running entirely on local CPU"**
 
-Features to demo:
+Features to showcase:
 - Voice input → transcription → RAG query (if Whisper built)
 - Multi-agent orchestration (variant analysis, drug discovery, immunotherapy)
 - Enterprise dossier generation (PDF export)
@@ -550,7 +550,7 @@ Total time: 15-30 minutes (depending on network/CPU)
     print("  2. Start llama-server: ./llama.cpp/llama-server -m models/gemma-2b-it-Q4_K_M.gguf -c 8192 --threads 4")
     print("  3. Build knowledge base: python tp53_rag/main.py build")
     print("  4. Run Streamlit: streamlit run tp53_rag/app.py")
-    print("\n🚀 Good luck at the hackathon!\n")
+    print("\n🧬 Setup complete — Daktari Genomed Labs\n")
 
 if __name__ == "__main__":
     try:

@@ -61,10 +61,10 @@
       "type": "n8n-nodes-base.executeCommand",
       "position": [1000, 200],
       "parameters": {
-        "command": "cd /path/to/tp53_analysis && python main.py demo --accession {{$json.accession}} 2>&1",
+        "command": "cd /path/to/tp53_analysis/tp53_rag && python main.py visualise --accession {{$json.accession}} --no-esmfold --no-embeddings 2>&1",
         "options": { "timeout": 120000 }
       },
-      "notes": "Runs the TP53 bioinformatics pipeline. Adjust path as needed."
+      "notes": "Runs the TP53 bioinformatics pipeline for the accession (ESMFold/embeddings skipped to fit the 8GB-RAM automation budget). Adjust the absolute path as needed."
     },
 
     {

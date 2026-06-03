@@ -1,8 +1,16 @@
 # ============================================================
-# TP53 RAG Platform — Streamlit Cloud Requirements
-# Python 3.11 — Cloud deployment ONLY
-# torch, sentence-transformers, llama-cpp-python excluded
-# They run locally only — cloud uses ChromaDB default embeddings
+# TP53 RAG Platform — Single Canonical Requirements
+# Python 3.11+
+# ------------------------------------------------------------
+# This is the ONE requirements file. It is cloud-safe by default:
+# torch, sentence-transformers, openai-whisper and llama-cpp-python
+# are intentionally EXCLUDED — they exceed the Streamlit Cloud RAM
+# limit and run on local hardware only.
+#
+#   • Streamlit Cloud  -> uses this file as-is (INFERENCE_MODE=api).
+#   • Local full stack -> also `pip install` the OPTIONAL block at the
+#                         bottom (uncomment) for offline inference,
+#                         pathology vision, and voice.
 # ============================================================
 
 # UI
@@ -34,11 +42,18 @@ rank-bm25>=0.2.1
 scipy>=1.10.0
 scikit-learn>=1.3.0
 
-# API
+# API server (FastAPI — n8n integration)
 fastapi>=0.111.0
 uvicorn>=0.30.1
 httpx>=0.27.0
 python-multipart>=0.0.9
+
+# Inference — cloud (Google AI Studio, INFERENCE_MODE=api)
+google-genai>=0.3.0
+
+# Embeddings — cloud uses the HuggingFace API / ChromaDB default
+# (NOT local sentence-transformers, which exceeds cloud RAM)
+huggingface-hub>=0.23.0
 
 # Utilities
 python-dotenv>=1.0.1
@@ -50,5 +65,17 @@ pygments>=2.15.0
 markdown-it-py>=3.0.0
 mdurl>=0.1.0
 
-# Embeddings
-huggingface-hub>=0.23.0
+# Testing
+pytest>=7.4.0
+pytest-asyncio>=0.21.0
+
+# ============================================================
+# OPTIONAL — LOCAL ONLY (do NOT install on Streamlit Cloud; these
+# exceed the 1GB RAM limit). Uncomment for the full offline stack.
+# ============================================================
+# llama-cpp-python>=0.2.0      # local llama.cpp inference (INFERENCE_MODE=llamacpp)
+# sentence-transformers>=3.0.1 # local embeddings / cross-encoder reranking
+# torch>=2.0.0                 # pathology vision + local embeddings
+# torchvision>=0.15.0          # pathology image transforms
+# timm>=0.9.0                  # UNI / ResNet pathology models
+# openai-whisper>=20231117     # voice transcription (also needs system ffmpeg)

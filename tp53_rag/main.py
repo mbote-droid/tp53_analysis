@@ -341,7 +341,7 @@ class TestCommands:
         console.print(Panel("[bold]Testing Immunogenicity Predictor[/bold]", border_style="cyan"))
         try:
             from agents.immunogenicity import ImmunogenicityPredictor
-            r = ImmunogenicityPredictor().predict(mut)
+            r = ImmunogenicityPredictor().predict("R175H")
             console.print(f"  TME          : {r.get('tme_status','—')}")
             
             console.print(f"  Checkpoint   : {r.get('checkpoint_recommendation','—')}")
@@ -404,7 +404,7 @@ class PlatformCLI:
     @staticmethod
     def build_parser() -> argparse.ArgumentParser:
         parser = argparse.ArgumentParser(
-            description="TP53 RAG Platform — Gemma 4 Good Hackathon",
+            description="TP53 RAG Platform — Daktari Genomed Labs",
             formatter_class=argparse.RawDescriptionHelpFormatter,
         )
         sub = parser.add_subparsers(dest="command")
@@ -429,7 +429,7 @@ class PlatformCLI:
             "[cyan]Commands:[/cyan]\n"
             "  python main.py build          — Build RAG knowledge base\n"
             "  python main.py query          — Interactive Q&A\n"
-            "  python main.py demo           — Full 9-agent demo\n"
+            "  python main.py demo           — Full multi-agent demo\n"
             "  python main.py serve          — FastAPI server (n8n)\n"
             "  python main.py visualise      — 3D structure viewer\n"
             "  python main.py test-rag       — Test RAG chain\n"
@@ -438,15 +438,15 @@ class PlatformCLI:
             "  python main.py test-dossier   — Test dossier compiler\n"
             "  python main.py list-agents    — Show all agents\n\n"
             "[yellow]Quick start (8GB RAM Local Edge Optimization):[/yellow]\n" 
-            " 1. ollama create gemma-hackathon-edge -f ./Modelfile\n"
-            " 2. ollama run gemma-hackathon-edge\n"
+            " 1. ollama create gemma4-lowmem -f ./Modelfile\n"
+            " 2. ollama run gemma4-lowmem\n"
             " 3. cp .env.example .env (add ENTREZ_EMAIL)\n"
             " 4. python main.py build\n"
             " 5. python main.py demo\n"
             " 6. streamlit run app.py\n",
 
             border_style="bold white",
-            title="[bold white]TP53 RAG Platform — Gemma 4 Good Hackathon[/bold white]",
+            title="[bold white]TP53 RAG Platform — Daktari Genomed Labs[/bold white]",
         ))
         parser.print_help()
 

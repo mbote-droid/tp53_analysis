@@ -5,6 +5,7 @@ Clean rebuild — no streamlit_option_menu dependency
 import os
 import sys
 import json
+import time
 import logging
 import tempfile
 from pathlib import Path
@@ -17,6 +18,19 @@ import streamlit as st
 import streamlit.components.v1 as components
 import pandas as pd
 import plotly.express as px
+import plotly.graph_objects as go
+
+from utils.viz import (
+    CANONICAL_HOTSPOTS,
+    P53_DOMAINS,
+    agent_status_badge,
+    animated_vaf_timeline,
+    animated_hotspot_bar,
+    agent_architecture_diagram,
+    domain_legend_chart,
+    parse_residues,
+    protein_viewer_html,
+)
 
 st.set_page_config(
     page_title="TP53 RAG Platform",
@@ -24,6 +38,96 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded",
 )
+
+
+def inject_theme() -> None:
+    """Apply the dark bioinformatics theme + web fonts.
+
+    Fonts load from Google Fonts when online; offline/edge deployments
+    fall back to the system stacks so nothing breaks without a network.
+    Pure CSS — no user input, no runtime cost, no memory footprint.
+    """
+    st.markdown(
+        """
+        <style>
+        @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;600&family=JetBrains+Mono:wght@400;700&display=swap');
+
+        :root {
+            --tp53-accent: #00d4ff;
+            --tp53-bg: #0d1117;
+            --tp53-panel: #161b22;
+            --tp53-text: #e6edf3;
+            --tp53-sans: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            --tp53-mono: 'JetBrains Mono', 'Cascadia Code', 'Fira Code', Consolas, monospace;
+        }
+
+        html, body, [class*="css"], .stMarkdown, .stTextInput, .stSelectbox,
+        button, input, textarea, .stTabs [data-baseweb="tab"] {
+            font-family: var(--tp53-sans);
+        }
+
+        code, pre, kbd, samp, .stCode, [data-testid="stMetricValue"],
+        [data-testid="stMetricLabel"] {
+            font-family: var(--tp53-mono);
+        }
+
+        h1, h2, h3, h4 {
+            font-family: var(--tp53-sans);
+            letter-spacing: -0.01em;
+        }
+
+        /* Accent the active tab + primary buttons */
+        .stTabs [aria-selected="true"] {
+            color: var(--tp53-accent);
+            border-bottom-color: var(--tp53-accent);
+        }
+        .stButton > button[kind="primary"] {
+            background: var(--tp53-accent);
+            color: #03121a;
+            border: none;
+        }
+
+        /* ── Real-time agent status badges ── */
+        .tp53-badge {
+            display: flex; align-items: center; gap: 10px;
+            font-family: var(--tp53-mono); font-size: 0.86rem;
+            padding: 8px 12px; margin: 6px 0; border-radius: 8px;
+            background: var(--tp53-panel);
+            border: 1px solid #232b36;
+        }
+        .tp53-badge .dot {
+            width: 10px; height: 10px; border-radius: 50%;
+            flex: 0 0 auto;
+        }
+        .tp53-badge .name { flex: 1 1 auto; color: var(--tp53-text); }
+        .tp53-badge .time { color: #8b98a5; font-size: 0.78rem; }
+
+        .tp53-badge.running { border-color: var(--tp53-accent); }
+        .tp53-badge.running .dot {
+            background: var(--tp53-accent);
+            animation: tp53-spin 0.9s linear infinite;
+            box-shadow: 0 0 0 0 rgba(0,212,255,0.6);
+        }
+        .tp53-badge.running .name::after {
+            content: ' …'; color: var(--tp53-accent);
+        }
+        .tp53-badge.complete .dot { background: #2ecc71; }
+        .tp53-badge.complete { border-color: #1e3a2a; }
+        .tp53-badge.failed   .dot { background: #ff4b4b; }
+        .tp53-badge.failed   { border-color: #3a1e1e; }
+
+        @keyframes tp53-spin {
+            0%   { box-shadow: 0 0 0 0 rgba(0,212,255,0.55); }
+            70%  { box-shadow: 0 0 0 7px rgba(0,212,255,0); }
+            100% { box-shadow: 0 0 0 0 rgba(0,212,255,0); }
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+inject_theme()
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
@@ -93,11 +197,14 @@ def safe_query(question: str, agent_type=None) -> dict:
             "retries": 0,
         }
     try:
-        return st.session_state.rag.query(
-            question=question,
-            pipeline_data=st.session_state.pipeline_data or None,
-            agent_type=agent_type,
-        )
+        # Cap concurrent inferences so parallel sessions can't exhaust the
+        # 8GB RAM budget. Acquire/release is handled by the context manager.
+        with _inference_lock:
+            return st.session_state.rag.query(
+                question=question,
+                pipeline_data=st.session_state.pipeline_data or None,
+                agent_type=agent_type,
+            )
     except Exception as e:
         return {
             "answer": f"Query error: {str(e)[:300]}",
@@ -118,6 +225,66 @@ def format_sources(sources: list) -> str:
             f"(score: {src.get('relevance_score', 0):.2f})"
         )
     return "\n".join(lines)
+
+
+# ── Voice transcription (shared by Tab 6 narration + Tab 7) ────────
+@st.cache_resource
+def load_whisper():
+    """Lazy-load the tiny Whisper model once. Returns None if unavailable."""
+    try:
+        import whisper  # type: ignore[import-not-found]  # optional dep, not in requirements
+        return whisper.load_model("tiny")
+    except Exception as e:
+        log.error(f"Failed to load Whisper: {e}")
+        return None
+
+
+def transcribe(audio_bytes) -> str:
+    """Transcribe recorded audio to text. Always returns a string; on any
+    failure returns a message prefixed 'Transcription error'.
+
+    Uses a NamedTemporaryFile so it never writes into the (read-only on
+    Streamlit Cloud) app directory.
+    """
+    model = load_whisper()
+    if model is None:
+        return "Transcription error: Whisper model failed to load"
+
+    tmp_path = None
+    try:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp:
+            if hasattr(audio_bytes, "getvalue"):
+                tmp.write(audio_bytes.getvalue())
+            elif hasattr(audio_bytes, "read"):
+                if hasattr(audio_bytes, "seek"):
+                    audio_bytes.seek(0)
+                tmp.write(audio_bytes.read())
+            else:
+                tmp.write(bytes(audio_bytes))
+            tmp_path = Path(tmp.name)
+
+        try:
+            result = model.transcribe(str(tmp_path), language="en", fp16=False)
+        except TypeError:
+            result = model.transcribe(str(tmp_path), language="en")
+        return result.get("text", "").strip()
+    except Exception as e:
+        return f"Transcription error: {str(e)[:200]}"
+    finally:
+        try:
+            if tmp_path and tmp_path.exists():
+                tmp_path.unlink()
+        except Exception as cleanup_err:
+            log.warning(f"Failed to cleanup temp audio: {cleanup_err}")
+
+
+def whisper_available() -> bool:
+    try:
+        import whisper  # type: ignore[import-not-found]  # noqa: F401  (optional dep)
+        return True
+    except ImportError:
+        return False
+
 
 # ── Sidebar ───────────────────────────────────────────────────────
 with st.sidebar:
@@ -241,13 +408,35 @@ with tab2:
             "liquid_biopsy":    f"VAF thresholds for {mutation}. Current VAF: {vaf}%",
         }
 
-        cols = st.columns(2)
-        for idx, (agent, query) in enumerate(agent_queries.items()):
-            with st.spinner(f"Running {agent}..."):
+        # ── Live agent status board ──
+        st.markdown("#### Agent status")
+        status_slots = {agent: st.empty() for agent in agent_queries}
+        for agent in agent_queries:
+            status_slots[agent].markdown(
+                agent_status_badge(agent, "running"), unsafe_allow_html=True
+            )
+
+        results: dict = {}
+        for agent, query in agent_queries.items():
+            start = time.perf_counter()
+            try:
                 result = safe_query(query, agent_type=agent)
+                state = "failed" if result.get("agent_used") == "error" else "complete"
+            except Exception as e:  # defensive — safe_query already guards
+                result = {"answer": f"Query error: {str(e)[:300]}", "sources": []}
+                state = "failed"
+            elapsed = time.perf_counter() - start
+            results[agent] = result
+            status_slots[agent].markdown(
+                agent_status_badge(agent, state, elapsed), unsafe_allow_html=True
+            )
+
+        st.divider()
+        cols = st.columns(2)
+        for idx, (agent, result) in enumerate(results.items()):
             with cols[idx % 2]:
                 with st.expander(f"🔬 {agent.replace('_', ' ').title()}", expanded=(idx < 2)):
-                    answer = result["answer"]
+                    answer = result.get("answer", "")
                     st.markdown(answer[:500] + "..." if len(answer) > 500 else answer)
                     st.caption(f"Sources: {len(result.get('sources', []))}")
 
@@ -289,25 +478,21 @@ with tab4:
     col1, col2 = st.columns(2)
     with col1:
         st.markdown("### ctDNA VAF Timeline")
-        vaf_df = pd.DataFrame({
-            "Day":    [0, 5, 10, 15, 20, 25],
-            "VAF (%)": [50, 48, 45, 42, 38, 35],
-        })
-        fig = px.line(vaf_df, x="Day", y="VAF (%)", markers=True,
-                      title="Variant Allele Frequency Over Treatment")
-        fig.update_layout(template="plotly_dark")
+        st.caption("Press ▶ Play to watch the treatment response unfold.")
+        fig = animated_vaf_timeline(
+            days=[0, 5, 10, 15, 20, 25],
+            vafs=[50, 48, 45, 42, 38, 35],
+            mrd_threshold=5.0,
+        )
         st.plotly_chart(fig, use_container_width=True)
 
     with col2:
         st.markdown("### TP53 Hotspot Frequency")
-        hotspot_df = pd.DataFrame({
-            "Codon":          ["175", "248", "273", "249", "282", "220"],
-            "Frequency (%)":  [8.0, 7.5, 7.0, 6.5, 4.0, 3.5],
-        })
-        fig2 = px.bar(hotspot_df, x="Codon", y="Frequency (%)",
-                      title="Known TP53 Hotspot Mutations",
-                      color="Frequency (%)", color_continuous_scale="Reds")
-        fig2.update_layout(template="plotly_dark")
+        st.caption("Press ▶ Play to watch the frequencies build up.")
+        fig2 = animated_hotspot_bar(
+            codons=["175", "248", "273", "249", "282", "220"],
+            freqs=[8.0, 7.5, 7.0, 6.5, 4.0, 3.5],
+        )
         st.plotly_chart(fig2, use_container_width=True)
 
     st.markdown("### TP53 Protein Domain Map")
@@ -320,6 +505,26 @@ with tab4:
                      "Tetramerization", "Regulatory"],
     })
     st.dataframe(domain_df, use_container_width=True, hide_index=True)
+
+    st.markdown("### Multi-Agent Dispatch Network")
+    st.caption("Press ▶ Trace dispatch to watch the orchestrator fan out to each agent.")
+    arch_fig = agent_architecture_diagram([
+        "mutation_analysis", "drug_discovery", "clinical_interpretation",
+        "liquid_biopsy", "gene_expression", "domain_annotation",
+        "pathology_vision", "tnm_staging", "variant_curator", "immunogenicity",
+    ])
+    st.plotly_chart(
+        arch_fig, use_container_width=True,
+        # Lock zoom so a stray click/scroll can't jump the diagram, and
+        # drop the zoom buttons from the toolbar (it's a fixed layout).
+        config={
+            "scrollZoom": False, "displaylogo": False, "doubleClick": False,
+            "modeBarButtonsToRemove": [
+                "zoom2d", "zoomIn2d", "zoomOut2d", "pan2d",
+                "autoScale2d", "select2d", "lasso2d", "resetScale2d",
+            ],
+        },
+    )
 
 # ── TAB 5: Report ─────────────────────────────────────────────────
 with tab5:
@@ -353,7 +558,10 @@ with tab5:
 # ── TAB 6: Structure ──────────────────────────────────────────────
 with tab6:
     st.markdown("## 🔬 3D Structure Visualization")
-    st.markdown("Interactive p53 protein structure — powered by Mol* viewer")
+    st.markdown(
+        "Interactive p53 protein structure — domain-coloured, auto-rotating, "
+        "with hotspot residues labelled. Colours match the domain map below."
+    )
 
     col1, col2 = st.columns([2, 1])
 
@@ -375,22 +583,40 @@ with tab6:
 
         st.markdown(f"**Structure:** `{pdb_id}` — [Open in RCSB](https://www.rcsb.org/structure/{pdb_id})")
 
-        # Mol* viewer embed
-        components.iframe(
-            f"https://molstar.org/viewer/?pdb={pdb_id}",
-            height=480,
-            scrolling=False,
+        enhanced = st.toggle(
+            "Enhanced viewer — auto-rotate + hotspot highlight",
+            value=True,
+            help="Spins the structure and highlights hotspot residues 175/248/273 "
+                 "plus your selected residue. Uncheck for the standard Mol* viewer.",
         )
 
+        if enhanced:
+            residues = parse_residues(highlight)
+            st.caption(f"Highlighting residues: {', '.join(map(str, residues))}")
+            components.html(protein_viewer_html(pdb_id, residues), height=500)
+        else:
+            # Mol* viewer embed
+            components.iframe(
+                f"https://molstar.org/viewer/?pdb={pdb_id}",
+                height=480,
+                scrolling=False,
+            )
+
     with col2:
-        st.markdown("### Domain Reference")
+        st.markdown("### Colour Legend")
         domain_ref = pd.DataFrame({
-            "Domain":   ["TAD", "PRD", "DBD", "TET", "REG"],
-            "Residues": ["1–67", "67–98", "94–292", "323–356", "364–393"],
-            "Function": ["Transactivation", "Proline-rich",
-                         "DNA-binding ⚠️", "Tetramerization", "Regulatory"],
+            "Domain":   [d["name"] for d in P53_DOMAINS],
+            "Residues": [f"{d['start']}–{d['end']}" for d in P53_DOMAINS],
+            "Function": [d["function"] for d in P53_DOMAINS],
         })
-        st.dataframe(domain_ref, use_container_width=True, hide_index=True)
+        st.dataframe(
+            domain_ref.style.apply(
+                lambda row: [f"background-color: {P53_DOMAINS[row.name]['color']}33"] * len(row),
+                axis=1,
+            ),
+            use_container_width=True, hide_index=True,
+        )
+        st.caption("🔴 Red spheres = hotspot residues (175 / 248 / 273) + your selection.")
 
         st.markdown("### Hotspot Positions")
         hotspot_ref = pd.DataFrame({
@@ -401,14 +627,42 @@ with tab6:
         })
         st.dataframe(hotspot_ref, use_container_width=True, hide_index=True)
 
-        st.markdown("### RAG Narration")
-        if st.button("🧠 Explain structure"):
+    # ── Domain map (side chart, colours match the 3D structure) ──
+    st.markdown("### Structure Colour Map")
+    st.plotly_chart(domain_legend_chart(), use_container_width=True)
+
+    # ── Multimodal RAG narration: type or speak ──
+    st.markdown("### 🧠 Structure Narration")
+    st.caption("Ask about this structure by typing or speaking.")
+    nar_col1, nar_col2 = st.columns([2, 1])
+    with nar_col1:
+        struct_q = st.text_input(
+            "Question about this structure:",
+            value=f"Explain the structure of p53 PDB {pdb_id}, focusing on the "
+                  f"DNA-binding domain and residue {highlight}.",
+            key="struct_narration_q",
+        )
+    with nar_col2:
+        struct_audio = st.audio_input("🎙️ Or speak", key="struct_narration_audio")
+
+    if struct_audio is not None:
+        if not whisper_available():
+            st.warning("⚠️ Voice needs Whisper: `pip install openai-whisper`")
+        else:
+            with st.spinner("Transcribing with Whisper..."):
+                spoken = transcribe(struct_audio)
+            if spoken.startswith("Transcription error"):
+                st.error(spoken)
+            else:
+                st.success(f"**Heard:** {spoken}")
+                struct_q = spoken
+
+    if st.button("🧠 Explain structure", key="explain_structure_btn"):
+        if not struct_q.strip():
+            st.info("Type or speak a question first.")
+        else:
             with st.spinner("Querying Gemma 4..."):
-                result = safe_query(
-                    f"Explain the 3D structure of p53 PDB {pdb_id}. "
-                    f"Focus on the DNA-binding domain and residue {highlight}.",
-                    agent_type="domain_annotation"
-                )
+                result = safe_query(struct_q, agent_type="domain_annotation")
             st.markdown(result["answer"])
 
 # ── TAB 7: Voice ──────────────────────────────────────────────────
@@ -416,56 +670,11 @@ with tab7:
     st.markdown("## 🎤 Voice Input (Beta)")
     st.markdown("Speak your question — transcribed locally via Whisper")
 
-    WHISPER_AVAILABLE = False
-    try:
-        import whisper
-        WHISPER_AVAILABLE = True
+    WHISPER_AVAILABLE = whisper_available()
+    if WHISPER_AVAILABLE:
         st.success("✅ Whisper ready")
-    except ImportError:
+    else:
         st.warning("⚠️ Install Whisper: `pip install openai-whisper`")
-
-    @st.cache_resource
-    def load_whisper():
-        try:
-            import whisper
-            return whisper.load_model("tiny")
-        except Exception as e:
-            log.error(f"Failed to load Whisper: {e}")
-            return None
-
-    def transcribe(audio_bytes) -> str:
-        model = load_whisper()
-        if model is None:
-            return "Transcription error: Whisper model failed to load"
-
-        tmp_path = Path(__file__).parent / "temp_audio.wav"
-        try:
-            with open(str(tmp_path), "wb") as f:
-                if hasattr(audio_bytes, "getvalue"):
-                    f.write(audio_bytes.getvalue())
-                elif hasattr(audio_bytes, "read"):
-                    if hasattr(audio_bytes, "seek"):
-                        audio_bytes.seek(0)
-                    f.write(audio_bytes.read())
-                else:
-                    f.write(bytes(audio_bytes))
-
-            try:
-                result = model.transcribe(str(tmp_path), language="en", fp16=False)
-            except TypeError:
-                result = model.transcribe(str(tmp_path), language="en")
-
-            return result.get("text", "").strip()
-        except FileNotFoundError as e:
-            return f"Transcription error: File not found - {e}"
-        except Exception as e:
-            return f"Transcription error: {str(e)[:200]}"
-        finally:
-            try:
-                if tmp_path.exists():
-                    tmp_path.unlink()
-            except Exception as cleanup_err:
-                log.warning(f"Failed to cleanup temp audio: {cleanup_err}")
 
     audio_bytes = st.audio_input("🎙️ Record your question (max 30s):")
 
@@ -556,17 +765,25 @@ with tab9:
                     "torch/torchvision not installed. Run locally for full functionality."
                 )
             else:
-                tmp = Path("temp_slide.jpg")
-                tmp.write_bytes(uploaded.getvalue())
+                # NamedTemporaryFile avoids writing into the (read-only on
+                # Streamlit Cloud) working directory.
+                suffix = Path(uploaded.name).suffix or ".jpg"
+                with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as _tf:
+                    _tf.write(uploaded.getvalue())
+                    tmp = Path(_tf.name)
 
-                with st.spinner("Analysing slide with pathology foundation model..."):
-                    result = agent.process_slide(
-                        str(tmp),
-                        mutation_data=st.session_state.pipeline_data
-                    )
-
-                if tmp.exists():
-                    tmp.unlink()
+                try:
+                    with st.spinner("Analysing slide with pathology foundation model..."):
+                        result = agent.process_slide(
+                            str(tmp),
+                            mutation_data=st.session_state.pipeline_data
+                        )
+                finally:
+                    try:
+                        if tmp.exists():
+                            tmp.unlink()
+                    except Exception as cleanup_err:
+                        log.warning(f"Failed to cleanup temp slide: {cleanup_err}")
 
                 if result["success"]:
                     st.session_state.last_pathology_result = result

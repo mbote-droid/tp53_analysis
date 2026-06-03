@@ -8,6 +8,9 @@ data/chroma_db/
 # Model cache
 data/structures/
 data/reports/
+
+# Generated benchmark reports (timestamped artifacts)
+benchmarks/results/
 data/surgical_briefs/
 data/structure_outputs/
 
@@ -42,6 +45,9 @@ Thumbs.db
 CLAUDE.local.md
 progress.md
 .claude/
+
+# Internal build notes (not for publication)
+BUILD_STATUS.md
 
 #llama files
 models/*.gguf

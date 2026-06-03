@@ -113,7 +113,7 @@ class TP53DocumentIngester:
 
     def load_uniprot_annotation(self) -> List[Document]:
         try:
-            # Using session manager with finite timeouts for hackathon performance stability
+            # Using session manager with finite timeouts for performance stability
             with requests.Session() as session:
                 resp = session.get("https://uniprot.org", timeout=10)
                 resp.raise_for_status()

@@ -3,10 +3,8 @@
 TP53 RAG Platform - Agent #9: The Medical Auditor
 ============================================================
 Verifies every clinical output before it reaches a clinician
-or patient. Implements the exact verification protocol from
-the hackathon strategy document.
-
-This agent is what wins the Safety & Trust $10k track.
+or patient. Implements the clinical verification protocol for
+the platform's safety and trust layer.
 
 It checks for:
   - Pharmacological hallucinations

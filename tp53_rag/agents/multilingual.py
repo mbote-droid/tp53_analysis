@@ -155,7 +155,7 @@ class MultilingualReportAgent:
 
     def _query(self, system_prompt: str, pipeline_data: Dict) -> str:
         try:
-            from langchain.prompts import ChatPromptTemplate
+            from langchain_core.prompts import ChatPromptTemplate
             from langchain_core.output_parsers import StrOutputParser
             prompt = ChatPromptTemplate.from_messages([
                 ("system", system_prompt),

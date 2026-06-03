@@ -1,0 +1,99 @@
+{
+  "metadata": {
+    "description": "Curated ground-truth classifications for TP53 variant benchmarking. Used to measure VariantCurator accuracy against established clinical databases.",
+    "gene": "TP53",
+    "transcript": "NM_000546.6",
+    "significance_vocabulary": ["pathogenic", "likely_pathogenic", "vus", "likely_benign", "benign"],
+    "sources": [
+      "ClinVar (NCBI) consensus classifications",
+      "IARC TP53 Database (R-class functional classification)",
+      "COSMIC somatic mutation frequencies"
+    ],
+    "curated_by": "Daktari Genomed Labs",
+    "last_reviewed": "2026-06-02",
+    "disclaimer": "Reference values curated from public databases for benchmarking only; not for direct clinical use. A domain expert should re-verify before any clinical interpretation."
+  },
+  "variants": [
+    {
+      "mutation": "R175H",
+      "expected_significance": "pathogenic",
+      "expected_function_class": "loss-of-function",
+      "expected_iarc": "R1",
+      "is_hotspot": true,
+      "notes": "Classic conformational hotspot; among the most common TP53 cancer mutations.",
+      "source": "ClinVar: Pathogenic; IARC functional: non-functional"
+    },
+    {
+      "mutation": "R248W",
+      "expected_significance": "pathogenic",
+      "expected_function_class": "loss-of-function",
+      "expected_iarc": "R1",
+      "is_hotspot": true,
+      "notes": "DNA-contact hotspot.",
+      "source": "ClinVar: Pathogenic; IARC functional: non-functional"
+    },
+    {
+      "mutation": "R273H",
+      "expected_significance": "pathogenic",
+      "expected_function_class": "loss-of-function",
+      "expected_iarc": "R1",
+      "is_hotspot": true,
+      "notes": "DNA-contact hotspot.",
+      "source": "ClinVar: Pathogenic; IARC functional: non-functional"
+    },
+    {
+      "mutation": "Y220C",
+      "expected_significance": "pathogenic",
+      "expected_function_class": "loss-of-function",
+      "expected_iarc": "R1",
+      "is_hotspot": true,
+      "notes": "Conformational destabilizing mutation; druggable pocket (PC14586/stabilizers).",
+      "source": "ClinVar: Pathogenic; IARC functional: non-functional"
+    },
+    {
+      "mutation": "R282W",
+      "expected_significance": "pathogenic",
+      "expected_function_class": "loss-of-function",
+      "expected_iarc": "R1",
+      "is_hotspot": true,
+      "notes": "Conformational hotspot.",
+      "source": "ClinVar: Pathogenic; IARC functional: non-functional"
+    },
+    {
+      "mutation": "G245S",
+      "expected_significance": "pathogenic",
+      "expected_function_class": "loss-of-function",
+      "expected_iarc": "R2",
+      "is_hotspot": true,
+      "notes": "Conformational hotspot; partially functional in some assays.",
+      "source": "ClinVar: Pathogenic; IARC functional: partially functional"
+    },
+    {
+      "mutation": "R249S",
+      "expected_significance": "pathogenic",
+      "expected_function_class": "loss-of-function",
+      "expected_iarc": "R1",
+      "is_hotspot": true,
+      "notes": "Aflatoxin-associated hepatocellular carcinoma hotspot; high relevance in sub-Saharan Africa.",
+      "source": "ClinVar: Pathogenic; IARC functional: non-functional"
+    },
+    {
+      "mutation": "P72R",
+      "expected_significance": "benign",
+      "expected_function_class": "neutral",
+      "expected_iarc": null,
+      "is_hotspot": false,
+      "notes": "Common germline polymorphism (rs1042522); negative control — must NOT be called pathogenic.",
+      "source": "ClinVar: Benign (common polymorphism)"
+    },
+    {
+      "mutation": "A159V",
+      "expected_significance": "vus",
+      "expected_function_class": "unknown",
+      "expected_iarc": null,
+      "is_hotspot": false,
+      "notes": "Non-hotspot missense; uncertain-significance control.",
+      "source": "ClinVar: conflicting / uncertain significance"
+    }
+  ]
+}

@@ -30,7 +30,8 @@ class CrossEncoderReranker:
       from sentence_transformers import CrossEncoder
       model = CrossEncoder("ms-marco-MiniLM-L-6-v2")
     
-    For now, we use a simple heuristic scorer for the hackathon demo.
+    By default we use a lightweight heuristic scorer to stay within
+    the low-memory hardware budget.
     """
     
     def __init__(self, model_name: str = "heuristic"):

@@ -21,7 +21,9 @@ for d in [DATA_DIR, DOCUMENTS_DIR, CHROMA_DIR, LOGS_DIR]:
     d.mkdir(parents=True, exist_ok=True)
 
 # ── Inference mode ────────────────────────────────────────
-INFERENCE_MODE = os.getenv("INFERENCE_MODE", "local")
+# Valid values: ollama | llamacpp | api  (default: ollama, the primary
+# offline mode). Must match the default in agents/rag_chain.py.
+INFERENCE_MODE = os.getenv("INFERENCE_MODE", "ollama")
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY", "")
 # Corrected: Explicitly targeting the new Gemma 4 API endpoint string
 GOOGLE_MODEL = os.getenv("GOOGLE_MODEL", "gemma-4-26b-a4b-it")

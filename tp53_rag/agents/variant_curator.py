@@ -9,6 +9,7 @@ Output: Structured JSON with variant class, clinical significance, databases.
 """
 
 import json
+import re
 import hashlib
 import threading
 import time
@@ -100,8 +101,11 @@ class VariantCurator:
         codon_str = ''.join([c for c in hgvs_name if c.isdigit()])
         codon = int(codon_str) if codon_str else 0
         
-        # Check hotspot database
-        hotspot_key = hgvs_name[:3]  # e.g., "R17"
+        # Check hotspot database. Key is reference-AA + codon, e.g. "R175"
+        # from "R175H" (a naive hgvs_name[:3] slice yields "R17" and silently
+        # misses every multi-digit codon — see benchmarks/run_benchmark.py).
+        _m = re.match(r'^([A-Za-z])(\d+)', hgvs_name)
+        hotspot_key = f"{_m.group(1).upper()}{_m.group(2)}" if _m else hgvs_name[:4]
         hotspot = self.HOTSPOTS.get(hotspot_key, {})
         
         # Determine function class
@@ -114,8 +118,9 @@ class VariantCurator:
         else:
             func_class = "unknown"  # non-hotspot
         
-        # Clinical significance
-        if hotspot_key in self.IARC_CLASSIFICATIONS:
+        # Clinical significance. IARC_CLASSIFICATIONS is keyed by the FULL
+        # variant name (e.g. "R175H"), so test hgvs_name — not hotspot_key.
+        if hgvs_name in self.IARC_CLASSIFICATIONS:
             clinical_sig = "pathogenic"
         elif hotspot:
             clinical_sig = "likely_pathogenic"

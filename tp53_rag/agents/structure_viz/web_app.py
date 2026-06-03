@@ -402,7 +402,7 @@ HTML_TEMPLATE = '''<!DOCTYPE html>
   <header>
     <div class="logo-area">
       <h1>TP53 · Structure Atlas</h1>
-      <p>Multi-Agent Bioinformatics Platform · Gemma 4 Hackathon</p>
+      <p>Multi-Agent Bioinformatics Platform · Daktari Genomed Labs</p>
     </div>
     <div class="badge-row">
       <span class="badge badge-gemma">Gemma 4</span>

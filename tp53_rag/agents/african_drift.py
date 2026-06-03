@@ -20,10 +20,10 @@ This module:
      (>1%), it issues a CRITICAL SAFETY ALERT
   4. Gemma 4 receives this context and adjusts its output
 
-Why this wins:
-  You are not just parsing code — you are correcting a
-  deep, systemic racial bias in global medical AI using
-  a completely offline model. Judges will remember this.
+Why this matters:
+  This does not just parse code — it corrects a deep,
+  systemic racial bias in global medical AI using a
+  completely offline model.
 ============================================================
 """
 

@@ -59,7 +59,7 @@ class PathologyVisionAgent:
         """
         try:
             # Lazy import — only runs when model is actually needed
-            import timm
+            import timm  # type: ignore[import-not-found]  # heavy optional dep, not in requirements
             # UNI model — best option
             self.model = timm.create_model(
                 "hf-hub:MahmoodLab/uni",
@@ -72,7 +72,7 @@ class PathologyVisionAgent:
         except Exception as e:
             log.warning(f"UNI not available: {e}. Using ResNet fallback.")
             try:
-                import timm
+                import timm  # type: ignore[import-not-found]  # heavy optional dep, not in requirements
                 self.model = timm.create_model(
                     "resnet50", pretrained=True, num_classes=len(TISSUE_CLASSES)
                 )
@@ -102,8 +102,8 @@ class PathologyVisionAgent:
 
         try:
             # Lazy imports inside method — safe for cloud
-            import torch
-            import torchvision.transforms as transforms
+            import torch  # type: ignore[import-not-found]  # heavy optional dep, not in requirements
+            import torchvision.transforms as transforms  # type: ignore[import-not-found]
             from PIL import Image
 
             # Load and preprocess image

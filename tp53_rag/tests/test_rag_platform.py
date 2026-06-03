@@ -188,3 +188,243 @@ class TestPipelineDataFormatting:
 
         formatted = chain._format_pipeline_data({})
         assert formatted == ""
+
+
+class TestVizHelpers:
+    """Visualization helpers in utils/viz.py — pure, LLM-free, edge-case safe."""
+
+    def test_status_badge_states(self):
+        from utils.viz import agent_status_badge
+        assert "running" in agent_status_badge("mutation_analysis", "running")
+        assert "complete" in agent_status_badge("drug_discovery", "complete", 1.4)
+        assert "failed" in agent_status_badge("x", "failed", 0.2)
+
+    def test_status_badge_unknown_state_non_empty(self):
+        from utils.viz import agent_status_badge
+        out = agent_status_badge("x", "not-a-state")
+        assert out and "tp53-badge" in out  # degrades, never empty
+
+    def test_vaf_timeline_valid(self):
+        from utils.viz import animated_vaf_timeline
+        fig = animated_vaf_timeline([0, 5, 10, 15], [50, 48, 45, 40])
+        assert len(fig.frames) == 4
+        assert fig.to_json()  # serializes for the browser
+
+    def test_vaf_timeline_empty_and_mismatch(self):
+        from utils.viz import animated_vaf_timeline
+        assert animated_vaf_timeline([], []).to_json()
+        assert animated_vaf_timeline([0, 5], [1]).to_json()  # length mismatch
+        assert animated_vaf_timeline([0, 1], ["x", "y"]).to_json()  # non-numeric
+
+    def test_vaf_marker_colour_logic(self):
+        # rising VAF -> red marker, falling -> green
+        from utils.viz import animated_vaf_timeline
+        fig = animated_vaf_timeline([0, 1, 2], [10, 20, 15])
+        colours = fig.frames[-1].data[0].marker.color
+        assert colours[1] == "#ff4b4b" and colours[2] == "#2ecc71"
+
+    def test_hotspot_bar_valid_and_bad_input(self):
+        from utils.viz import animated_hotspot_bar
+        fig = animated_hotspot_bar(["175", "248"], [8.0, 7.5])
+        assert len(fig.frames) == 12 and fig.to_json()
+        assert animated_hotspot_bar(["175"], ["nope"]).to_json()
+        assert animated_hotspot_bar([], []).to_json()
+
+    def test_architecture_frame_traces_uniform(self):
+        # Plotly tweening requires identical trace count in every frame.
+        from utils.viz import agent_architecture_diagram
+        fig = agent_architecture_diagram(["a", "b", "c", "d", "e"])
+        base = len(fig.data)
+        assert base == 5
+        assert all(len(f.data) == base for f in fig.frames)
+        assert fig.to_json()
+
+    def test_architecture_empty_and_spin_toggle(self):
+        from utils.viz import agent_architecture_diagram
+        assert agent_architecture_diagram([]).to_json()
+        # spin disabled must still produce a valid figure
+        assert agent_architecture_diagram(["a", "b"], spin_revolutions=0.0).to_json()
+
+    def test_architecture_axes_zoom_locked(self):
+        from utils.viz import agent_architecture_diagram
+        fig = agent_architecture_diagram(["a", "b", "c"])
+        assert fig.layout.xaxis.fixedrange is True
+        assert fig.layout.yaxis.fixedrange is True
+
+    def test_domain_legend_chart(self):
+        from utils.viz import domain_legend_chart, P53_DOMAINS
+        fig = domain_legend_chart()
+        assert len(fig.data) == len(P53_DOMAINS)
+        assert fig.to_json()
+
+    def test_parse_residues_basic_and_dedup(self):
+        from utils.viz import parse_residues
+        assert parse_residues("175 248") == [175, 248, 273]
+        assert parse_residues("273, 273, 100") == [100, 175, 248, 273]
+
+    def test_parse_residues_empty_returns_hotspots(self):
+        from utils.viz import parse_residues, CANONICAL_HOTSPOTS
+        assert parse_residues("") == sorted(CANONICAL_HOTSPOTS)
+
+    def test_parse_residues_out_of_range_dropped(self):
+        from utils.viz import parse_residues
+        # 99999 and 0 are out of 1..393 and must be dropped
+        assert 99999 not in parse_residues("99999")
+        assert 0 not in parse_residues("0")
+
+    def test_viewer_html_injection_safe(self):
+        from utils.viz import protein_viewer_html
+        html = protein_viewer_html('2OCO"; alert(1)//', [175, 248, 273])
+        assert "alert(1)" not in html          # script payload stripped
+        assert "175,248,273" in html           # sanitized residues embedded
+        assert "addLabel" in html              # hotspot labels present
+        assert "s:1,e:66" in html              # domain ranges injected
+
+    def test_viewer_html_default_pdb_on_garbage(self):
+        from utils.viz import protein_viewer_html
+        html = protein_viewer_html("!!!", [])
+        assert "pdb:2OCJ" in html  # falls back to a safe default id
+
+
+class TestBenchmarkScoring:
+    """Pure scoring helpers in benchmarks/scoring.py."""
+
+    def test_normalize_synonyms(self):
+        from benchmarks.scoring import normalize_significance as nz
+        assert nz("Likely Pathogenic") == "likely_pathogenic"
+        assert nz("Uncertain significance") == "vus"
+        assert nz("NEUTRAL") == "benign"
+        assert nz(None) == ""
+
+    def test_bucket_collapse(self):
+        from benchmarks.scoring import significance_bucket as sb
+        assert sb("pathogenic") == "pathogenic_leaning"
+        assert sb("likely_pathogenic") == "pathogenic_leaning"
+        assert sb("benign") == "benign_leaning"
+        assert sb("vus") == "uncertain"
+        assert sb("garbage") == "uncertain"
+
+    def test_score_variant_exact_and_iarc(self):
+        from benchmarks.scoring import score_variant
+        r = score_variant(
+            {"clinical_significance": "pathogenic", "iarc_classification": "R1"},
+            {"mutation": "R175H", "expected_significance": "pathogenic", "expected_iarc": "R1"},
+        )
+        assert r["exact_match"] and r["concordant"] and r["iarc_match"] is True
+
+    def test_score_variant_concordant_not_exact(self):
+        from benchmarks.scoring import score_variant
+        r = score_variant(
+            {"clinical_significance": "likely_pathogenic"},
+            {"mutation": "X", "expected_significance": "pathogenic", "expected_iarc": None},
+        )
+        assert r["exact_match"] is False
+        assert r["concordant"] is True
+        assert r["iarc_match"] is None  # not applicable
+
+    def test_score_variant_missing_prediction(self):
+        from benchmarks.scoring import score_variant
+        r = score_variant({}, {"mutation": "Y", "expected_significance": "benign",
+                               "expected_iarc": None})
+        assert r["exact_match"] is False and r["predicted_significance"] == "(none)"
+
+    def test_aggregate_empty(self):
+        from benchmarks.scoring import aggregate
+        m = aggregate([])
+        assert m["n"] == 0 and m["precision"] == 0.0 and "note" in m
+
+    def test_aggregate_metrics_and_confusion(self):
+        from benchmarks.scoring import score_variant, aggregate
+        rs = [
+            score_variant({"clinical_significance": "pathogenic"},
+                          {"mutation": "A", "expected_significance": "pathogenic"}),
+            score_variant({"clinical_significance": "vus"},
+                          {"mutation": "B", "expected_significance": "benign"}),
+        ]
+        m = aggregate(rs)
+        assert m["n"] == 2 and m["tp"] == 1 and m["fp"] == 0
+        assert 0.0 <= m["precision"] <= 1.0
+
+
+class TestBenchmarkRunner:
+    """Runner orchestration in benchmarks/run_benchmark.py (no LLM needed)."""
+
+    def test_load_ground_truth_real_file(self):
+        from benchmarks.run_benchmark import load_ground_truth
+        gt = load_ground_truth()
+        assert len(gt["variants"]) >= 5
+        assert all("mutation" in v for v in gt["variants"])
+
+    def test_load_ground_truth_missing_file_graceful(self):
+        from pathlib import Path
+        from benchmarks.run_benchmark import load_ground_truth
+        gt = load_ground_truth(Path("does_not_exist_xyz.json"))
+        assert gt["variants"] == []  # degrades, no raise
+
+    def test_run_benchmark_with_oracle(self):
+        from benchmarks.run_benchmark import run_benchmark, load_ground_truth
+        gt = load_ground_truth()
+
+        def oracle(mut):
+            for v in gt["variants"]:
+                if v["mutation"] == mut:
+                    return {"clinical_significance": v["expected_significance"],
+                            "iarc_classification": v["expected_iarc"]}
+            return {}
+
+        rep = run_benchmark(classifier=oracle, ground_truth=gt)
+        assert rep["metrics"]["exact_accuracy"] == 1.0
+        assert rep["metrics"]["recall"] == 1.0
+
+    def test_run_benchmark_classifier_exception_is_caught(self):
+        from benchmarks.run_benchmark import run_benchmark
+        def boom(mut):
+            raise RuntimeError("simulated agent failure")
+        rep = run_benchmark(classifier=boom,
+                            ground_truth={"variants": [{"mutation": "R175H",
+                                          "expected_significance": "pathogenic"}]})
+        assert rep["metrics"]["n"] == 1  # ran without crashing
+
+    def test_render_markdown_non_empty(self):
+        from benchmarks.run_benchmark import run_benchmark, render_markdown
+        rep = run_benchmark(classifier=lambda m: {}, ground_truth={"variants": []})
+        md = render_markdown(rep)
+        assert md and "Benchmark Report" in md
+
+
+class TestVariantCuratorClassification:
+    """Regression lock for the hotspot-key bug the benchmark surfaced:
+    multi-digit codons must classify correctly, not fall through to VUS."""
+
+    def test_known_hotspots_are_pathogenic(self):
+        from agents.variant_curator import VariantCurator
+        c = VariantCurator()
+        for mut in ["R175H", "R248W", "R273H", "Y220C", "R282W", "R249S"]:
+            out = c.classify(mut)["classification"]
+            assert out["clinical_significance"] == "pathogenic", mut
+
+    def test_hotspot_function_class_is_lof(self):
+        from agents.variant_curator import VariantCurator
+        out = VariantCurator().classify("R175H")["classification"]
+        assert out["function_class"] == "loss-of-function"
+
+    def test_iarc_classification_resolved(self):
+        from agents.variant_curator import VariantCurator
+        out = VariantCurator().classify("R175H")["classification"]
+        assert out["iarc_classification"] == "R1"
+
+    def test_non_hotspot_is_vus_not_pathogenic(self):
+        from agents.variant_curator import VariantCurator
+        out = VariantCurator().classify("A159V")["classification"]
+        assert out["clinical_significance"] == "vus"
+
+    def test_benign_control_not_called_pathogenic(self):
+        # P72R is a benign polymorphism — must never be reported pathogenic.
+        from agents.variant_curator import VariantCurator
+        out = VariantCurator().classify("P72R")["classification"]
+        assert out["clinical_significance"] != "pathogenic"
+
+    def test_codon_extracted_correctly(self):
+        from agents.variant_curator import VariantCurator
+        out = VariantCurator().classify("R273H")["classification"]
+        assert out["codon"] == 273

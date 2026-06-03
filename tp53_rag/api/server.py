@@ -69,7 +69,7 @@ app = FastAPI(
     title="TP53 RAG Platform API",
     description=(
         "Multi-agent RAG platform for TP53 bioinformatics analysis, "
-        "powered by Gemma 4 via Ollama. Built for the Gemma 4 Good Hackathon."
+        "powered by Gemma 4 via Ollama. Built by Daktari Genomed Labs."
     ),
     version="1.0.0",
     lifespan=lifespan,

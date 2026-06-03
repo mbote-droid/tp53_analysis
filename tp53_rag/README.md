@@ -8,7 +8,9 @@
 [![FastAPI](https://img.shields.io/badge/API-FastAPI-009688)](https://fastapi.tiangolo.com)
 [![Streamlit App](https://img.shields.io/badge/Streamlit-App-FF4B4B?logo=streamlit)](https://tp53-rag.streamlit.app)
 
-TP53 RAG Platform is an enterprise-grade, multi-agent AI system for genomic researchers, oncologists, and pharmaceutical companies. Combines local-first Gemma 4 4B inference, 14 specialized AI agents, multi-omics integration, and HIPAA-compliant FHIR R4 output.
+TP53 RAG Platform is an enterprise-grade, multi-agent AI system for genomic researchers, oncologists, and pharmaceutical companies. It combines local-first Gemma 4 inference, 16 specialized AI agents, multi-omics integration, and HIPAA-compliant FHIR R4 output — running entirely offline on commodity hardware (8GB RAM, no GPU).
+
+> **Differentiator:** Beyond a generic RAG system, this platform embeds an **African cancer-genomics layer** — regional variant prevalence, an equity/bias drift detector, Kenya/KEML drug-availability context, and Swahili output — making it a clinically-grounded copilot for under-represented populations, not just another TP53 wrapper.
 
 ## 🎯 What's New (RAG Platform)
 
@@ -17,8 +19,9 @@ TP53 RAG Platform is an enterprise-grade, multi-agent AI system for genomic rese
 | Feature | Classic Pipeline | 🆕 RAG Platform |
 |---------|-----------------|-----------------|
 | **Inference** | NCBI API calls | Local Gemma 4 (no data leaks) |
-| **Agents** | Single sequential analysis | 14 specialized multi-agents |
-| **Voice Input** | ❌ | ✅ Whisper transcription |
+| **Agents** | Single sequential analysis | 16 specialized multi-agents |
+| **Voice Input** | ❌ | ✅ Whisper transcription (text + voice, multimodal) |
+| **Accuracy** | Unmeasured | ✅ Benchmarked vs ClinVar/IARC (see Benchmarking) |
 | **Drug Discovery** | Manual literature review | Automated APR-246 & KEML screening |
 | **Clinical Output** | CSV + PNG | FHIR R4 compliant dossiers |
 | **Speed** | 2-5 minutes | <30 seconds (with voice cache) |
@@ -27,45 +30,50 @@ TP53 RAG Platform is an enterprise-grade, multi-agent AI system for genomic rese
 
 ## 🏗️ Architecture
 
-**14 AI Agents + 1 Orchestrator:**
+**16 AI Agents + 1 Orchestrator:**
 
 ```
-USER INPUT (Text/Voice/VCF)
+USER INPUT (Text / Voice / VCF)
     ↓
-DISPATCHER (Routes to agents)
-    ├→ Agent 1: Variant Curator (ClinVar/COSMIC classification)
-    ├→ Agent 2: Drug Discovery (APR-246, KEML, therapeutic targeting)
-    ├→ Agent 3: Immunogenicity (TME profiling, checkpoint response)
-    ├→ Agent 4: Gene Expression (Pathway analysis, RNA-seq)
-    ├→ Agent 5: Enzyme Design (PROTAC, molecular glues, zinc rescue)
-    ├→ Agent 6: Liquid Biopsy (ctDNA VAF trends, resistance)
-    ├→ Agent 7: Dossier Compiler (FHIR R4 + academic/pharma reports)
-    ├→ Agent 8: Surgical Brief (Clinical interpretation for oncology)
-    ├→ Agent 9: Auditor (Quality control & fact-checking)
-    ├→ Agent 10: African Drift (Regional variant prevalence)
-    ├→ Agent 11: Multilingual (Query translation & cross-language support)
+DISPATCHER (parallel routing to agents)
+    ├→ Agent 1:  Variant Curator (ClinVar/COSMIC/IARC classification)
+    ├→ Agent 2:  Drug Discovery (APR-246, KEML, therapeutic targeting)
+    ├→ Agent 3:  Immunogenicity (TME profiling, checkpoint response)
+    ├→ Agent 4:  Gene Expression (Pathway analysis, RNA-seq)
+    ├→ Agent 5:  Enzyme Design (PROTAC, molecular glues, zinc rescue)
+    ├→ Agent 6:  Liquid Biopsy (ctDNA VAF trends, resistance)
+    ├→ Agent 7:  Dossier Compiler (FHIR R4 + academic/pharma reports)
+    ├→ Agent 8:  Surgical Brief (Clinical interpretation for oncology)
+    ├→ Agent 9:  Auditor (Quality control, hallucination & bias checks)
+    ├→ Agent 10: African Drift (Regional variant prevalence / equity)
+    ├→ Agent 11: Multilingual (Swahili + cross-language support)
     ├→ Agent 12: PDF Report (Enterprise dossier generation)
-    ├→ Agent 13: Structure Viz (3D protein visualization, Mol*)
-    └→ Agent 14: Clinical Interpretation (Prognosis & cancer associations)
+    ├→ Agent 13: Structure Viz (3D protein visualization, Mol*/3Dmol)
+    ├→ Agent 14: Clinical Interpretation (Prognosis & cancer associations)
+    ├→ Agent 15: Pathology Vision (H&E slide tissue classification)
+    └→ Agent 16: TNM Staging (AJCC clinical staging)
     ↓
-GEMMA 4 4B (Local inference via llama.cpp)
+GEMMA 4 (Local inference — Ollama / llama.cpp / Google AI Studio API)
     ↓
-CHROMADB RAG (TP53 knowledge base + HNSW indexing)
+CHROMADB RAG (TP53 knowledge base + BM25 hybrid + HNSW indexing)
     ↓
 FHIR R4 + PDF + JSON REPORT
 ```
 
 ## 🚀 Core Features
 
-✅ **Local Inference**: Gemma 4 4B via llama.cpp (8GB RAM compatible, no API calls)  
-✅ **Voice Input**: Real-time transcription via Whisper  
-✅ **Hybrid Search**: Keyword + semantic retrieval from RAG store  
-✅ **Semantic Cache**: Avoid redundant LLM calls  
-✅ **Self-Correction**: Automatic retry + fallback logic  
-✅ **PII Scrubbing**: HIPAA-compliant output filtering  
-✅ **JSON Guardrails**: Strict output formatting (no hallucinations)  
+✅ **Local Inference**: Gemma 4 via Ollama / llama.cpp (8GB RAM, no GPU, no API calls)  
+✅ **Dual-Mode**: Offline (Ollama) or cloud (Google AI Studio) via `INFERENCE_MODE`  
+✅ **Multimodal Input**: Type *or* speak — Whisper transcription wired into the query + structure tabs  
+✅ **Hybrid Search**: BM25 keyword + semantic vector retrieval, cross-encoder reranking  
+✅ **Semantic Cache**: Cosine-similarity cache (0.92 threshold) to avoid redundant LLM calls  
+✅ **Self-Correction**: Automatic retry + fallback logic (3 attempts)  
+✅ **PII Scrubbing**: SHA-256 hashing — HIPAA-compliant output filtering  
+✅ **JSON Guardrails**: Strict output formatting + post-response validation  
+✅ **Accuracy Benchmark**: Curator scored against ClinVar/IARC ground truth (offline, repeatable)  
+✅ **Animated Clinical UI**: Dark bioinformatics theme, animated VAF/hotspot charts, live agent-status board, animated dispatch network, auto-rotating domain-coloured 3D structure  
 ✅ **FHIR R4 Export**: HL7 clinical interoperability  
-✅ **n8n Workflows**: Visual node-based automation  
+✅ **n8n Workflows**: Visual node-based automation with EHR alerting  
 ✅ **Docker-Ready**: Single-command deployment  
 
 ## 📊 Use Cases
@@ -114,17 +122,22 @@ cd tp53_rag
 python main.py build
 
 # Terminal 3: Launch web app
-streamlit run app_rag.py
+streamlit run tp53_rag/app.py
 ```
 
-Visit: `http://localhost:8501`
+Visit: `http://localhost:8501` (or `8502` locally)
 
-**Features on web app:**
-- 🎯 Quick Query — Text-based RAG questions
-- 🎤 Voice Input — Whisper transcription + auto-analysis
-- 📊 Analysis — Multi-agent dispatcher dashboard
-- 📋 History — Query tracking
-- ⚙️ Settings — HIPAA controls
+**Web app tabs:**
+- 🔍 Query — Text-based RAG questions
+- 🧬 Analysis — Multi-agent dispatcher with a live agent-status board
+- 💊 Drug Discovery — Therapeutic targeting + KEML availability
+- 📊 Visualization — Animated VAF timeline, hotspot chart, dispatch network
+- 📋 Report — FHIR-aware clinical report generator
+- 🔬 Structure — Auto-rotating, domain-coloured 3D protein + multimodal (voice) narration
+- 🎤 Voice — Whisper transcription + auto-analysis
+- 🛠 Debug — System status & cache stats
+- 🔬 Pathology — H&E slide tissue classification
+- 📍 TNM Staging — AJCC clinical staging
 
 ### Docker (One-Command Deployment)
 
@@ -145,7 +158,7 @@ Access:
 # Interactive Q&A with RAG
 python tp53_rag/main.py query
 
-# Run full demo (all 9 agents)
+# Run full multi-agent demo
 python tp53_rag/main.py demo
 
 # Test individual agent
@@ -165,11 +178,12 @@ python tp53_rag/main.py list-agents
 ### Python API
 
 ```python
-# Variant classification
-from tp53_rag.agents.variant_curator import VariantCurator
+# Variant classification (rule-based, no LLM required)
+from agents.variant_curator import VariantCurator
 curator = VariantCurator()
 result = curator.classify("R175H")
-print(result['pathogenicity'], result['clinvar_class'])
+c = result["classification"]
+print(c["clinical_significance"], c["iarc_classification"])  # -> pathogenic R1
 
 # Drug discovery
 from tp53_rag.agents.dispatcher import AgentDispatcher
@@ -198,37 +212,67 @@ streamlit run app.py
 python main_tp53_analysis.py --accession NM_000546 --skip-phylo --skip-domains
 ```
 
+## 🎯 Benchmarking
+
+The Variant Curator is benchmarked against curated **ClinVar / IARC** ground truth so accuracy is measured, not assumed. The harness is offline (rule-based curator, no LLM needed) and fully opt-in — it never touches the live app.
+
+```bash
+python -m benchmarks.run_benchmark           # writes a timestamped markdown + JSON report
+python -m benchmarks.run_benchmark --no-save # print only
+```
+
+Ground truth lives in [`benchmarks/ground_truth.json`](benchmarks/ground_truth.json) (7 pathogenic hotspots incl. R249S — the aflatoxin/sub-Saharan HCC hotspot — plus benign and VUS controls). Reported metrics: exact accuracy, bucketed concordance, IARC concordance, and precision/recall/F1 for pathogenic detection.
+
+> Benchmarking immediately paid off: it caught a hotspot-key bug that was mislabelling every pathogenic hotspot as **VUS**. After the fix, exact accuracy rose **11% → 89%** and pathogenic-detection recall **0% → 100%**. The fix is locked by regression tests.
+
+## 🧪 Testing
+
+```bash
+pytest tests/ -v                       # full suite
+pytest tests/test_rag_platform.py -q   # unit + agent tests (no live LLM; mocked)
+```
+
+Tests run without a live model. Coverage includes the RAG chain, dispatcher, every agent, the visualization helpers (`utils/viz.py`), the benchmark scoring/runner, and a regression lock on the variant-classification fix.
+
 ## 📦 Project Structure
 
 ```
 tp53_analysis/
-├── tp53_rag/                      # Main RAG platform
-│   ├── app_rag.py                 # 🎤 Streamlit web app (voice + text)
-│   ├── main.py                    # CLI orchestrator & agent router
-│   ├── agents/
-│   │   ├── rag_chain.py           # LLM inference (llama.cpp + ChromaDB)
-│   │   ├── dispatcher.py          # Multi-agent orchestration
-│   │   ├── variant_curator.py     # ClinVar/COSMIC classification
-│   │   ├── immunogenicity.py      # TME profiling
-│   │   ├── dossier_compiler.py    # FHIR R4 + PDF reports
-│   │   └── ...
-│   ├── knowledge_base/
-│   │   ├── ingestion.py           # Document processing
-│   │   └── vector_store.py        # ChromaDB + HNSW
-│   ├── utils/
-│   │   ├── voice_transcriber.py   # 🎤 Whisper integration
-│   │   ├── rag_cache.py           # Semantic caching
-│   │   ├── pii_scrubber.py        # HIPAA scrubbing
-│   │   └── logger.py              # Audit logging
-│   └── ...
-├── app.py                         # 🧬 Classic bioinformatics UI
-├── main_tp53_analysis.py          # CLI genomic analysis
-├── requirements.txt               # Dependencies
-├── .env.example                   # Environment template
-└── README.md                      # This file
+└── tp53_rag/                      # Main RAG platform
+    ├── app.py                     # 🎤 Streamlit web app (10 tabs, animated UI)
+    ├── main.py                    # CLI orchestrator & agent router
+    ├── agents/                    # 16 specialized agents
+    │   ├── rag_chain.py           # LLM inference (Ollama/llama.cpp/API + ChromaDB)
+    │   ├── dispatcher.py          # Parallel multi-agent orchestration
+    │   ├── variant_curator.py     # ClinVar/COSMIC/IARC classification
+    │   ├── immunogenicity.py      # TME profiling
+    │   ├── dossier_compiler.py    # FHIR R4 + PDF reports
+    │   ├── african_drift.py       # Regional/equity variant analysis
+    │   ├── pathology_vision.py    # H&E slide classification
+    │   ├── tnm_staging.py         # AJCC staging
+    │   └── ...
+    ├── knowledge_base/
+    │   ├── ingestion.py           # Document processing
+    │   └── vector_store.py        # ChromaDB + BM25 + HNSW
+    ├── utils/
+    │   ├── viz.py                 # 📊 Charts, dispatch network, 3D viewer (pure, tested)
+    │   ├── voice_transcriber.py   # 🎤 Whisper integration
+    │   ├── rag_cache.py           # Semantic caching
+    │   ├── pii_scrubber.py        # HIPAA SHA-256 scrubbing
+    │   └── hybrid_search.py       # BM25 + vector fusion
+    ├── benchmarks/                # 🎯 Accuracy benchmark (ClinVar/IARC)
+    │   ├── ground_truth.json
+    │   ├── scoring.py
+    │   └── run_benchmark.py
+    ├── api/server.py              # FastAPI server (n8n integration)
+    ├── tests/test_rag_platform.py # Unit + agent + benchmark tests
+    ├── n8n_workflow.json          # Automation workflow (EHR alerting)
+    ├── requirements.txt           # Dependencies
+    ├── .env.example               # Environment template
+    └── README.md                  # This file
 ```
 
-## 🎯 Hackathon Pitch
+## 🎯 Platform Pitch
 
 **Problem**: TP53 is mutated in 50% of human cancers but notoriously hard to drug.
 
@@ -240,11 +284,11 @@ tp53_analysis/
 5. **Predicts immune response** (TME profiling)
 6. **Generates enterprise dossiers** (FHIR R4 + PDF)
 
-**Why judges should care**:
+**Why this matters**:
 - ✅ **Privacy-first**: Runs locally — no data leaks to cloud
 - ✅ **Efficient**: Gemma 4 4B on 8GB RAM (edge-deployable)
-- ✅ **Marketable**: Pharma companies will pay for this
-- ✅ **Open-source**: LGPL license, fully reproducible
+- ✅ **Africa-relevant**: Regional variant data + KEML drug context — a genuine differentiator
+- ✅ **Open-source**: MIT license, fully reproducible
 
 ## 📚 Key Publications Integrated
 
@@ -296,8 +340,9 @@ MIT License — See [LICENSE](LICENSE)
 
 ## 👨‍💻 Author
 
-**Samuel Mbote**  
-General Surgery Resident & Bioinformatics Developer  
+**Dr Samuel Ngigi Mbote**  
+General Surgery Resident (COSECSA) · IBM Certified AI Developer · Nairobi, Kenya  
+Daktari Genomed Labs  
 
 ## 🙏 Acknowledgments
 
@@ -308,4 +353,4 @@ General Surgery Resident & Bioinformatics Developer
 
 ---
 
-**Built for the Gemma 4 Good Hackathon 2026** 🚀
+**Built by Daktari Genomed Labs · Nairobi, Kenya** 🧬
