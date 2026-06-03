@@ -30,6 +30,10 @@ from utils.viz import (
     domain_legend_chart,
     parse_residues,
     protein_viewer_html,
+    dock_candidates,
+    docking_affinity_chart,
+    docking_pose_html,
+    tnm_stage_bar,
 )
 
 st.set_page_config(
@@ -475,6 +479,36 @@ with tab3:
         "KEML Available": ["Yes", "Limited", "Yes", "Limited"],
     })
     st.dataframe(drug_df, use_container_width=True, hide_index=True)
+
+    # ── Candidate ranking + 3D docking pose (illustrative) ──
+    st.divider()
+    st.markdown("### 🧪 Candidate Ranking & Docking Pose")
+    st.caption(
+        "Illustrative binding-affinity ranking for the mutation above — shows "
+        "*why* one drug is favoured over another. Heuristic estimate, **not a "
+        "real docking simulation** (AutoDock Vina is a separate module)."
+    )
+
+    candidates = dock_candidates(mut_input)
+    rank_df = pd.DataFrame([
+        {"Rank": c["rank"], "Drug": c["name"], "Mechanism": c["mechanism"],
+         "ΔG (kcal/mol)": c["affinity"], "Why": c["rationale"]}
+        for c in candidates
+    ])
+    st.dataframe(rank_df, use_container_width=True, hide_index=True)
+
+    dcol1, dcol2 = st.columns([3, 2])
+    with dcol1:
+        st.plotly_chart(docking_affinity_chart(candidates), use_container_width=True)
+    with dcol2:
+        top = candidates[0]
+        st.markdown(f"**Top candidate:** {top['name']}  \nΔG ≈ **{top['affinity']} kcal/mol**")
+        pocket = parse_residues(mut_input)  # mutation residue + canonical hotspots
+        components.html(
+            docking_pose_html("2OCJ", pocket, top["name"], top["affinity"]),
+            height=480,
+        )
+        st.caption("Yellow cloud = proposed binding pocket on p53 (illustrative).")
 
 # ── TAB 4: Visualization ──────────────────────────────────────────
 with tab4:
@@ -967,6 +1001,7 @@ not a replacement for pathological staging.*
         }
         badge = stage_colors.get(stage, "⚪")
         st.markdown(f"## {badge} Stage **{stage}** — {t_code} {n_code} {m_code}")
+        st.plotly_chart(tnm_stage_bar(stage), use_container_width=True)
 
         equity = result.get("equity_flag")
         if equity:

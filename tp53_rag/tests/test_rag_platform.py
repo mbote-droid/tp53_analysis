@@ -10,12 +10,30 @@ Run: pytest tests/ -v
 ============================================================
 """
 
+import socket
+
 import pytest
 from unittest.mock import MagicMock, patch
 from langchain_core.documents import Document
 
 from knowledge_base.ingestion import TP53DocumentIngester, CURATED_TP53_KNOWLEDGE
 from agents.rag_chain import IntentRouter
+
+
+def _has_network(host: str = "api-inference.huggingface.co",
+                 port: int = 443, timeout: float = 3.0) -> bool:
+    """True if an embeddings backend is reachable. Integration tests that build
+    a real vector store need this; they skip (not fail) when offline."""
+    try:
+        socket.create_connection((host, port), timeout=timeout).close()
+        return True
+    except OSError:
+        return False
+
+
+requires_network = pytest.mark.skipif(
+    not _has_network(), reason="requires network access to an embeddings backend"
+)
 
 
 class TestCuratedKnowledge:
@@ -133,8 +151,9 @@ class TestVectorStoreIntegration:
     """Integration tests for the vector store (require Ollama)."""
 
     @pytest.mark.integration
+    @requires_network
     @patch('langchain_ollama.embeddings.OllamaEmbeddings.embed_documents') # 2. Intercept embedding requests
-    @patch('langchain_ollama.embeddings.OllamaEmbeddings.embed_query')  
+    @patch('langchain_ollama.embeddings.OllamaEmbeddings.embed_query')
     def test_build_and_query(self, mock_embed_query, mock_embed_docs, tmp_path):
         """Full build + query cycle. Requires Ollama running."""
         
@@ -284,6 +303,47 @@ class TestVizHelpers:
         from utils.viz import protein_viewer_html
         html = protein_viewer_html("!!!", [])
         assert "pdb:2OCJ" in html  # falls back to a safe default id
+
+    def test_mutation_class(self):
+        from utils.viz import mutation_class
+        assert mutation_class("Y220C") == "y220c"
+        assert mutation_class("R248W") == "contact"
+        assert mutation_class("R175H") == "conformational"
+        assert mutation_class("C176Y") == "zinc"
+        assert mutation_class("P72R") == "other"
+
+    def test_dock_candidates_ranking_shifts_by_mutation(self):
+        from utils.viz import dock_candidates
+        y = dock_candidates("Y220C")
+        r = dock_candidates("R175H")
+        assert y[0]["name"].startswith("PC14586")          # Y220C-specific wins for Y220C
+        assert r[0]["name"].startswith("APR-246")          # reactivator wins for R175H
+        assert [c["name"] for c in y] != [c["name"] for c in r]
+        # ranks are 1..n, affinities sorted ascending (most negative first)
+        assert [c["rank"] for c in y] == list(range(1, len(y) + 1))
+        assert all(y[i]["affinity"] <= y[i + 1]["affinity"] for i in range(len(y) - 1))
+
+    def test_dock_mdm2_penalised_on_lof(self):
+        from utils.viz import dock_candidates
+        r = dock_candidates("R175H")
+        idasa = [c for c in r if "Idasanutlin" in c["name"]][0]
+        assert idasa["rank"] == len(r)  # MDM2 inhibitor ranks last on a LOF mutant
+
+    def test_docking_affinity_chart_valid_and_empty(self):
+        from utils.viz import dock_candidates, docking_affinity_chart
+        assert docking_affinity_chart(dock_candidates("R248W")).to_json()
+        assert docking_affinity_chart([]).to_json()  # never empty
+
+    def test_docking_pose_html_injection_safe(self):
+        from utils.viz import docking_pose_html
+        html = docking_pose_html('2OCJ"; alert(1)//', [175, 248], "Evil<script>", -7.5)
+        assert "alert(1)" not in html
+        assert "175,248" in html and "kcal/mol" in html
+
+    def test_tnm_stage_bar_all_groups(self):
+        from utils.viz import tnm_stage_bar
+        for s in ["I", "IIA", "IIB", "IIIA", "IIIB", "IIIC", "IV", "", "?"]:
+            assert tnm_stage_bar(s).to_json()  # never empty, valid for any input
 
 
 class TestBenchmarkScoring:

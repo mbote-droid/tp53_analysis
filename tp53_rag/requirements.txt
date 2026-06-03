@@ -50,6 +50,11 @@ uvicorn>=0.30.1
 httpx>=0.27.0
 python-multipart>=0.0.9
 
+# Protobuf — pin away from bleeding-edge 7.x, which breaks chromadb's
+# opentelemetry _pb2 files ("Descriptors cannot be created directly").
+# Forces pip to resolve a consistent protobuf + opentelemetry stack.
+protobuf>=4.25.0,<6.0.0
+
 # Inference — cloud (Google AI Studio, INFERENCE_MODE=api)
 google-genai>=0.3.0
 

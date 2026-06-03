@@ -365,3 +365,211 @@ def protein_viewer_html(pdb_id: str, residues) -> str:
       }})();
     </script>
     """
+
+
+def tnm_stage_bar(stage_group: str) -> go.Figure:
+    """Horizontal stage-progression gauge (I → IV) with the patient's stage
+    highlighted. Colour runs green (early) → red (advanced). Never empty.
+    """
+    stages = ["I", "II", "III", "IV"]
+    colours = {"I": "#2ecc71", "II": "#f1c40f", "III": "#e67e22", "IV": "#e74c3c"}
+    # Map full group (e.g. "IIIB") to its coarse Roman stage for positioning.
+    sg = str(stage_group or "").upper().strip()
+    coarse = "IV" if sg.startswith("IV") else \
+             "III" if sg.startswith("III") else \
+             "II" if sg.startswith("II") else \
+             "I" if sg.startswith("I") else ""
+    active = stages.index(coarse) if coarse in stages else -1
+
+    xs = list(range(len(stages)))
+    fig = go.Figure()
+    # connecting track
+    fig.add_trace(go.Scatter(x=xs, y=[0] * len(stages), mode="lines",
+                             line=dict(color="#2a3340", width=4), hoverinfo="skip"))
+    # stage nodes
+    fig.add_trace(go.Scatter(
+        x=xs, y=[0] * len(stages), mode="markers+text",
+        marker=dict(
+            size=[44 if i == active else 26 for i in range(len(stages))],
+            color=[colours[s] for s in stages],
+            line=dict(color=["#e6edf3" if i == active else "#0d1117"
+                             for i in range(len(stages))],
+                      width=[3 if i == active else 1 for i in range(len(stages))]),
+        ),
+        text=[f"<b>{s}</b>" for s in stages], textposition="middle center",
+        textfont=dict(color="#0d1117", size=12, family="JetBrains Mono"),
+        hovertemplate="Stage %{text}<extra></extra>",
+    ))
+    label = f"Stage {sg}" if sg else "Stage —"
+    fig.update_layout(
+        template="plotly_dark", height=150, showlegend=False,
+        title=dict(text=f"Stage progression — {label}",
+                   font=dict(color="#e6edf3", size=14)),
+        margin=dict(l=20, r=20, t=46, b=10),
+        xaxis=dict(visible=False, range=[-0.5, len(stages) - 0.5], fixedrange=True),
+        yaxis=dict(visible=False, range=[-1, 1], fixedrange=True),
+    )
+    return fig
+
+
+# ── Drug docking (illustrative) ───────────────────────────────────
+# NOTE: the binding affinities below are ILLUSTRATIVE / heuristic, not the
+# output of a real docking engine (AutoDock Vina is a separate agent). They
+# are deterministic so they can be unit-tested and reproduced.
+
+# Residue-class buckets used to weight which mechanism fits which mutation.
+_ZINC_CODONS = {176, 179, 238, 242}
+_CONTACT_CODONS = {248, 273, 249}
+_CONFORMATIONAL_CODONS = {143, 175, 245, 282}
+_LOF_CLASSES = {"y220c", "zinc", "contact", "conformational"}
+
+TP53_DRUGS = [
+    {"name": "PC14586 (Rezatapopt)", "mechanism": "Y220C pocket stabiliser",
+     "base": -6.0, "fit": {"y220c": -3.4}},
+    {"name": "APR-246 (Eprenetapopt)", "mechanism": "Mutant p53 reactivator (thiol refolding)",
+     "base": -7.0, "fit": {"conformational": -1.8, "zinc": -1.2, "y220c": -1.0}},
+    {"name": "COTI-2", "mechanism": "Zinc-metallochaperone reactivator",
+     "base": -6.6, "fit": {"zinc": -2.0, "conformational": -1.0}},
+    {"name": "Idasanutlin", "mechanism": "MDM2 inhibitor (requires functional p53)",
+     "base": -6.4, "fit": {}, "lof_penalty": 2.5},
+    {"name": "Carboplatin", "mechanism": "DNA cross-linker (mutation-agnostic chemo)",
+     "base": -5.4, "fit": {}},
+]
+
+
+def mutation_class(mutation: str) -> str:
+    """Classify a TP53 variant into a mechanism-relevant bucket.
+
+    Returns one of: y220c, zinc, contact, conformational, other. Never raises.
+    """
+    digits = "".join(ch for ch in str(mutation or "") if ch.isdigit())
+    codon = int(digits) if digits else 0
+    if codon == 220:
+        return "y220c"
+    if codon in _ZINC_CODONS:
+        return "zinc"
+    if codon in _CONTACT_CODONS:
+        return "contact"
+    if codon in _CONFORMATIONAL_CODONS:
+        return "conformational"
+    return "other"
+
+
+def dock_candidates(mutation: str) -> list:
+    """Rank candidate drugs for a mutation by illustrative binding affinity.
+
+    More-negative affinity = stronger predicted binding = better rank. The
+    ranking shifts with the mutation class so the *why* is visible (e.g. the
+    Y220C stabiliser wins for Y220C; the MDM2 inhibitor is penalised on any
+    loss-of-function mutant). Always returns a non-empty, sorted list.
+    """
+    cls = mutation_class(mutation)
+    out = []
+    for d in TP53_DRUGS:
+        affinity = d["base"] + d.get("fit", {}).get(cls, 0.0)
+        penalty = d.get("lof_penalty", 0.0) if cls in _LOF_CLASSES else 0.0
+        affinity += penalty
+        if d.get("fit", {}).get(cls):
+            rationale = f"Mechanism fits a {cls} mutant → stronger predicted binding."
+        elif penalty:
+            rationale = "Needs functional p53; penalised on a loss-of-function mutant."
+        else:
+            rationale = "Mutation-agnostic baseline."
+        out.append({
+            "name": d["name"], "mechanism": d["mechanism"],
+            "affinity": round(affinity, 1), "fit_class": cls, "rationale": rationale,
+        })
+    out.sort(key=lambda r: r["affinity"])  # most negative first
+    for i, r in enumerate(out, 1):
+        r["rank"] = i
+    return out
+
+
+def docking_affinity_chart(candidates) -> go.Figure:
+    """Horizontal bar of illustrative binding affinity (kcal/mol).
+
+    Lower (more negative) = stronger binding; the top bar is the best
+    candidate. Greens = stronger, reds = weaker. Never empty.
+    """
+    candidates = list(candidates or [])
+    if not candidates:
+        return _empty_fig("No drug candidates")
+    ordered = sorted(candidates, key=lambda r: r.get("affinity", 0), reverse=True)
+    names = [r.get("name", "?") for r in ordered]
+    vals = [r.get("affinity", 0.0) for r in ordered]
+    # Strongest (most negative) -> green; weakest -> red.
+    lo, hi = min(vals), max(vals)
+    def _col(v):
+        t = 0.0 if hi == lo else (v - lo) / (hi - lo)  # 0 = strongest
+        return f"rgb({int(40 + 200 * t)},{int(200 - 150 * t)},90)"
+    fig = go.Figure(go.Bar(
+        x=vals, y=names, orientation="h",
+        marker=dict(color=[_col(v) for v in vals]),
+        hovertemplate="%{y}: %{x:.1f} kcal/mol<extra></extra>",
+        text=[f"{v:.1f}" for v in vals], textposition="outside",
+    ))
+    fig.update_layout(
+        template="plotly_dark", height=300,
+        title="Illustrative Binding Affinity (kcal/mol) — lower = stronger",
+        xaxis_title="Predicted ΔG (kcal/mol)", margin=dict(l=10, r=10, t=50, b=10),
+        annotations=[dict(text="Heuristic estimate — not real docking",
+                          x=1.0, y=1.12, xref="paper", yref="paper",
+                          showarrow=False, font=dict(color="#8b98a5", size=9))],
+    )
+    return fig
+
+
+def docking_pose_html(pdb_id: str, residues, drug_name: str = "",
+                      affinity: float = 0.0) -> str:
+    """Illustrative 3Dmol docking pose: protein cartoon + highlighted binding
+    pocket + a translucent ligand cloud over the pocket residues.
+
+    Not a real docked pose — it visualises *where* the drug is proposed to act.
+    All injected values are sanitised (pdb alnum, residues ints, name charset).
+    """
+    safe_pdb = "".join(ch for ch in str(pdb_id) if ch.isalnum())[:8] or "2OCJ"
+    resi = [int(r) for r in (residues or [])]
+    resi_js = ",".join(str(r) for r in resi)
+    safe_name = "".join(ch for ch in str(drug_name) if ch.isalnum() or ch in " ()-+.")[:40]
+    label = f"{safe_name} (~{float(affinity):.1f} kcal/mol)" if safe_name else "ligand"
+    return f"""
+    <div id="dockview" style="width:100%;height:460px;background:#0d1117;
+         border-radius:8px;"></div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/3Dmol/2.1.0/3Dmol-min.js"></script>
+    <script>
+      (function() {{
+        try {{
+          var el = document.getElementById('dockview');
+          var viewer = $3Dmol.createViewer(el, {{backgroundColor: '#0d1117'}});
+          $3Dmol.download('pdb:{safe_pdb}', viewer, {{}}, function() {{
+            viewer.setStyle({{}}, {{cartoon: {{color: '#3a4654', opacity: 0.55}}}});
+            var resi = [{resi_js}];
+            resi.forEach(function(r) {{
+              viewer.setStyle({{resi: r}},
+                {{cartoon: {{color: '#00d4ff'}},
+                 stick: {{colorscheme: 'cyanCarbon', radius: 0.25}}}});
+              // translucent 'ligand cloud' over the binding pocket
+              viewer.addStyle({{resi: r}},
+                {{sphere: {{color: '#ffcc33', radius: 1.6, opacity: 0.35}}}});
+            }});
+            if (resi.length) {{
+              viewer.addLabel('{label}', {{
+                inFront: true, fontSize: 12, fontColor: '#ffcc33',
+                backgroundColor: '#0d1117', backgroundOpacity: 0.75,
+                position: {{resi: resi[0]}}
+              }});
+              viewer.zoomTo({{resi: resi.join(',')}});
+            }} else {{
+              viewer.zoomTo();
+            }}
+            viewer.render();
+            viewer.spin('y', 0.5);
+          }});
+        }} catch (e) {{
+          document.getElementById('dockview').innerHTML =
+            '<p style=\"color:#8b98a5;font-family:monospace;padding:1rem\">'
+            + '3D docking view needs an internet connection.</p>';
+        }}
+      }})();
+    </script>
+    """

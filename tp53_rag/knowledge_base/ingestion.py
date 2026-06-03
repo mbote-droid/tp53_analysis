@@ -113,9 +113,13 @@ class TP53DocumentIngester:
 
     def load_uniprot_annotation(self) -> List[Document]:
         try:
-            # Using session manager with finite timeouts for performance stability
+            # UniProt REST API — flat-file (.txt) format for TP53 (P04637),
+            # which is what the CC/FT/DE/GN line parser below expects. The bare
+            # homepage returns HTML and yields no usable annotations.
             with requests.Session() as session:
-                resp = session.get("https://uniprot.org", timeout=10)
+                resp = session.get(
+                    "https://rest.uniprot.org/uniprotkb/P04637.txt", timeout=10
+                )
                 resp.raise_for_status()
                 lines = [line for line in resp.text.split("\n") if line.startswith(("CC", "FT", "DE", "GN"))]
                 content = "\n".join(lines[:150])  # Strict capping preserves token budget boundaries
