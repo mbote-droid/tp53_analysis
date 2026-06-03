@@ -10,6 +10,7 @@ from chromadb.config import Settings as ChromaSettings
 import os
 from langchain_chroma import Chroma
 from langchain_core.documents import Document
+from langchain_core.embeddings import Embeddings
 from config.settings import (
     CHROMA_DIR,
     CHROMA_COLLECTION_NAME,
@@ -21,13 +22,37 @@ from config.settings import (
 from utils.logger import log
 
 
+class _ChromaDefaultEmbeddings(Embeddings):
+    """LangChain Embeddings adapter over ChromaDB's built-in ONNX
+    all-MiniLM-L6-v2 model (384-dim).
+
+    Runs locally via onnxruntime — no API key, no live API endpoint. The model
+    is fetched once from ChromaDB's own CDN (AWS S3), so it has zero dependency
+    on the (decommissioned) HuggingFace Inference API. Ideal for cloud/offline.
+    """
+
+    def __init__(self):
+        from chromadb.utils.embedding_functions import DefaultEmbeddingFunction
+        self._ef = DefaultEmbeddingFunction()
+
+    def embed_documents(self, texts: List[str]) -> List[List[float]]:
+        vectors = self._ef(list(texts))
+        return [list(map(float, v)) for v in vectors]
+
+    def embed_query(self, text: str) -> List[float]:
+        return list(map(float, self._ef([text])[0]))
+
+
 def _get_embedding_model():
     """
-    Get best available embedding model.
+    Get the best available embedding model.
     Priority:
-      1. Ollama local (INFERENCE_MODE=ollama/llamacpp)
-      2. HuggingFace Inference API (cloud, needs HF_TOKEN)
-      3. ChromaDB default (fallback)
+      1. Ollama local         (INFERENCE_MODE=ollama/llamacpp)
+      2. Local ONNX MiniLM    (cloud-safe default — no API, no key, no network
+                               at query time; model cached from ChromaDB CDN)
+
+    The legacy HuggingFace Inference API (api-inference.huggingface.co) is
+    decommissioned and is no longer used.
     """
     inference_mode = os.getenv("INFERENCE_MODE", "ollama")
 
@@ -40,26 +65,13 @@ def _get_embedding_model():
                 base_url=OLLAMA_BASE_URL,
             )
         except Exception as e:
-            log.warning(f"Ollama embeddings failed: {e} — falling back")
-
-    hf_token = os.getenv("HF_TOKEN", "")
-    if hf_token:
-        try:
-            from langchain_community.embeddings import HuggingFaceInferenceAPIEmbeddings
-            log.info("Using HuggingFace Inference API embeddings (cloud mode)")
-            return HuggingFaceInferenceAPIEmbeddings(
-                api_key=hf_token,
-                model_name="BAAI/bge-small-en-v1.5",
-            )
-        except Exception as e:
-            log.warning(f"HuggingFace embeddings failed: {e} — falling back")
+            log.warning(f"Ollama embeddings failed: {e} — falling back to local ONNX")
 
     try:
-        from chromadb.utils.embedding_functions import DefaultEmbeddingFunction
-        log.warning("Using ChromaDB default embeddings (fallback)")
-        return DefaultEmbeddingFunction()
+        log.info("Using local ONNX embeddings (all-MiniLM-L6-v2) — cloud-safe")
+        return _ChromaDefaultEmbeddings()
     except Exception as e:
-        log.error(f"All embedding models failed: {e}")
+        log.error(f"Embedding model init failed: {e}")
         return None
 
 
@@ -97,7 +109,7 @@ class TP53VectorStore:
                 return self
         except Exception:
             pass
-        log.info(f"Building vector store with {len(documents)} documents via Ollama...")
+        log.info(f"Building vector store with {len(documents)} documents...")
         self._vectorstore = Chroma.from_documents(
             documents=documents,
             embedding=self.embedding_model,
