@@ -152,14 +152,30 @@ except Exception as e:  # surface the REAL chained cause, not just the final mes
     log.error("RAG import failed:\n%s", _details)
 
 # ── Session state ─────────────────────────────────────────────────
-@st.cache_resource
+@st.cache_resource(show_spinner="Preparing knowledge base…")
 def init_rag_system():
     if not RAG_AVAILABLE:
         return None, None
     try:
         store = TP53VectorStore()
         if not store.is_built():
-            return None, None
+            # Auto-build from the in-code curated knowledge so the app is
+            # self-sufficient on cloud (no pre-built DB / no `main.py build`
+            # needed). The documents ship in the package; only the embeddings
+            # need the network, which is already configured (HF API on cloud).
+            try:
+                from knowledge_base.ingestion import TP53DocumentIngester
+                ingester = TP53DocumentIngester()
+                docs = ingester.load_curated_knowledge()
+                chunks = ingester.chunk_documents(docs)
+                if not chunks:
+                    log.error("Auto-build skipped: no curated documents found.")
+                    return None, None
+                store.build(chunks)
+                log.info(f"Auto-built knowledge base with {len(chunks)} chunks.")
+            except Exception as be:
+                log.error(f"Knowledge-base auto-build failed: {be}")
+                return None, None
         store.load()
         rag = TP53RAGChain(vector_store=store)
         return rag, store
