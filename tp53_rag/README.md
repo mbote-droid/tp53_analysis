@@ -6,7 +6,7 @@
 [![Ollama](https://img.shields.io/badge/Runtime-Ollama-green)](https://ollama.com)
 [![ChromaDB](https://img.shields.io/badge/Vector%20DB-ChromaDB-orange)](https://trychroma.com)
 [![FastAPI](https://img.shields.io/badge/API-FastAPI-009688)](https://fastapi.tiangolo.com)
-[![Streamlit App](https://img.shields.io/badge/Streamlit-App-FF4B4B?logo=streamlit)](https://tp53-rag.streamlit.app)
+![Status](https://img.shields.io/badge/Deploy-local%20%2F%20pending-orange?logo=streamlit&logoColor=white)
 
 TP53 RAG Platform is an enterprise-grade, multi-agent AI system for genomic researchers, oncologists, and pharmaceutical companies. It combines local-first Gemma 4 inference, 16 specialized AI agents, multi-omics integration, and HIPAA-compliant FHIR R4 output — running entirely offline on commodity hardware (8GB RAM, no GPU).
 
