@@ -14,14 +14,17 @@
 # ============================================================
 
 # UI
-streamlit>=1.32.0
+streamlit>=1.32.0,<2.0.0
 
 # RAG & Vector DB
-chromadb>=0.5.3
-langchain>=0.3.0
-langchain-core>=0.2.0
-langchain-community>=0.3.0
-langchain-chroma>=0.1.4
+# Upper bounds pin to the major versions this code targets. Without them,
+# the resolver pulls bleeding-edge majors (langchain 1.x, chromadb 1.x) whose
+# moved/removed APIs crash the app on import.
+chromadb>=0.5.3,<0.6.0
+langchain>=0.3.0,<0.4.0
+langchain-core>=0.3.0,<0.4.0
+langchain-community>=0.3.0,<0.4.0
+langchain-chroma>=0.1.4,<0.2.0
 
 # Document Processing
 pypdf>=4.2.0
@@ -32,10 +35,9 @@ requests>=2.32.3
 biopython>=1.83
 
 # Data & Visualization
-pandas>=2.2.2
+pandas>=2.2.2,<3.0.0
 numpy>=1.26.4,<2.0.0
-plotly>=5.22.0
-matplotlib>=3.8.0
+plotly>=5.22.0,<6.0.0
 
 # Search & Ranking
 rank-bm25>=0.2.1
@@ -53,7 +55,8 @@ google-genai>=0.3.0
 
 # Embeddings — cloud uses the HuggingFace API / ChromaDB default
 # (NOT local sentence-transformers, which exceeds cloud RAM)
-huggingface-hub>=0.23.0
+# Capped <1.0: langchain-community 0.3.x expects the huggingface-hub 0.x API.
+huggingface-hub>=0.23.0,<1.0
 
 # Utilities
 python-dotenv>=1.0.1
