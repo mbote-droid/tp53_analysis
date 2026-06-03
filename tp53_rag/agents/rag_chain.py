@@ -317,14 +317,19 @@ class SemanticCache:
         self._load_from_disk()
 
     def _init_embedder(self):
-        """Lazy load embedder — only on first use, not at startup."""
+        """Lazy load embedder — only on first use, not at startup.
+
+        Uses ChromaDB's built-in ONNX all-MiniLM-L6-v2 model (local, fetched
+        once from ChromaDB's CDN). This avoids sentence-transformers / the
+        decommissioned HuggingFace Inference API, so the cache works on cloud.
+        """
         if self._embedder_load_attempted:
             return
         self._embedder_load_attempted = True
         try:
-            from sentence_transformers import SentenceTransformer
-            self._embedder = SentenceTransformer("all-MiniLM-L6-v2")
-            log.info("Semantic cache embedder loaded")
+            from chromadb.utils.embedding_functions import DefaultEmbeddingFunction
+            self._embedder = DefaultEmbeddingFunction()
+            log.info("Semantic cache embedder loaded (local ONNX)")
         except Exception as e:
             log.warning(f"Semantic cache embedder unavailable ({e})")
 
@@ -332,7 +337,14 @@ class SemanticCache:
         self._init_embedder()  # lazy load on first use
         if not self._embedder:
             return None
-        return self._embedder.encode(text, normalize_embeddings=True).tolist()
+        try:
+            vec = [float(x) for x in self._embedder([text])[0]]
+            # Normalise to unit length — _cosine() assumes unit vectors.
+            norm = math.sqrt(sum(x * x for x in vec)) or 1.0
+            return [x / norm for x in vec]
+        except Exception as e:
+            log.warning(f"Semantic cache embed failed: {e}")
+            return None
 
     @staticmethod
     def _cosine(a: List[float], b: List[float]) -> float:
