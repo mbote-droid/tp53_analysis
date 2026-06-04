@@ -42,6 +42,7 @@ from utils.viz import (
     african_burden_bar,
     clinvar_conflict_chart,
     chembl_phase_chart,
+    trials_priority_chart,
 )
 
 st.set_page_config(
@@ -403,7 +404,8 @@ with st.sidebar:
 """)
 
 # ── Tabs ──────────────────────────────────────────────────────────
-tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10, tab11 = st.tabs([
+(tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10, tab11,
+ tab12) = st.tabs([
     "🔍 Query",
     "🧬 Analysis",
     "💊 Drug Discovery",
@@ -415,6 +417,7 @@ tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10, tab11 = st.tabs([
     "🔬 Pathology",
     "📍 TNM Staging",
     "🌍 African Atlas",
+    "🧪 Clinical Trials",
 ])
 
 # ── TAB 1: Query ──────────────────────────────────────────────────
@@ -474,7 +477,51 @@ with tab1:
 with tab2:
     st.markdown("## 🧬 Multi-Agent Analysis")
 
-    mutation = st.text_input("TP53 Mutation:", placeholder="e.g., R175H", value="R175H")
+    # ── 📁 Optional: upload a patient VCF (TP53 variants auto-extracted) ──
+    with st.expander("📁 Upload a patient VCF (auto-extract TP53 variants)"):
+        up = st.file_uploader("VCF file (.vcf / .txt)", type=["vcf", "txt"], key="vcf_up")
+        use_sample = st.checkbox("Use a sample VCF instead", key="vcf_sample")
+        vcf_bytes = up.getvalue() if up is not None else None
+        if vcf_bytes is None and use_sample:
+            from utils.vcf_parser import sample_vcf
+            vcf_bytes = sample_vcf().encode()
+        if vcf_bytes:
+            try:
+                from utils.vcf_parser import parse_vcf_bytes
+                from utils.viz import vcf_variant_chart
+                parsed = parse_vcf_bytes(vcf_bytes)
+                st.caption(f"**{parsed['tp53_count']}** TP53 variant(s) found "
+                           f"· {parsed['skipped']} malformed line(s) skipped")
+                if parsed["variants"]:
+                    st.plotly_chart(vcf_variant_chart(parsed["variants"]),
+                                    use_container_width=True)
+                    st.dataframe(
+                        pd.DataFrame([
+                            {"AA": v["amino_acid_change"] or "—",
+                             "Pos": f"{v['chrom']}:{v['pos']}", "REF>ALT": f"{v['ref']}>{v['alt']}",
+                             "QUAL": v["qual"], "FILTER": v["filter"],
+                             "Hotspot": "🔴" if v["is_hotspot"] else ""}
+                            for v in parsed["variants"]
+                        ]),
+                        use_container_width=True, hide_index=True,
+                    )
+                    opts = [v["amino_acid_change"] for v in parsed["variants"]
+                            if v.get("amino_acid_change")]
+                    if opts:
+                        picked = st.selectbox("Use a variant for analysis:", opts, key="vcf_pick")
+                        if st.button("→ Use this mutation", key="vcf_use"):
+                            st.session_state["vcf_picked_mut"] = picked
+                            st.rerun()
+                    else:
+                        st.info("No annotated protein changes in this VCF — run it through "
+                                "VEP/SnpEff for amino-acid annotation, or enter a mutation manually.")
+                st.caption("⚠️ VCF parsed locally; amino-acid changes come from the file's own "
+                           "HGVS annotation. Unannotated variants are shown genomic-only.")
+            except Exception as e:
+                st.error(f"VCF parsing failed: {str(e)[:160]}")
+
+    _default_mut = st.session_state.get("vcf_picked_mut") or "R175H"
+    mutation = st.text_input("TP53 Mutation:", placeholder="e.g., R175H", value=_default_mut)
     cancer = st.selectbox("Cancer type:", ["Colorectal", "Breast", "Ovarian", "Lung", "Gastric"])
     vaf = st.number_input("Variant Allele Frequency (%):", 0.0, 100.0, 50.0)
 
@@ -1259,6 +1306,62 @@ with tab11:
         st.caption(f"⚠️ {atlas['disclaimer']}")
     except Exception as e:
         st.error(f"African Atlas unavailable: {str(e)[:200]}")
+
+# ── TAB 12: Clinical Trials ───────────────────────────────────────
+with tab12:
+    st.markdown("## 🧪 Clinical Trials Matcher")
+    st.markdown(
+        "Find **recruiting** trials for a TP53 mutation + cancer, with "
+        "**Kenyan / African sites prioritised** (then international trials "
+        "open to African patients). Live ClinicalTrials.gov data."
+    )
+
+    tc1, tc2, tc3 = st.columns([2, 2, 1])
+    with tc1:
+        ct_mut = st.text_input("Mutation:", value="R175H", key="ct_mut")
+    with tc2:
+        ct_cancer = st.text_input("Cancer type:", value="breast cancer", key="ct_cancer")
+    with tc3:
+        ct_live = st.checkbox("Live API", value=True, key="ct_live")
+
+    if st.button("🔎 Find Trials", use_container_width=True, key="ct_go"):
+        try:
+            from agents.clinical_trials import ClinicalTrialsMatcher
+            with st.spinner("Searching ClinicalTrials.gov..."):
+                res = ClinicalTrialsMatcher().search(
+                    mutation=ct_mut or None, cancer_type=ct_cancer or None,
+                    use_live=ct_live)
+
+            if res["live"]:
+                st.success(f"🟢 {res['message']}")
+            else:
+                st.info(f"⚪ Live API unavailable — showing curated search pointers. "
+                        f"{res['message']}")
+
+            m1, m2, m3 = st.columns(3)
+            m1.metric("Trials", res["count"])
+            m2.metric("🌍 African sites", res["african_count"])
+            m3.metric("🇰🇪 Kenyan sites", res["kenya_count"])
+
+            st.plotly_chart(trials_priority_chart(res["trials"]),
+                            use_container_width=True)
+
+            for t in res["trials"]:
+                flag = "🇰🇪" if t.get("kenya_site") else ("🌍" if t.get("african_priority") else "🌐")
+                header = f"{flag} {t.get('phase', 'N/A')} — {t['title'][:80]}"
+                with st.expander(header):
+                    if t.get("nct_id"):
+                        st.markdown(f"**NCT ID:** `{t['nct_id']}` · **Status:** {t['status']}")
+                    if t.get("conditions"):
+                        st.markdown(f"**Conditions:** {', '.join(t['conditions'][:5])}")
+                    if t.get("countries"):
+                        st.markdown(f"**Sites:** {', '.join(t['countries'][:8])}")
+                    if t.get("african_sites"):
+                        st.markdown(f"🌍 **African sites:** {', '.join(t['african_sites'])}")
+                    st.markdown(f"🔗 [Open on ClinicalTrials.gov]({t['url']})")
+            st.caption(f"⚠️ {res['disclaimer']}")
+        except Exception as e:
+            st.error(f"Clinical Trials matcher unavailable: {str(e)[:200]}")
 
 # ── Footer ────────────────────────────────────────────────────────
 st.divider()

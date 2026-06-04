@@ -494,6 +494,94 @@ _ISO3 = {
 }
 
 
+def vcf_variant_chart(variants) -> go.Figure:
+    """TP53 variants from a VCF by QUAL, coloured by significance
+    (hotspot = red, annotated = blue, unannotated = grey). Never empty.
+    """
+    rows = [v for v in (variants or []) if isinstance(v, dict)]
+    if not rows:
+        return _empty_fig("No TP53 variants in VCF")
+
+    def _qual(v):
+        try:
+            return float(v.get("qual"))
+        except (TypeError, ValueError):
+            return 0.0
+
+    def _col(v):
+        if v.get("is_hotspot"):
+            return "#e74c3c"
+        return "#00d4ff" if v.get("annotated") else "#5a6b7a"
+
+    rows = sorted(rows, key=_qual)[-16:]
+    labels = []
+    seen: dict = {}
+    for v in rows:
+        base = v.get("amino_acid_change") or f"{v.get('chrom','?')}:{v.get('pos','?')}"
+        seen[base] = seen.get(base, 0) + 1
+        labels.append(base if seen[base] == 1 else f"{base}·{seen[base]}")
+
+    fig = go.Figure(go.Bar(
+        x=[_qual(v) for v in rows], y=labels, orientation="h",
+        marker=dict(color=[_col(v) for v in rows]),
+        customdata=[[v.get("ref", "?") + ">" + v.get("alt", "?"),
+                     v.get("filter", "?"),
+                     "hotspot" if v.get("is_hotspot") else
+                     ("annotated" if v.get("annotated") else "unannotated")]
+                    for v in rows],
+        hovertemplate="%{y} (%{customdata[0]})<br>QUAL %{x} · %{customdata[1]} · %{customdata[2]}<extra></extra>",
+    ))
+    fig.update_layout(
+        template="plotly_dark", height=max(220, 32 * len(rows) + 70),
+        title=dict(text="TP53 variants — hotspot 🔴 · annotated 🔵 · unannotated ⚪",
+                   font=dict(size=14)),
+        xaxis_title="QUAL", margin=dict(l=10, r=20, t=50, b=10),
+    )
+    return fig
+
+
+def trials_priority_chart(trials) -> go.Figure:
+    """Recruiting trials by clinical phase, coloured by geographic priority
+    (Kenya = gold, other African = teal, international = grey). Never empty.
+    """
+    rows = [t for t in (trials or []) if isinstance(t, dict)]
+    if not rows:
+        return _empty_fig("No trials to plot")
+    rows = sorted(rows, key=lambda t: t.get("phase_rank", 0))[-14:]
+
+    def _col(t):
+        if t.get("kenya_site"):
+            return "#f1c40f"
+        if t.get("african_priority"):
+            return "#1abc9c"
+        return "#5a6b7a"
+
+    labels = [(t.get("nct_id") or "search")[:14] for t in rows]
+    # de-duplicate y labels (Plotly needs distinct categories)
+    seen: dict = {}
+    ylabels = []
+    for lbl in labels:
+        seen[lbl] = seen.get(lbl, 0) + 1
+        ylabels.append(lbl if seen[lbl] == 1 else f"{lbl}·{seen[lbl]}")
+
+    fig = go.Figure(go.Bar(
+        x=[t.get("phase_rank", 0) for t in rows], y=ylabels, orientation="h",
+        marker=dict(color=[_col(t) for t in rows]),
+        customdata=[[t.get("title", "")[:60], t.get("phase", "?"),
+                     ", ".join(t.get("countries", [])[:3]) or "—"] for t in rows],
+        hovertemplate="%{customdata[0]}<br>%{customdata[1]} · %{customdata[2]}<extra></extra>",
+    ))
+    fig.update_layout(
+        template="plotly_dark", height=max(240, 34 * len(rows) + 80),
+        title=dict(text="Recruiting trials — Kenya 🟡 · Africa 🟢 · International ⚪",
+                   font=dict(size=14)),
+        xaxis=dict(title="Clinical phase", tickvals=[0, 1, 2, 3, 4],
+                   ticktext=["—", "I", "II", "III", "IV"], range=[0, 4.6]),
+        margin=dict(l=10, r=20, t=50, b=10),
+    )
+    return fig
+
+
 def chembl_phase_chart(compounds) -> go.Figure:
     """Horizontal bar of TP53-pathway compounds by clinical phase (0-4).
 

@@ -87,6 +87,11 @@ AGENT_REGISTRY = {
         "keywords": ["clinvar", "conflict", "concordance", "verify", "hallucination",
                      "classification", "pathogenic", "benign", "safety"],
     },
+    "clinical_trials_matcher": {
+        "description": "Match TP53 mutation + cancer to recruiting trials (Kenya/Africa prioritised)",
+        "keywords": ["trial", "trials", "clinicaltrials", "recruiting", "enroll",
+                     "study", "kenya", "africa", "eligibility"],
+    },
     "sequence_fetch": {
         "description": "Fetch and validate TP53 sequences from NCBI",
         "keywords": ["fetch", "accession", "ncbi", "sequence", "download", "retrieve"],

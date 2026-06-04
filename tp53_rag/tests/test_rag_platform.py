@@ -605,6 +605,181 @@ class TestChEMBLClient:
         assert chembl_phase_chart([]).to_json()  # never empty
 
 
+class TestClinicalTrialsMatcher:
+    """ClinicalTrials.gov matcher — offline-first, Kenya/Africa prioritised."""
+
+    # mock v2 payload: a US Phase-2 and a Kenya Phase-3 recruiting study
+    _PAYLOAD = {"studies": [
+        {"protocolSection": {
+            "identificationModule": {"nctId": "NCT001", "briefTitle": "US study"},
+            "statusModule": {"overallStatus": "RECRUITING"},
+            "designModule": {"phases": ["PHASE2"]},
+            "conditionsModule": {"conditions": ["Breast Cancer"]},
+            "contactsLocationsModule": {"locations": [{"country": "United States"}]}}},
+        {"protocolSection": {
+            "identificationModule": {"nctId": "NCT002", "briefTitle": "Kenya study"},
+            "statusModule": {"overallStatus": "RECRUITING"},
+            "designModule": {"phases": ["PHASE3"]},
+            "conditionsModule": {"conditions": ["Liver Cancer"]},
+            "contactsLocationsModule": {"locations": [{"country": "Kenya"},
+                                                      {"country": "Nigeria"}]}}},
+    ]}
+
+    def test_parse_studies(self):
+        from agents.clinical_trials import parse_studies
+        recs = parse_studies(self._PAYLOAD)
+        assert len(recs) == 2
+        k = [r for r in recs if r["nct_id"] == "NCT002"][0]
+        assert k["african_priority"] and k["kenya_site"] and k["phase"] == "Phase 3"
+
+    def test_parse_none_safe(self):
+        from agents.clinical_trials import parse_studies
+        assert parse_studies(None) == [] and parse_studies({"x": 1}) == []
+
+    def test_phase_normalisation(self):
+        from agents.clinical_trials import _norm_phase
+        assert _norm_phase(["PHASE1", "PHASE2"]) == "Phase 1/2"
+        assert _norm_phase(["NA"]) == "N/A" and _norm_phase(None) == "N/A"
+
+    def test_kenya_sorts_first(self):
+        from unittest.mock import patch
+        from agents.clinical_trials import ClinicalTrialsMatcher
+        with patch.object(ClinicalTrialsMatcher, "_get_json", return_value=self._PAYLOAD):
+            out = ClinicalTrialsMatcher().search(mutation="R249S", cancer_type="liver")
+        assert out["trials"][0]["nct_id"] == "NCT002"  # Kenya first
+        assert out["kenya_count"] == 1 and out["african_count"] == 1
+
+    def test_graceful_fallback_never_empty(self):
+        from unittest.mock import patch
+        from agents.clinical_trials import ClinicalTrialsMatcher
+        with patch.object(ClinicalTrialsMatcher, "_get_json", return_value=None):
+            out = ClinicalTrialsMatcher().search(mutation="R175H", cancer_type="breast")
+        assert out["live"] is False and out["count"] >= 1
+        assert out["trials"][0]["source"] == "curated-search"
+
+    def test_offline_mode(self):
+        from agents.clinical_trials import ClinicalTrialsMatcher
+        out = ClinicalTrialsMatcher().search(use_live=False)
+        assert out["count"] >= 1 and out["live"] is False
+
+    def test_phase_filter_does_not_empty(self):
+        # a payload with only a Phase-1 study should still return something
+        from unittest.mock import patch
+        from agents.clinical_trials import ClinicalTrialsMatcher
+        p1 = {"studies": [{"protocolSection": {
+            "identificationModule": {"nctId": "NCT9", "briefTitle": "early"},
+            "statusModule": {"overallStatus": "RECRUITING"},
+            "designModule": {"phases": ["PHASE1"]},
+            "contactsLocationsModule": {"locations": [{"country": "Kenya"}]}}}]}
+        with patch.object(ClinicalTrialsMatcher, "_get_json", return_value=p1):
+            out = ClinicalTrialsMatcher().search(mutation="X", cancer_type="y")
+        assert out["count"] >= 1  # phase filter kept it rather than going empty
+
+    def test_caching(self):
+        from unittest.mock import patch
+        from agents.clinical_trials import ClinicalTrialsMatcher
+        m = ClinicalTrialsMatcher()
+        with patch.object(ClinicalTrialsMatcher, "_get_json",
+                          return_value=self._PAYLOAD) as mock:
+            m.search(mutation="R175H", cancer_type="breast")
+            m.search(mutation="R175H", cancer_type="breast")
+        assert mock.call_count == 1  # second hit cache
+
+    def test_output_json_serialisable(self):
+        import json
+        from unittest.mock import patch
+        from agents.clinical_trials import ClinicalTrialsMatcher
+        with patch.object(ClinicalTrialsMatcher, "_get_json", return_value=self._PAYLOAD):
+            out = ClinicalTrialsMatcher().search(mutation="R175H", cancer_type="breast")
+        assert json.dumps(out)
+
+    def test_convenience_and_registry(self):
+        from agents.clinical_trials import match_trials
+        from config.settings import AGENT_REGISTRY
+        assert match_trials(use_live=False)["status"] == "success"
+        assert "clinical_trials_matcher" in AGENT_REGISTRY
+
+    def test_trials_viz(self):
+        from utils.viz import trials_priority_chart
+        from agents.clinical_trials import parse_studies
+        assert trials_priority_chart(parse_studies(self._PAYLOAD)).to_json()
+        assert trials_priority_chart([]).to_json()  # never empty
+
+
+class TestVCFParser:
+    """VCF parsing — TP53 filter + honest HGVS-based amino-acid extraction."""
+
+    def test_sample_vcf_counts(self):
+        from utils.vcf_parser import parse_vcf_text, sample_vcf
+        out = parse_vcf_text(sample_vcf())
+        assert out["tp53_count"] == 3  # 2 annotated hotspots + 1 unannotated
+        assert out["skipped"] == 0
+
+    def test_non_tp53_filtered_out(self):
+        from utils.vcf_parser import parse_vcf_text, sample_vcf
+        chroms = {v["chrom"] for v in parse_vcf_text(sample_vcf())["variants"]}
+        assert chroms == {"17"}  # the chr1 line is excluded
+
+    def test_protein_change_3letter(self):
+        from utils.vcf_parser import extract_protein_change
+        assert extract_protein_change("HGVS.p=p.Arg175His") == "R175H"
+        assert extract_protein_change("p.Arg196Ter") == "R196*"
+
+    def test_protein_change_1letter(self):
+        from utils.vcf_parser import extract_protein_change
+        assert extract_protein_change("p.R273H") == "R273H"
+
+    def test_protein_change_none(self):
+        from utils.vcf_parser import extract_protein_change
+        assert extract_protein_change("no annotation") is None
+        assert extract_protein_change("") is None
+
+    def test_hotspot_flagging(self):
+        from utils.vcf_parser import parse_vcf_text, sample_vcf
+        hot = [v for v in parse_vcf_text(sample_vcf())["variants"] if v["is_hotspot"]]
+        assert {v["amino_acid_change"] for v in hot} == {"R175H", "R248W"}
+
+    def test_unannotated_is_genomic_only(self):
+        from utils.vcf_parser import parse_vcf_text, sample_vcf
+        un = [v for v in parse_vcf_text(sample_vcf())["variants"] if not v["annotated"]]
+        assert len(un) == 1 and un[0]["amino_acid_change"] is None
+
+    def test_locus_detection_both_builds(self):
+        from utils.vcf_parser import is_tp53_locus
+        assert is_tp53_locus("chr17", 7675088)   # GRCh38
+        assert is_tp53_locus("17", 7578406)       # hg19
+        assert not is_tp53_locus("1", 12345)
+        assert not is_tp53_locus("17", 999999999)
+
+    def test_malformed_lines_skipped(self):
+        from utils.vcf_parser import parse_vcf_text
+        out = parse_vcf_text("17\tNOTANUMBER\t.\tC\tT\n17\t7675088\t.\tC\tT\t.\tPASS\tp.Arg175His")
+        assert out["skipped"] == 1 and out["tp53_count"] == 1
+
+    def test_empty_input(self):
+        from utils.vcf_parser import parse_vcf_text
+        out = parse_vcf_text("")
+        assert out["tp53_count"] == 0 and out["variants"] == []
+
+    def test_bytes_parsing(self):
+        from utils.vcf_parser import parse_vcf_bytes, sample_vcf
+        assert parse_vcf_bytes(sample_vcf().encode())["tp53_count"] == 3
+
+    def test_pipeline_data_compatible(self):
+        from utils.vcf_parser import parse_vcf_text, sample_vcf
+        v = parse_vcf_text(sample_vcf())["variants"][0]
+        for k in ("gene", "chrom", "pos", "ref", "alt", "amino_acid_change"):
+            assert k in v
+        assert v["gene"] == "TP53"
+
+    def test_vcf_viz(self):
+        from utils.viz import vcf_variant_chart
+        from utils.vcf_parser import parse_vcf_text, sample_vcf
+        vs = parse_vcf_text(sample_vcf())["variants"]
+        assert vcf_variant_chart(vs).to_json()
+        assert vcf_variant_chart([]).to_json()  # never empty
+
+
 class TestBenchmarkScoring:
     """Pure scoring helpers in benchmarks/scoring.py."""
 
