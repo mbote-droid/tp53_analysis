@@ -38,6 +38,9 @@ from utils.viz import (
     tme_donut,
     vaf_gauge,
     pathway_diverging_bar,
+    african_atlas_map,
+    african_burden_bar,
+    clinvar_conflict_chart,
 )
 
 st.set_page_config(
@@ -256,6 +259,40 @@ def format_sources(sources: list) -> str:
     return "\n".join(lines)
 
 
+def render_clinvar_safety(answer_text: str, key_prefix: str = "") -> None:
+    """🛡 Shared ClinVar hallucination-guard panel — vets AI text against
+    ClinVar and renders verdict + concordance chart. Used by the Query and
+    Analysis tabs (single source of truth, no copy-paste)."""
+    try:
+        from agents.clinvar_conflict_checker import ClinVarConflictChecker
+        chk = ClinVarConflictChecker().check(text=answer_text or "")
+        findings = chk["findings"]
+        if not findings:
+            return  # nothing to verify — stay quiet
+        if chk["conflicts_found"]:
+            st.error(f"🛡 ClinVar Safety Check — {chk['message']}")
+        elif chk["verdict"] == "concordant":
+            st.success(f"🛡 ClinVar Safety Check — {chk['message']}")
+        else:
+            st.info(f"🛡 ClinVar Safety Check — {chk['message']}")
+        with st.expander("ClinVar concordance details",
+                         expanded=chk["conflicts_found"] > 0):
+            st.plotly_chart(clinvar_conflict_chart(findings),
+                            use_container_width=True,
+                            key=f"clinvar_chart_{key_prefix}")
+            for f in findings:
+                icon = {"high": "🔴", "medium": "🟠"}.get(f["severity"], "🟢")
+                st.markdown(
+                    f"{icon} **{f['mutation']}** — AI: *{f['ai_classification']}* · "
+                    f"ClinVar: *{f['clinvar_classification']}* "
+                    f"([verify]({f['evidence_url']}))"
+                )
+            st.caption("Cross-checked against a curated ClinVar reference. "
+                       "Conflicts flag possible AI hallucination — verify before clinical use.")
+    except Exception as e:
+        log.warning(f"ClinVar safety check skipped: {e}")
+
+
 # ── Voice transcription (shared by Tab 6 narration + Tab 7) ────────
 @st.cache_resource
 def load_whisper():
@@ -365,7 +402,7 @@ with st.sidebar:
 """)
 
 # ── Tabs ──────────────────────────────────────────────────────────
-tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10 = st.tabs([
+tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10, tab11 = st.tabs([
     "🔍 Query",
     "🧬 Analysis",
     "💊 Drug Discovery",
@@ -376,6 +413,7 @@ tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10 = st.tabs([
     "🛠 Debug",
     "🔬 Pathology",
     "📍 TNM Staging",
+    "🌍 African Atlas",
 ])
 
 # ── TAB 1: Query ──────────────────────────────────────────────────
@@ -406,6 +444,10 @@ with tab1:
 
         st.markdown("### Answer")
         st.markdown(result["answer"])
+
+        # 🛡 hallucination guard on the answer
+        render_clinvar_safety(result.get("answer", ""), key_prefix="query")
+
         st.divider()
 
         c1, c2, c3, c4 = st.columns(4)
@@ -481,6 +523,10 @@ with tab2:
                     answer = result.get("answer", "")
                     st.markdown(answer[:500] + "..." if len(answer) > 500 else answer)
                     st.caption(f"Sources: {len(result.get('sources', []))}")
+
+        # 🛡 hallucination guard across ALL multi-agent answers
+        _combined = "\n\n".join(r.get("answer", "") for r in results.values())
+        render_clinvar_safety(_combined, key_prefix="analysis")
 
         # ── Molecular profile (at-a-glance visuals from structured agents) ──
         st.divider()
@@ -1131,6 +1177,69 @@ not a replacement for pathological staging.*
         )
         if st.checkbox("Show FHIR R4 ClinicalImpression resource"):
             st.json(result.get("fhir_resource", {}))
+
+# ── TAB 11: African TP53 Atlas ────────────────────────────────────
+with tab11:
+    st.markdown("## 🌍 African TP53 Atlas")
+    st.markdown(
+        "Regional TP53 cancer-genomics for African populations — which mutations "
+        "dominate which regions, in which cancers, driven by which exposures. "
+        "Complements the African Drift bias-detector."
+    )
+
+    try:
+        from agents.african_atlas import AfricanTP53Atlas
+        _atlas = AfricanTP53Atlas()
+
+        # ── Continental map (always shown) ──
+        st.plotly_chart(african_atlas_map(_atlas.country_burden()),
+                        use_container_width=True)
+
+        st.divider()
+        st.markdown("### 🔎 Explore by mutation, region or cancer")
+        ac1, ac2, ac3 = st.columns(3)
+        with ac1:
+            atlas_mut = st.text_input("Mutation:", value="R249S", key="atlas_mut")
+        with ac2:
+            atlas_region = st.text_input("Region / country:", value="", key="atlas_region")
+        with ac3:
+            atlas_cancer = st.text_input("Cancer type:", value="", key="atlas_cancer")
+
+        out = _atlas.profile(
+            mutation=atlas_mut or None,
+            region=atlas_region or None,
+            cancer_type=atlas_cancer or None,
+        )
+        atlas = out["atlas"]
+        if out["broadened"]:
+            st.info("No exact match — showing the full continental atlas.")
+
+        mcols = st.columns([3, 2])
+        with mcols[0]:
+            st.plotly_chart(african_burden_bar(atlas["matched_profiles"]),
+                            use_container_width=True)
+        with mcols[1]:
+            st.metric("Profiles matched", len(atlas["matched_profiles"]))
+            if atlas["key_mutations"]:
+                st.markdown("**Key mutations:** " + ", ".join(atlas["key_mutations"]))
+            if atlas["cancers"]:
+                st.markdown("**Cancers:** " + "; ".join(atlas["cancers"]))
+
+        for p in atlas["matched_profiles"]:
+            with st.expander(f"📍 {p['title']}  ·  burden {p.get('burden_score', '?')}/100"):
+                st.markdown(f"**Regions:** {', '.join(p['regions'])}")
+                st.markdown(f"**Countries:** {', '.join(p['countries'])}")
+                st.markdown(f"**Dominant cancer:** {p['dominant_cancer']}")
+                st.markdown(f"**Key TP53 mutations:** "
+                            f"{', '.join(p['key_mutations']) or '— (TP53 typically wild-type)'}")
+                st.markdown(f"**Environmental driver:** {p['environmental_driver']}")
+                st.markdown(f"**Prevalence (representative):** {p['representative_prevalence']}")
+                st.markdown(f"🏥 **Kenya context:** {p['kenya_context']}")
+                st.caption("Sources: " + "; ".join(p["sources"]))
+
+        st.caption(f"⚠️ {atlas['disclaimer']}")
+    except Exception as e:
+        st.error(f"African Atlas unavailable: {str(e)[:200]}")
 
 # ── Footer ────────────────────────────────────────────────────────
 st.divider()

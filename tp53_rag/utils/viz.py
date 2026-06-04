@@ -485,6 +485,136 @@ def pathway_diverging_bar(activated, suppressed) -> go.Figure:
     return fig
 
 
+# Stable ISO-3 codes (the "country names" locationmode is deprecated in Plotly).
+_ISO3 = {
+    "Nigeria": "NGA", "Kenya": "KEN", "Senegal": "SEN", "Gambia": "GMB",
+    "Mozambique": "MOZ", "Ghana": "GHA", "Tanzania": "TZA", "Malawi": "MWI",
+    "Ethiopia": "ETH", "Uganda": "UGA", "South Africa": "ZAF", "Zambia": "ZMB",
+    "Guinea": "GIN", "Mali": "MLI", "Zimbabwe": "ZWE", "Egypt": "EGY",
+}
+
+
+def clinvar_conflict_chart(findings) -> go.Figure:
+    """Dumbbell chart: AI vs ClinVar classification per mutation.
+
+    Each row shows the AI's call (◆) and ClinVar's call (●) on a
+    Benign → Uncertain → Pathogenic axis; a red connector = conflict,
+    green = concordant. Never empty.
+    """
+    rows = [f for f in (findings or []) if isinstance(f, dict)]
+    if not rows:
+        return _empty_fig("No classifications to compare")
+
+    bucket = {"pathogenic": 2, "likely_pathogenic": 2,
+              "benign": 0, "likely_benign": 0,
+              "vus": 1, "uncertain": 1}
+
+    def _pos(label):
+        s = str(label or "").lower().replace(" ", "_").replace("-", "_")
+        for k, v in bucket.items():
+            if k in s:
+                return v
+        return 1  # unknown / not-stated -> uncertain column
+
+    muts = [f.get("mutation", "?") for f in rows]
+    ai_x = [_pos(f.get("ai_classification")) for f in rows]
+    cv_x = [_pos(f.get("clinvar_classification")) for f in rows]
+
+    fig = go.Figure()
+    for i, f in enumerate(rows):
+        conflict = bool(f.get("conflict"))
+        fig.add_trace(go.Scatter(
+            x=[ai_x[i], cv_x[i]], y=[muts[i], muts[i]], mode="lines",
+            line=dict(color="#e74c3c" if conflict else "#2ecc71", width=4),
+            hoverinfo="skip", showlegend=False,
+        ))
+    fig.add_trace(go.Scatter(
+        x=cv_x, y=muts, mode="markers", name="ClinVar",
+        marker=dict(symbol="circle", size=15, color="#00d4ff",
+                    line=dict(color="#0d1117", width=1)),
+        hovertemplate="%{y} · ClinVar<extra></extra>",
+    ))
+    fig.add_trace(go.Scatter(
+        x=ai_x, y=muts, mode="markers", name="AI",
+        marker=dict(symbol="diamond", size=14, color="#f39c12",
+                    line=dict(color="#0d1117", width=1)),
+        hovertemplate="%{y} · AI<extra></extra>",
+    ))
+    fig.update_layout(
+        template="plotly_dark", height=max(220, 52 * len(rows) + 80),
+        title=dict(text="AI vs ClinVar — classification concordance", font=dict(size=14)),
+        xaxis=dict(tickvals=[0, 1, 2], ticktext=["Benign", "Uncertain", "Pathogenic"],
+                   range=[-0.4, 2.4]),
+        legend=dict(orientation="h", y=1.12), margin=dict(l=10, r=10, t=60, b=10),
+    )
+    return fig
+
+
+def african_atlas_map(country_burden: dict) -> go.Figure:
+    """Africa choropleth coloured by representative TP53-cancer burden (0-100).
+
+    `country_burden`: {country_name: score}. Never empty.
+    """
+    cb = {k: v for k, v in dict(country_burden or {}).items() if k in _ISO3}
+    if not cb:
+        return _empty_fig("No regional data")
+    names = list(cb.keys())
+    fig = go.Figure(go.Choropleth(
+        locations=[_ISO3[n] for n in names],
+        text=names,
+        z=list(cb.values()),
+        colorscale="YlOrRd",
+        zmin=0, zmax=100,
+        marker_line_color="#0d1117", marker_line_width=0.5,
+        colorbar=dict(title="Burden", thickness=12, len=0.7),
+        hovertemplate="%{text}: %{z}/100<extra></extra>",
+    ))
+    fig.update_geos(
+        scope="africa", bgcolor="#0d1117",
+        showcountries=True, countrycolor="#2a3340",
+        showframe=False, showcoastlines=False, landcolor="#161b22",
+    )
+    fig.update_layout(
+        template="plotly_dark", height=460,
+        title=dict(text="African TP53 / Cancer Burden (representative)",
+                   font=dict(color="#e6edf3", size=15)),
+        margin=dict(l=0, r=0, t=46, b=0),
+        annotations=[dict(text="Curated/illustrative — not measured incidence",
+                          x=0.5, y=-0.02, xref="paper", yref="paper",
+                          showarrow=False, font=dict(color="#8b98a5", size=9))],
+    )
+    return fig
+
+
+def african_burden_bar(matched_profiles) -> go.Figure:
+    """Horizontal bar of relative burden per matched African TP53 profile."""
+    rows = [p for p in (matched_profiles or []) if isinstance(p, dict)]
+    if not rows:
+        return _empty_fig("No profiles to plot")
+    rows = sorted(rows, key=lambda p: p.get("burden_score", 0))
+    titles = [str(p.get("title", p.get("id", "?")))[:42] for p in rows]
+    scores = [p.get("burden_score", 0) for p in rows]
+    lo, hi = (min(scores), max(scores)) if scores else (0, 1)
+
+    def _col(v):
+        t = 0.0 if hi == lo else (v - lo) / (hi - lo)
+        return f"rgb({int(120 + 135 * t)},{int(180 - 140 * t)},60)"
+
+    fig = go.Figure(go.Bar(
+        x=scores, y=titles, orientation="h",
+        marker=dict(color=[_col(v) for v in scores]),
+        text=scores, textposition="outside",
+        hovertemplate="%{y}: %{x}/100<extra></extra>",
+    ))
+    fig.update_layout(
+        template="plotly_dark", height=max(240, 60 * len(rows) + 60),
+        title=dict(text="Relative regional burden", font=dict(size=14)),
+        xaxis=dict(title="Burden (0-100)", range=[0, 100]),
+        margin=dict(l=10, r=30, t=50, b=10),
+    )
+    return fig
+
+
 def tnm_stage_bar(stage_group: str) -> go.Figure:
     """Horizontal stage-progression gauge (I → IV) with the patient's stage
     highlighted. Colour runs green (early) → red (advanced). Never empty.
@@ -680,12 +810,10 @@ def docking_pose_html(pdb_id: str, residues, drug_name: str = "",
                 borderColor: '#ffd23f', borderThickness: 0.5,
                 position: {{resi: resi[0]}}
               }});
-              // Zoom into the pocket with a little padding so it fills the view.
-              viewer.zoomTo({{resi: resi.join(',')}});
-              viewer.zoom(0.85);
-            }} else {{
-              viewer.zoomTo();
             }}
+            // Fit the whole structure so it opens at normal size (not a
+            // close-up of the pocket). Users can scroll to zoom in.
+            viewer.zoomTo();
             viewer.render();
             viewer.spin('y', 0.5);
           }});

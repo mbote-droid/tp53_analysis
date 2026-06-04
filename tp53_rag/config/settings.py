@@ -77,6 +77,16 @@ AGENT_REGISTRY = {
         "description": "Clinical significance and cancer association of findings",
         "keywords": ["clinical", "cancer", "pathogenic", "benign", "significance", "prognosis"],
     },
+    "african_tp53_atlas": {
+        "description": "Regional African TP53 cancer-genomics atlas (epidemiology by region/cancer)",
+        "keywords": ["african", "africa", "kenya", "regional", "atlas", "aflatoxin",
+                     "prevalence", "population", "epidemiology"],
+    },
+    "clinvar_conflict_checker": {
+        "description": "Cross-check AI classifications against ClinVar; flag conflicts (hallucination guard)",
+        "keywords": ["clinvar", "conflict", "concordance", "verify", "hallucination",
+                     "classification", "pathogenic", "benign", "safety"],
+    },
     "sequence_fetch": {
         "description": "Fetch and validate TP53 sequences from NCBI",
         "keywords": ["fetch", "accession", "ncbi", "sequence", "download", "retrieve"],

@@ -367,6 +367,161 @@ class TestVizHelpers:
         assert pathway_diverging_bar(["MDM2", "BAX"], ["CDKN1A"]).to_json()
         assert pathway_diverging_bar([], []).to_json()  # never empty
 
+    def test_african_atlas_map(self):
+        from utils.viz import african_atlas_map
+        assert african_atlas_map({"Kenya": 86, "Nigeria": 88}).to_json()
+        assert african_atlas_map({}).to_json()  # never empty
+
+    def test_african_burden_bar(self):
+        from utils.viz import african_burden_bar
+        rows = [{"title": "A", "burden_score": 90}, {"title": "B", "burden_score": 70}]
+        assert african_burden_bar(rows).to_json()
+        assert african_burden_bar([]).to_json()  # never empty
+
+
+class TestAfricanTP53Atlas:
+    """Agent #17 — African TP53 Atlas (curated regional epidemiology)."""
+
+    def _agent(self):
+        from agents.african_atlas import AfricanTP53Atlas
+        return AfricanTP53Atlas()
+
+    def test_mutation_lookup_r249s(self):
+        out = self._agent().profile(mutation="R249S")
+        assert out["status"] == "success"
+        ids = [p["id"] for p in out["atlas"]["matched_profiles"]]
+        assert "aflatoxin_hcc" in ids
+
+    def test_codon_only_match(self):
+        # "249" alone should still match the R249S profile
+        out = self._agent().profile(mutation="249")
+        ids = [p["id"] for p in out["atlas"]["matched_profiles"]]
+        assert "aflatoxin_hcc" in ids
+
+    def test_region_lookup_kenya(self):
+        out = self._agent().profile(region="Kenya")
+        assert len(out["atlas"]["matched_profiles"]) >= 2
+        assert not out["broadened"]
+
+    def test_cancer_lookup_liver(self):
+        out = self._agent().profile(cancer_type="liver")
+        ids = [p["id"] for p in out["atlas"]["matched_profiles"]]
+        assert "aflatoxin_hcc" in ids
+
+    def test_unknown_falls_back_to_continental(self):
+        out = self._agent().profile(mutation="ZZZ999")
+        assert out["broadened"] is True
+        assert len(out["atlas"]["matched_profiles"]) >= 4  # full atlas, never empty
+
+    def test_no_filters_returns_overview(self):
+        out = self._agent().profile()
+        assert out["atlas"]["query"] == "continental overview"
+        assert len(out["atlas"]["countries"]) > 5
+
+    def test_cervical_is_wild_type(self):
+        # HPV-driven cervical cancer: TP53 typically wild-type (E6-inactivated)
+        out = self._agent().profile(cancer_type="cervical")
+        cerv = [p for p in out["atlas"]["matched_profiles"] if p["id"] == "cervical_hpv"][0]
+        assert cerv["key_mutations"] == []
+
+    def test_output_is_json_serializable(self):
+        import json
+        out = self._agent().profile(mutation="R249S")
+        assert json.dumps(out)  # no non-serialisable objects
+
+    def test_disclaimer_and_sources_present(self):
+        out = self._agent().profile(region="West Africa")
+        assert out["atlas"]["disclaimer"]
+        assert all(p["sources"] for p in out["atlas"]["matched_profiles"])
+
+    def test_country_burden_map(self):
+        cb = self._agent().country_burden()
+        assert "Kenya" in cb and 0 <= cb["Kenya"] <= 100
+
+    def test_convenience_function(self):
+        from agents.african_atlas import atlas_profile
+        assert atlas_profile(mutation="R249S")["status"] == "success"
+
+    def test_registered_in_agent_registry(self):
+        from config.settings import AGENT_REGISTRY
+        assert "african_tp53_atlas" in AGENT_REGISTRY
+        assert AGENT_REGISTRY["african_tp53_atlas"]["keywords"]
+
+
+class TestClinVarConflictChecker:
+    """Hallucination guard — AI classifications vs ClinVar."""
+
+    def _agent(self):
+        from agents.clinvar_conflict_checker import ClinVarConflictChecker
+        return ClinVarConflictChecker()
+
+    def test_extract_mutations(self):
+        from agents.clinvar_conflict_checker import extract_mutations
+        muts = extract_mutations("p.R175H and R248W; benign P72R; ignore A9999Z")
+        assert "R175H" in muts and "R248W" in muts and "P72R" in muts
+        assert all(not m.endswith("9999Z") for m in muts)  # codon range enforced
+
+    def test_high_conflict_benign_vs_pathogenic(self):
+        out = self._agent().check(mutation="R175H", ai_classification="benign")
+        f = out["findings"][0]
+        assert f["conflict"] is True and f["severity"] == "high"
+        assert out["verdict"] == "conflict_high"
+
+    def test_concordant(self):
+        out = self._agent().check(mutation="R175H", ai_classification="pathogenic")
+        assert out["verdict"] == "concordant"
+        assert out["findings"][0]["conflict"] is False
+
+    def test_medium_conflict_vus(self):
+        f = self._agent().check(mutation="R248W", ai_classification="VUS")["findings"][0]
+        assert f["severity"] == "medium" and f["conflict"] is True
+
+    def test_unknown_mutation_not_in_reference(self):
+        f = self._agent().check(mutation="A159V", ai_classification="benign")["findings"][0]
+        assert f["severity"] == "unknown" and f["conflict"] is False
+
+    def test_no_claim_no_conflict(self):
+        # mutation present but no classification claimed -> not a conflict
+        f = self._agent().check(mutation="R175H")["findings"][0]
+        assert f["conflict"] is False and f["severity"] == "none"
+
+    def test_free_text_conflict_detection(self):
+        out = self._agent().check(text="R175H is a benign polymorphism.")
+        assert out["conflicts_found"] == 1
+        assert out["findings"][0]["severity"] == "high"
+
+    def test_free_text_concordant(self):
+        out = self._agent().check(text="R175H is pathogenic in this tumour.")
+        assert out["verdict"] == "concordant"
+
+    def test_never_empty_no_mutation(self):
+        out = self._agent().check(text="general question about cancer")
+        assert out["verdict"] == "no_claims" and out["findings"] == []
+
+    def test_codon_only_clinvar_lookup(self):
+        # a different alt at codon 175 should still map to the codon's ClinVar call
+        assert self._agent().clinvar_classification("R175C") == "pathogenic"
+
+    def test_evidence_url_present(self):
+        f = self._agent().check(mutation="R249S", ai_classification="benign")["findings"][0]
+        assert "clinvar" in f["evidence_url"].lower() and "R249S" in f["evidence_url"]
+
+    def test_output_json_serialisable(self):
+        import json
+        assert json.dumps(self._agent().check(mutation="R175H", ai_classification="benign"))
+
+    def test_convenience_function_and_registry(self):
+        from agents.clinvar_conflict_checker import check_conflicts
+        from config.settings import AGENT_REGISTRY
+        assert check_conflicts(mutation="R175H", ai_classification="benign")["status"] == "success"
+        assert "clinvar_conflict_checker" in AGENT_REGISTRY
+
+    def test_conflict_chart_viz(self):
+        from utils.viz import clinvar_conflict_chart
+        f = self._agent().check(text="R175H benign; R248W pathogenic")["findings"]
+        assert clinvar_conflict_chart(f).to_json()
+        assert clinvar_conflict_chart([]).to_json()  # never empty
+
 
 class TestBenchmarkScoring:
     """Pure scoring helpers in benchmarks/scoring.py."""
