@@ -8,7 +8,7 @@
 [![FastAPI](https://img.shields.io/badge/API-FastAPI-009688)](https://fastapi.tiangolo.com)
 ![Status](https://img.shields.io/badge/Deploy-local%20%2F%20pending-orange?logo=streamlit&logoColor=white)
 
-TP53 RAG Platform is an enterprise-grade, multi-agent AI system for genomic researchers, oncologists, and pharmaceutical companies. It combines local-first Gemma 4 inference, 16 specialized AI agents, multi-omics integration, and HIPAA-compliant FHIR R4 output — running entirely offline on commodity hardware (8GB RAM, no GPU).
+TP53 RAG Platform is an enterprise-grade, multi-agent AI system for genomic researchers, oncologists, and pharmaceutical companies. It combines local-first Gemma 4 inference, 23 specialized AI agents, multi-omics integration, and HIPAA-compliant FHIR R4 output — running entirely offline on commodity hardware (8GB RAM, no GPU).
 
 > **Differentiator:** Beyond a generic RAG system, this platform embeds an **African cancer-genomics layer** — regional variant prevalence, an equity/bias drift detector, Kenya/KEML drug-availability context, and Swahili output — making it a clinically-grounded copilot for under-represented populations, not just another TP53 wrapper.
 
@@ -19,7 +19,7 @@ TP53 RAG Platform is an enterprise-grade, multi-agent AI system for genomic rese
 | Feature | Classic Pipeline | 🆕 RAG Platform |
 |---------|-----------------|-----------------|
 | **Inference** | NCBI API calls | Local Gemma 4 (no data leaks) |
-| **Agents** | Single sequential analysis | 16 specialized multi-agents |
+| **Agents** | Single sequential analysis | 23 specialized multi-agents |
 | **Voice Input** | ❌ | ✅ Whisper transcription (text + voice, multimodal) |
 | **Accuracy** | Unmeasured | ✅ Benchmarked vs ClinVar/IARC (see Benchmarking) |
 | **Drug Discovery** | Manual literature review | Automated APR-246 & KEML screening |
@@ -30,7 +30,7 @@ TP53 RAG Platform is an enterprise-grade, multi-agent AI system for genomic rese
 
 ## 🏗️ Architecture
 
-**19 AI Agents + 1 Orchestrator:**
+**23 AI Agents + 1 Orchestrator:**
 
 ```
 USER INPUT (Text / Voice / VCF upload)
@@ -54,7 +54,13 @@ DISPATCHER (parallel routing to agents)
     ├→ Agent 16: TNM Staging (AJCC clinical staging)
     ├→ Agent 17: African TP53 Atlas (regional cancer-genomics epidemiology)
     ├→ Agent 18: ClinVar Conflict Checker (hallucination guard)
-    └→ Agent 19: Clinical Trials Matcher (Kenya/Africa-prioritised, live ClinicalTrials.gov)
+    ├→ Agent 19: Clinical Trials Matcher (Kenya/Africa-prioritised, live ClinicalTrials.gov)
+    ├→ Agent 20: IND Generator (FDA Investigational New Drug draft sections)
+    ├→ Agent 21: Synthetic-Lethality Modeler (WEE1/ATR/CHK1, DepMap-derived)
+    ├→ Agent 22: Molecular Docking (AutoDock Vina if installed, else estimate)
+    └→ Agent 23: Structural Analyzer (ΔΔG, cavity druggability, contacts)
+    ↓
++ utility services: ChEMBL drug data · PubMed citations · VCF parser
     ↓
 GEMMA 4 (Inference — Ollama / llama.cpp local, or Google AI Studio API on cloud)
     ↓
@@ -62,6 +68,29 @@ CHROMADB RAG (TP53 knowledge base + BM25 hybrid + HNSW; local-ONNX embeddings on
     ↓
 FHIR R4 + PDF + JSON REPORT  ·  ClinVar safety cross-check
 ```
+
+### Architectural style — a hybrid (modular monolith + microservices layer)
+
+The platform deliberately combines **both** patterns:
+
+- **Modular-monolith core.** The Streamlit app runs as one process; the ~20
+  agents are cleanly-separated Python modules (`agents/*.py`) with shared,
+  in-process state. This keeps latency low and memory small — essential on
+  the target 8GB-RAM / no-GPU hardware, where running each agent as its own
+  service would multiply RAM and orchestration overhead for no benefit.
+- **Microservices-style service layer.** On top, a FastAPI server
+  (`api/server.py`), an n8n automation workflow, and a `docker-compose` of
+  three independent services (Streamlit UI · FastAPI · n8n) expose the
+  platform over the network for EHR/automation integration and independent
+  scaling of the API surface.
+
+**Why both?** A pure monolith couldn't integrate with external systems or
+scale the API independently; pure microservices would be wasteful and slow on
+constrained edge hardware. The hybrid gives the **efficiency and simplicity of
+a monolith** for the compute-heavy agent pipeline, plus the **interoperability
+and selective scalability of microservices** at the integration boundary — and
+the clean module seams mean any heavy agent can later be peeled into its own
+service if a workload ever demands it.
 
 ## 🚀 Core Features
 
@@ -79,6 +108,11 @@ FHIR R4 + PDF + JSON REPORT  ·  ClinVar safety cross-check
 ✅ **Clinical Trials Matcher**: live ClinicalTrials.gov v2 search, **Kenya/African sites prioritised**  
 ✅ **VCF Input**: upload a patient VCF → auto-extract TP53 variants (chr17p13.1, GRCh38 + hg19) from the file's HGVS annotation  
 ✅ **African TP53 Atlas**: regional cancer-genomics epidemiology (aflatoxin/R249S HCC, ESCC corridor, …) with an Africa choropleth  
+✅ **Synthetic-Lethality Modeler**: ranked SL targets (WEE1/ATR/CHK1…) from curated DepMap signals + radial network  
+✅ **Molecular Docking**: AutoDock Vina when installed, else a clearly-labelled binding-affinity estimate  
+✅ **Structural Mechanics & Cavity Analysis**: ΔΔG destabilisation, pocket druggability, residue contacts (radar)  
+✅ **IND Draft Generator**: FDA Investigational New Drug skeleton (downloadable) from a mutation + lead candidate  
+✅ **PubMed Citations**: live Entrez literature with inline `[PMID]` references  
 ✅ **Animated Clinical UI**: dark bioinformatics theme, animated VAF/hotspot charts, live agent-status board, animated dispatch network, auto-rotating domain-coloured 3D structure, drug-docking pose  
 ✅ **FHIR R4 Export**: HL7 clinical interoperability  
 ✅ **n8n Workflows**: visual node-based automation with EHR alerting  
@@ -252,7 +286,7 @@ tp53_analysis/
 └── tp53_rag/                      # Main RAG platform
     ├── app.py                     # 🎤 Streamlit web app (10 tabs, animated UI)
     ├── main.py                    # CLI orchestrator & agent router
-    ├── agents/                    # 16 specialized agents
+    ├── agents/                    # 23 specialized agents
     │   ├── rag_chain.py           # LLM inference (Ollama/llama.cpp/API + ChromaDB)
     │   ├── dispatcher.py          # Parallel multi-agent orchestration
     │   ├── variant_curator.py     # ClinVar/COSMIC/IARC classification

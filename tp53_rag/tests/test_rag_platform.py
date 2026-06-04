@@ -1092,6 +1092,69 @@ class TestMolecularDocking:
         assert docking_affinity_gauge({}).to_json()  # never empty
 
 
+class TestStructuralAnalyzer:
+    """Structural mechanics & cavity analyzer (curated biophysics)."""
+
+    def _a(self):
+        from agents.structural_analyzer import StructuralAnalyzer
+        return StructuralAnalyzer()
+
+    def test_y220c_druggable_cleft(self):
+        r = self._a().analyse("Y220C")
+        assert r["druggability"] >= 0.8 and "cleft" in r["pocket"].lower()
+        assert "stabiliser" in r["strategy"].lower()
+
+    def test_conformational_is_destabilising(self):
+        r = self._a().analyse("R175H")
+        assert r["stability_class"] == "conformational" and r["destabilising"] is True
+        assert r["ddG_kcal_mol"] >= 1.5
+
+    def test_contact_mutant_low_ddg(self):
+        r = self._a().analyse("R273H")
+        assert r["stability_class"] == "contact" and r["destabilising"] is False
+        # contact mutants destabilise less than conformational ones
+        assert r["ddG_kcal_mol"] < self._a().analyse("R175H")["ddG_kcal_mol"]
+
+    def test_zinc_class(self):
+        assert self._a().analyse("C176Y")["stability_class"] == "zinc"
+
+    def test_generic_fallback_for_unknown_codon(self):
+        r = self._a().analyse("A159V")
+        assert r["status"] == "success" and "Estimated" in r["note"]
+        assert r["ddG_kcal_mol"] is not None
+
+    def test_never_empty_blank(self):
+        r = self._a().analyse("")
+        assert r["status"] == "success" and r["ddG_kcal_mol"] is not None
+
+    def test_contact_residues_for_known_hotspot(self):
+        assert self._a().analyse("Y220C")["contact_residues"]
+
+    def test_strategy_for_contact_mentions_limited(self):
+        r = self._a().analyse("R248W")
+        assert "contact" in r["strategy"].lower() or "limited" in r["strategy"].lower()
+
+    def test_fields_and_disclaimer(self):
+        r = self._a().analyse("R175H")
+        for k in ("ddG_kcal_mol", "druggability", "pocket", "hydrophobicity",
+                  "cavity_volume_A3", "strategy", "structure_source"):
+            assert k in r
+        assert "research" in r["disclaimer"].lower()
+
+    def test_json_and_registry(self):
+        import json
+        from config.settings import AGENT_REGISTRY
+        from agents.structural_analyzer import analyse_structure
+        assert json.dumps(analyse_structure("Y220C"))
+        assert "structural_analyzer" in AGENT_REGISTRY
+
+    def test_radar_viz(self):
+        from utils.viz import structural_profile_radar
+        r = self._a().analyse("Y220C")
+        assert structural_profile_radar(r).to_json()
+        assert structural_profile_radar({}).to_json()  # never empty
+
+
 class TestBenchmarkScoring:
     """Pure scoring helpers in benchmarks/scoring.py."""
 

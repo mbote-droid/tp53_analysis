@@ -579,6 +579,46 @@ def ind_section_chart(ind_result) -> go.Figure:
     return fig
 
 
+def structural_profile_radar(struct_result) -> go.Figure:
+    """Radar of a mutation's structural-mechanics profile: destabilisation
+    (ΔΔG), druggability, cavity volume and pocket hydrophobicity (each
+    normalised 0–1). Never empty.
+    """
+    r = struct_result if isinstance(struct_result, dict) else {}
+    if not r:
+        return _empty_fig("No structural profile")
+
+    def _n(v, lo, hi):
+        try:
+            return max(0.0, min(1.0, (float(v) - lo) / (hi - lo)))
+        except (TypeError, ValueError, ZeroDivisionError):
+            return 0.0
+
+    axes = ["Destabilisation<br>(ΔΔG)", "Druggability", "Cavity volume", "Hydrophobicity"]
+    vals = [
+        _n(r.get("ddG_kcal_mol"), 0, 5),
+        _n(r.get("druggability"), 0, 1),
+        _n(r.get("cavity_volume_A3"), 0, 300),
+        _n(r.get("hydrophobicity"), 0, 1),
+    ]
+    mut = r.get("mutation", "?")
+    fig = go.Figure(go.Scatterpolar(
+        r=vals + [vals[0]], theta=axes + [axes[0]], fill="toself",
+        line=dict(color="#00d4ff"), fillcolor="rgba(0,212,255,0.25)",
+        hovertemplate="%{theta}: %{r:.2f}<extra></extra>",
+    ))
+    fig.update_layout(
+        template="plotly_dark", height=340,
+        title=dict(text=f"Structural profile — {mut} ({r.get('stability_class','?')})",
+                   font=dict(size=14)),
+        polar=dict(radialaxis=dict(range=[0, 1], showticklabels=False,
+                                   gridcolor="#2a3340"),
+                   angularaxis=dict(gridcolor="#2a3340")),
+        margin=dict(l=40, r=40, t=60, b=30), showlegend=False,
+    )
+    return fig
+
+
 def docking_affinity_gauge(docking_result) -> go.Figure:
     """Binding-affinity gauge (kcal/mol) for a docking result. More negative =
     stronger binding (green); the docking method is shown in the title so a

@@ -107,6 +107,11 @@ AGENT_REGISTRY = {
         "keywords": ["docking", "dock", "vina", "autodock", "binding", "affinity",
                      "kcal", "pose", "interaction"],
     },
+    "structural_analyzer": {
+        "description": "Structural mechanics + cavity analysis (ΔΔG, pocket druggability, contacts)",
+        "keywords": ["structural", "structure", "cavity", "pocket", "ddg", "stability",
+                     "destabilis", "druggability", "mechanics", "fold"],
+    },
     "sequence_fetch": {
         "description": "Fetch and validate TP53 sequences from NCBI",
         "keywords": ["fetch", "accession", "ncbi", "sequence", "download", "retrieve"],

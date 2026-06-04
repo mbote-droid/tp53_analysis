@@ -46,6 +46,7 @@ from utils.viz import (
     ind_section_chart,
     synthetic_lethal_network,
     docking_affinity_gauge,
+    structural_profile_radar,
 )
 
 st.set_page_config(
@@ -1000,6 +1001,30 @@ with tab6:
             with st.spinner("Querying Gemma 4..."):
                 result = safe_query(struct_q, agent_type="domain_annotation")
             st.markdown(result["answer"])
+
+    # ── 🔩 Structural Mechanics & Cavity Analysis ──
+    st.divider()
+    st.markdown("### 🔩 Structural Mechanics & Cavity Analysis")
+    st.caption("ΔΔG destabilisation, binding-pocket druggability and residue "
+               "contacts for drug design (curated biophysical estimates).")
+    sa_mut = st.text_input("Mutation:", value="Y220C", key="struct_analyze_mut")
+    try:
+        from agents.structural_analyzer import StructuralAnalyzer
+        sa = StructuralAnalyzer().analyse(sa_mut)
+        scol1, scol2 = st.columns([3, 2])
+        with scol1:
+            st.plotly_chart(structural_profile_radar(sa), use_container_width=True)
+        with scol2:
+            st.metric("ΔΔG (destabilisation)", f"{sa['ddG_kcal_mol']} kcal/mol")
+            st.metric("Druggability", f"{sa['druggability']:.0%}")
+            st.markdown(f"**Pocket:** {sa['pocket']}")
+            st.markdown(f"**Strategy:** {sa['strategy']}")
+            if sa["contact_residues"]:
+                st.caption(f"Contact residues: {', '.join(map(str, sa['contact_residues']))}")
+        st.info(sa["note"])
+        st.caption(f"⚠️ {sa['disclaimer']} · source: {sa['structure_source']}")
+    except Exception as e:
+        st.error(f"Structural analysis unavailable: {str(e)[:160]}")
 
 # ── TAB 7: Voice ──────────────────────────────────────────────────
 with tab7:
