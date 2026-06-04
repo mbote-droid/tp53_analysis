@@ -30,14 +30,14 @@ TP53 RAG Platform is an enterprise-grade, multi-agent AI system for genomic rese
 
 ## 🏗️ Architecture
 
-**16 AI Agents + 1 Orchestrator:**
+**19 AI Agents + 1 Orchestrator:**
 
 ```
-USER INPUT (Text / Voice / VCF)
+USER INPUT (Text / Voice / VCF upload)
     ↓
 DISPATCHER (parallel routing to agents)
     ├→ Agent 1:  Variant Curator (ClinVar/COSMIC/IARC classification)
-    ├→ Agent 2:  Drug Discovery (APR-246, KEML, therapeutic targeting)
+    ├→ Agent 2:  Drug Discovery (ChEMBL real drug data + KEML targeting)
     ├→ Agent 3:  Immunogenicity (TME profiling, checkpoint response)
     ├→ Agent 4:  Gene Expression (Pathway analysis, RNA-seq)
     ├→ Agent 5:  Enzyme Design (PROTAC, molecular glues, zinc rescue)
@@ -51,13 +51,16 @@ DISPATCHER (parallel routing to agents)
     ├→ Agent 13: Structure Viz (3D protein visualization, Mol*/3Dmol)
     ├→ Agent 14: Clinical Interpretation (Prognosis & cancer associations)
     ├→ Agent 15: Pathology Vision (H&E slide tissue classification)
-    └→ Agent 16: TNM Staging (AJCC clinical staging)
+    ├→ Agent 16: TNM Staging (AJCC clinical staging)
+    ├→ Agent 17: African TP53 Atlas (regional cancer-genomics epidemiology)
+    ├→ Agent 18: ClinVar Conflict Checker (hallucination guard)
+    └→ Agent 19: Clinical Trials Matcher (Kenya/Africa-prioritised, live ClinicalTrials.gov)
     ↓
-GEMMA 4 (Local inference — Ollama / llama.cpp / Google AI Studio API)
+GEMMA 4 (Inference — Ollama / llama.cpp local, or Google AI Studio API on cloud)
     ↓
-CHROMADB RAG (TP53 knowledge base + BM25 hybrid + HNSW indexing)
+CHROMADB RAG (TP53 knowledge base + BM25 hybrid + HNSW; local-ONNX embeddings on cloud)
     ↓
-FHIR R4 + PDF + JSON REPORT
+FHIR R4 + PDF + JSON REPORT  ·  ClinVar safety cross-check
 ```
 
 ## 🚀 Core Features
@@ -70,11 +73,17 @@ FHIR R4 + PDF + JSON REPORT
 ✅ **Self-Correction**: Automatic retry + fallback logic (3 attempts)  
 ✅ **PII Scrubbing**: SHA-256 hashing — HIPAA-compliant output filtering  
 ✅ **JSON Guardrails**: Strict output formatting + post-response validation  
-✅ **Accuracy Benchmark**: Curator scored against ClinVar/IARC ground truth (offline, repeatable)  
-✅ **Animated Clinical UI**: Dark bioinformatics theme, animated VAF/hotspot charts, live agent-status board, animated dispatch network, auto-rotating domain-coloured 3D structure  
+✅ **Accuracy Benchmark**: Curator scored against ClinVar/IARC ground truth (offline, repeatable — `python -m benchmarks.run_benchmark`)  
+✅ **ClinVar Hallucination Guard**: every AI answer is cross-checked against ClinVar; conflicting classifications are flagged (Query + Analysis tabs)  
+✅ **Real Drug Data (ChEMBL)**: live ChEMBL API for TP53-pathway compounds + clinical phase, with an offline curated fallback  
+✅ **Clinical Trials Matcher**: live ClinicalTrials.gov v2 search, **Kenya/African sites prioritised**  
+✅ **VCF Input**: upload a patient VCF → auto-extract TP53 variants (chr17p13.1, GRCh38 + hg19) from the file's HGVS annotation  
+✅ **African TP53 Atlas**: regional cancer-genomics epidemiology (aflatoxin/R249S HCC, ESCC corridor, …) with an Africa choropleth  
+✅ **Animated Clinical UI**: dark bioinformatics theme, animated VAF/hotspot charts, live agent-status board, animated dispatch network, auto-rotating domain-coloured 3D structure, drug-docking pose  
 ✅ **FHIR R4 Export**: HL7 clinical interoperability  
-✅ **n8n Workflows**: Visual node-based automation with EHR alerting  
-✅ **Docker-Ready**: Single-command deployment  
+✅ **n8n Workflows**: visual node-based automation with EHR alerting  
+
+> ⚠️ **Research & educational use only — not for clinical decisions.** Some visuals (e.g. docking affinities) are illustrative, not measured; live data (ClinVar/ChEMBL/ClinicalTrials.gov) should be verified at source.
 
 ## 📊 Use Cases
 
@@ -127,17 +136,19 @@ streamlit run tp53_rag/app.py
 
 Visit: `http://localhost:8501` (or `8502` locally)
 
-**Web app tabs:**
-- 🔍 Query — Text-based RAG questions
-- 🧬 Analysis — Multi-agent dispatcher with a live agent-status board
-- 💊 Drug Discovery — Therapeutic targeting + KEML availability
+**Web app tabs (12):**
+- 🔍 Query — Text-based RAG questions, with the ClinVar safety check on every answer
+- 🧬 Analysis — Multi-agent dispatcher + live status board + Molecular Profile visuals + **VCF upload**
+- 💊 Drug Discovery — **ChEMBL** real drug/clinical-phase data + illustrative docking pose
 - 📊 Visualization — Animated VAF timeline, hotspot chart, dispatch network
 - 📋 Report — FHIR-aware clinical report generator
 - 🔬 Structure — Auto-rotating, domain-coloured 3D protein + multimodal (voice) narration
 - 🎤 Voice — Whisper transcription + auto-analysis
 - 🛠 Debug — System status & cache stats
 - 🔬 Pathology — H&E slide tissue classification
-- 📍 TNM Staging — AJCC clinical staging
+- 📍 TNM Staging — AJCC clinical staging + stage-progression gauge
+- 🌍 African Atlas — Regional TP53 epidemiology + Africa choropleth
+- 🧪 Clinical Trials — Live ClinicalTrials.gov search, Kenya/Africa-prioritised
 
 ### Docker (One-Command Deployment)
 
