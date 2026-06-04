@@ -102,6 +102,11 @@ AGENT_REGISTRY = {
         "keywords": ["synthetic", "lethality", "lethal", "depmap", "wee1", "atr",
                      "chk1", "dependency", "vulnerability", "network"],
     },
+    "molecular_docking": {
+        "description": "Dock a drug against TP53 (AutoDock Vina if installed, else heuristic estimate)",
+        "keywords": ["docking", "dock", "vina", "autodock", "binding", "affinity",
+                     "kcal", "pose", "interaction"],
+    },
     "sequence_fetch": {
         "description": "Fetch and validate TP53 sequences from NCBI",
         "keywords": ["fetch", "accession", "ncbi", "sequence", "download", "retrieve"],

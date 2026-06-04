@@ -45,6 +45,7 @@ from utils.viz import (
     trials_priority_chart,
     ind_section_chart,
     synthetic_lethal_network,
+    docking_affinity_gauge,
 )
 
 st.set_page_config(
@@ -723,6 +724,36 @@ with tab3:
             height=540,
         )
         st.caption("Yellow cloud = proposed binding pocket on p53 (illustrative).")
+
+    # ── 🧬 Molecular Docking (AutoDock Vina or estimate) ──
+    st.divider()
+    st.markdown("### 🧬 Molecular Docking")
+    st.caption("Dock a specific candidate against TP53. Uses **AutoDock Vina** when "
+               "installed; otherwise a clearly-labelled heuristic **estimate**.")
+    try:
+        cand_names = [c["name"] for c in dock_candidates(mut_input)]
+        dock_drug_pick = st.selectbox("Drug to dock:", cand_names, key="dock_pick")
+        dock_mech = next((c["mechanism"] for c in dock_candidates(mut_input)
+                          if c["name"] == dock_drug_pick), "")
+        if st.button("🧬 Run Docking", use_container_width=True, key="dock_go"):
+            from agents.molecular_docking import MolecularDockingAgent
+            dres = MolecularDockingAgent().dock(mut_input, dock_drug_pick,
+                                                mechanism=dock_mech)
+            if dres["method"] == "autodock_vina":
+                st.success(f"🟢 AutoDock Vina — {dres['message']}")
+            else:
+                st.info(f"⚪ Heuristic estimate (Vina not installed) — {dres['message']}")
+            dgcol1, dgcol2 = st.columns([3, 2])
+            with dgcol1:
+                st.plotly_chart(docking_affinity_gauge(dres), use_container_width=True)
+            with dgcol2:
+                st.markdown("**Predicted interactions:**")
+                for it in dres["interactions"]:
+                    st.markdown(f"- {it}")
+                st.caption(f"Pocket residues: {', '.join(map(str, dres['pocket_residues']))}")
+            st.caption(f"⚠️ {dres['disclaimer']}")
+    except Exception as e:
+        st.error(f"Docking unavailable: {str(e)[:160]}")
 
     # ── 🕸 Synthetic Lethality (DepMap-derived) ──
     st.divider()

@@ -1009,6 +1009,89 @@ class TestPubMedCitations:
         assert out["status"] == "success" and out["live"] is False and out["count"] >= 1
 
 
+class TestMolecularDocking:
+    """Molecular docking agent — AutoDock Vina or honest heuristic estimate."""
+
+    def _a(self):
+        from agents.molecular_docking import MolecularDockingAgent
+        return MolecularDockingAgent()
+
+    def test_parse_vina_output_best_mode(self):
+        from agents.molecular_docking import parse_vina_output
+        txt = ("mode | affinity\n----+----\n   1       -8.4   0.0  0.0\n"
+               "   2       -7.9   1.2  2.3\n   3       -6.1   3.0  4.0\n")
+        assert parse_vina_output(txt) == -8.4
+
+    def test_parse_vina_output_none_safe(self):
+        from agents.molecular_docking import parse_vina_output
+        assert parse_vina_output("no table") is None
+        assert parse_vina_output("") is None and parse_vina_output(None) is None
+
+    def test_strategy_detection(self):
+        from agents.molecular_docking import _strategy
+        assert _strategy("MDM2 inhibitor") == "mdm2_inhibitor"
+        assert _strategy("Y220C pocket stabiliser") == "stabiliser"
+        assert _strategy("p53 reactivator") == "reactivator"
+        assert _strategy("carboplatin DNA crosslink") == "chemotherapy"
+
+    def test_fallback_is_heuristic_when_no_vina(self):
+        # no PDBQT inputs => always the heuristic estimate, clearly labelled
+        r = self._a().dock("R175H", "APR-246", mechanism="Mutant p53 reactivator")
+        assert r["method"] == "heuristic_estimate"
+        assert r["binding_affinity"] is not None and r["status"] == "success"
+
+    def test_uses_vina_when_available_and_parses(self):
+        # simulate Vina present + a successful run
+        from unittest.mock import patch
+        import agents.molecular_docking as md
+
+        class _P:
+            stdout = "mode | affinity\n   1   -9.9  0 0\n"
+        with patch.object(md, "vina_available", return_value=True), \
+             patch.object(md.subprocess, "run", return_value=_P()):
+            r = self._a().dock("R175H", "X", receptor_pdbqt="r.pdbqt",
+                               ligand_pdbqt="l.pdbqt")
+        assert r["method"] == "autodock_vina" and r["binding_affinity"] == -9.9
+
+    def test_vina_run_failure_falls_back(self):
+        from unittest.mock import patch
+        import agents.molecular_docking as md
+        with patch.object(md, "vina_available", return_value=True), \
+             patch.object(md.subprocess, "run", side_effect=Exception("vina boom")):
+            r = self._a().dock("R175H", "APR-246", receptor_pdbqt="r", ligand_pdbqt="l")
+        assert r["method"] == "heuristic_estimate" and r["status"] == "success"
+
+    def test_pocket_residues_present(self):
+        r = self._a().dock("R175H", "X")
+        assert isinstance(r["pocket_residues"], list) and r["pocket_residues"]
+
+    def test_never_empty_blank_inputs(self):
+        r = self._a().dock("", "")
+        assert r["status"] == "success" and r["binding_affinity"] is not None
+
+    def test_interactions_present(self):
+        r = self._a().dock("R175H", "Idasanutlin", mechanism="MDM2 inhibitor")
+        assert r["interactions"] and any("MDM2" in i for i in r["interactions"])
+
+    def test_disclaimer_and_json(self):
+        import json
+        r = self._a().dock("R175H", "APR-246")
+        assert "estimate" in r["disclaimer"].lower()
+        assert json.dumps(r)
+
+    def test_convenience_and_registry(self):
+        from agents.molecular_docking import dock_drug
+        from config.settings import AGENT_REGISTRY
+        assert dock_drug("R175H", "APR-246")["status"] == "success"
+        assert "molecular_docking" in AGENT_REGISTRY
+
+    def test_affinity_gauge_viz(self):
+        from utils.viz import docking_affinity_gauge
+        r = self._a().dock("R175H", "APR-246")
+        assert docking_affinity_gauge(r).to_json()
+        assert docking_affinity_gauge({}).to_json()  # never empty
+
+
 class TestBenchmarkScoring:
     """Pure scoring helpers in benchmarks/scoring.py."""
 

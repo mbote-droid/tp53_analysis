@@ -579,6 +579,44 @@ def ind_section_chart(ind_result) -> go.Figure:
     return fig
 
 
+def docking_affinity_gauge(docking_result) -> go.Figure:
+    """Binding-affinity gauge (kcal/mol) for a docking result. More negative =
+    stronger binding (green); the docking method is shown in the title so a
+    real Vina run vs a heuristic estimate is never ambiguous. Never empty.
+    """
+    r = docking_result if isinstance(docking_result, dict) else {}
+    aff = r.get("binding_affinity")
+    try:
+        val = float(aff)
+    except (TypeError, ValueError):
+        return _empty_fig("No binding affinity")
+    method = r.get("method", "")
+    label = "AutoDock Vina" if method == "autodock_vina" else "Heuristic estimate"
+    drug = r.get("drug", "ligand")
+    fig = go.Figure(go.Indicator(
+        mode="gauge+number",
+        value=round(val, 2),
+        number={"suffix": " kcal/mol", "font": {"size": 20}},
+        title={"text": f"{drug} — binding affinity<br><span style='font-size:11px'>"
+                       f"{label}</span>", "font": {"size": 14}},
+        gauge={
+            "axis": {"range": [-12, 0]},
+            "bar": {"color": "#00d4ff", "thickness": 0.3},
+            "steps": [
+                {"range": [-12, -9], "color": "#1e3a2a"},   # very strong
+                {"range": [-9, -7], "color": "#274d35"},
+                {"range": [-7, -5], "color": "#3a3320"},
+                {"range": [-5, 0], "color": "#3a1e1e"},      # weak
+            ],
+            "threshold": {"line": {"color": "#2ecc71", "width": 4},
+                          "thickness": 0.85, "value": val},
+        },
+    ))
+    fig.update_layout(template="plotly_dark", height=260,
+                      margin=dict(l=20, r=20, t=60, b=10))
+    return fig
+
+
 def vcf_variant_chart(variants) -> go.Figure:
     """TP53 variants from a VCF by QUAL, coloured by significance
     (hotspot = red, annotated = blue, unannotated = grey). Never empty.
