@@ -523,6 +523,88 @@ class TestClinVarConflictChecker:
         assert clinvar_conflict_chart([]).to_json()  # never empty
 
 
+class TestChEMBLClient:
+    """TP53-pathway drug data — offline-first with live ChEMBL augmentation."""
+
+    _MOCK = {"mechanisms": [
+        {"molecule_chembl_id": "CHEMBL999", "mechanism_of_action": "MDM2 inhibitor",
+         "max_phase": 2},
+        {"molecule_chembl_id": "CHEMBL998", "mechanism_of_action": "p53 stabiliser",
+         "max_phase": None},
+        {"bad": "row"},
+        {"molecule_chembl_id": None},
+    ]}
+
+    def test_offline_curated_never_empty(self):
+        from utils.chembl_client import ChEMBLClient
+        out = ChEMBLClient().compounds(use_live=False)
+        assert out["count"] >= 5 and out["live"] is False
+        assert out["source"] == "curated"
+
+    def test_curated_sorted_by_phase(self):
+        from utils.chembl_client import ChEMBLClient
+        comp = ChEMBLClient().compounds(use_live=False)["compounds"]
+        phases = [c.get("max_phase") or -1 for c in comp]
+        assert phases == sorted(phases, reverse=True)
+
+    def test_phase_label_and_url_present(self):
+        from utils.chembl_client import ChEMBLClient
+        for c in ChEMBLClient().compounds(use_live=False)["compounds"]:
+            assert "phase_label" in c and "chembl_url" in c
+
+    def test_parse_mechanisms_pure(self):
+        from utils.chembl_client import parse_mechanisms
+        recs = parse_mechanisms(self._MOCK, "MDM2")
+        assert len(recs) == 2  # 2 valid rows, bad/None dropped
+        assert recs[0]["chembl_id"] == "CHEMBL999" and recs[0]["max_phase"] == 2
+
+    def test_parse_mechanisms_none_safe(self):
+        from utils.chembl_client import parse_mechanisms
+        assert parse_mechanisms(None, "MDM2") == []
+        assert parse_mechanisms({"x": 1}, "MDM2") == []
+
+    def test_live_merge_when_network_ok(self):
+        from unittest.mock import patch
+        from utils.chembl_client import ChEMBLClient
+        c = ChEMBLClient()
+        with patch.object(ChEMBLClient, "_get_json", return_value=self._MOCK):
+            out = c.compounds(use_live=True)
+        assert out["live"] is True and out["source"] == "chembl-live+curated"
+        assert any(d.get("source") == "chembl-live" for d in out["compounds"])
+
+    def test_graceful_when_network_fails(self):
+        from unittest.mock import patch
+        from utils.chembl_client import ChEMBLClient
+        c = ChEMBLClient()
+        with patch.object(ChEMBLClient, "_get_json", return_value=None):
+            out = c.compounds(use_live=True)
+        assert out["live"] is False and out["count"] >= 5  # fell back to curated
+
+    def test_caching(self):
+        from unittest.mock import patch
+        from utils.chembl_client import ChEMBLClient
+        c = ChEMBLClient()
+        with patch.object(ChEMBLClient, "_get_json", return_value=self._MOCK) as m:
+            c.fetch_target_drugs("MDM2")
+            c.fetch_target_drugs("MDM2")  # second call should hit cache
+        assert m.call_count == 1
+
+    def test_unknown_target_returns_empty(self):
+        from utils.chembl_client import ChEMBLClient
+        assert ChEMBLClient().fetch_target_drugs("NOPE") == []
+
+    def test_convenience_function(self):
+        from utils.chembl_client import tp53_pathway_drugs
+        assert tp53_pathway_drugs(use_live=False)["count"] >= 5
+
+    def test_phase_chart_viz(self):
+        from utils.viz import chembl_phase_chart
+        from utils.chembl_client import ChEMBLClient
+        comp = ChEMBLClient().compounds(use_live=False)["compounds"]
+        assert chembl_phase_chart(comp).to_json()
+        assert chembl_phase_chart([]).to_json()  # never empty
+
+
 class TestBenchmarkScoring:
     """Pure scoring helpers in benchmarks/scoring.py."""
 

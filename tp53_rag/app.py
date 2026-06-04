@@ -41,6 +41,7 @@ from utils.viz import (
     african_atlas_map,
     african_burden_bar,
     clinvar_conflict_chart,
+    chembl_phase_chart,
 )
 
 st.set_page_config(
@@ -596,14 +597,32 @@ with tab3:
             )
         st.markdown(result["answer"])
 
-    st.markdown("### Known TP53-Targeted Drugs")
-    drug_df = pd.DataFrame({
-        "Drug":           ["APR-246", "Idasanutlin", "Carboplatin", "Vorinostat"],
-        "Mechanism":      ["p53 refolding", "MDM2 inhibitor", "DNA cross-link", "HDAC inhibitor"],
-        "Clinical Stage": ["Phase III", "Phase II", "Approved", "Approved"],
-        "KEML Available": ["Yes", "Limited", "Yes", "Limited"],
-    })
-    st.dataframe(drug_df, use_container_width=True, hide_index=True)
+    st.markdown("### 💊 TP53-Pathway Drugs (ChEMBL)")
+    try:
+        from utils.chembl_client import ChEMBLClient
+        use_live = st.checkbox("Query live ChEMBL API", value=True,
+                               help="Off = curated offline set only (faster).")
+        with st.spinner("Loading TP53-pathway compounds..."):
+            data = ChEMBLClient().compounds(use_live=use_live)
+        if data["live"]:
+            st.success(f"🟢 Live ChEMBL + curated — {data['count']} compounds")
+        else:
+            st.info(f"⚪ Curated offline set — {data['count']} compounds "
+                    "(live ChEMBL unavailable or disabled)")
+
+        drug_df = pd.DataFrame([
+            {"Drug": d["name"], "Mechanism": d["mechanism"],
+             "Target": d.get("target", "—"), "Phase": d.get("phase_label", "?"),
+             "Source": d.get("source", "?")}
+            for d in data["compounds"]
+        ])
+        st.dataframe(drug_df, use_container_width=True, hide_index=True)
+        st.plotly_chart(chembl_phase_chart(data["compounds"]),
+                        use_container_width=True)
+        st.caption("Real compound/clinical-phase data from ChEMBL (EBI), "
+                   "with a curated TP53-pathway fallback. ChEMBL IDs link out for verification.")
+    except Exception as e:
+        st.error(f"ChEMBL drug data unavailable: {str(e)[:120]}")
 
     # ── Candidate ranking + 3D docking pose (illustrative) ──
     st.divider()

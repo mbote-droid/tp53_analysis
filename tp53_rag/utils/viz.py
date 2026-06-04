@@ -494,6 +494,39 @@ _ISO3 = {
 }
 
 
+def chembl_phase_chart(compounds) -> go.Figure:
+    """Horizontal bar of TP53-pathway compounds by clinical phase (0-4).
+
+    Coloured green→red by maturity (Approved = green). Never empty.
+    """
+    rows = [c for c in (compounds or []) if isinstance(c, dict)]
+    rows = [c for c in rows if isinstance(c.get("max_phase"), (int, float))]
+    if not rows:
+        return _empty_fig("No clinical-phase data")
+    rows = sorted(rows, key=lambda c: c.get("max_phase", 0))[-14:]
+    names = [str(c.get("name", "?"))[:34] for c in rows]
+    phases = [c.get("max_phase", 0) for c in rows]
+    phase_colour = {4: "#2ecc71", 3: "#7ac943", 2: "#f1c40f",
+                    1: "#e67e22", 0: "#8b98a5"}
+    fig = go.Figure(go.Bar(
+        x=phases, y=names, orientation="h",
+        marker=dict(color=[phase_colour.get(p, "#8b98a5") for p in phases]),
+        customdata=[c.get("phase_label", "?") for c in rows],
+        hovertemplate="%{y}: %{customdata}<extra></extra>",
+        text=[c.get("phase_label", "") for c in rows], textposition="outside",
+    ))
+    fig.update_layout(
+        template="plotly_dark", height=max(240, 34 * len(rows) + 70),
+        title=dict(text="TP53-pathway drugs by clinical phase (ChEMBL)",
+                   font=dict(size=14)),
+        xaxis=dict(title="Clinical phase", tickvals=[0, 1, 2, 3, 4],
+                   ticktext=["Preclin.", "I", "II", "III", "Approved"],
+                   range=[0, 4.6]),
+        margin=dict(l=10, r=40, t=50, b=10),
+    )
+    return fig
+
+
 def clinvar_conflict_chart(findings) -> go.Figure:
     """Dumbbell chart: AI vs ClinVar classification per mutation.
 
