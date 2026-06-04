@@ -92,6 +92,16 @@ AGENT_REGISTRY = {
         "keywords": ["trial", "trials", "clinicaltrials", "recruiting", "enroll",
                      "study", "kenya", "africa", "eligibility"],
     },
+    "ind_generator": {
+        "description": "Draft FDA IND application sections from a mutation + drug candidate (regulatory)",
+        "keywords": ["ind", "regulatory", "fda", "investigational", "preclinical",
+                     "submission", "moa", "protocol", "safety"],
+    },
+    "synthetic_lethality": {
+        "description": "Rank synthetic-lethal targets for TP53-mutant tumours (WEE1/ATR/CHK1, DepMap)",
+        "keywords": ["synthetic", "lethality", "lethal", "depmap", "wee1", "atr",
+                     "chk1", "dependency", "vulnerability", "network"],
+    },
     "sequence_fetch": {
         "description": "Fetch and validate TP53 sequences from NCBI",
         "keywords": ["fetch", "accession", "ncbi", "sequence", "download", "retrieve"],

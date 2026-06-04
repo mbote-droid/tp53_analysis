@@ -43,6 +43,8 @@ from utils.viz import (
     clinvar_conflict_chart,
     chembl_phase_chart,
     trials_priority_chart,
+    ind_section_chart,
+    synthetic_lethal_network,
 )
 
 st.set_page_config(
@@ -452,6 +454,27 @@ with tab1:
         # 🛡 hallucination guard on the answer
         render_clinvar_safety(result.get("answer", ""), key_prefix="query")
 
+        # 📚 on-demand PubMed citations for this question
+        with st.expander("📚 Find supporting literature (PubMed)"):
+            if st.button("🔎 Search PubMed", key="pubmed_go"):
+                try:
+                    from utils.pubmed_citations import PubMedClient
+                    cited = PubMedClient().cite(question, max_results=4)
+                    if cited["live"]:
+                        st.success(cited["message"])
+                    else:
+                        st.info(cited["message"])
+                    for c in cited["citations"]:
+                        if c.get("pmid"):
+                            st.markdown(f"- **{c['title']}** — {c.get('source','')} "
+                                        f"{c.get('year','')} · "
+                                        f"[PMID {c['pmid']}]({c['url']})")
+                        else:
+                            st.markdown(f"- 🔗 [{c['title']}]({c['url']})")
+                    st.caption("Live from NCBI PubMed (Entrez); verify relevance at source.")
+                except Exception as e:
+                    st.error(f"PubMed lookup unavailable: {str(e)[:160]}")
+
         st.divider()
 
         c1, c2, c3, c4 = st.columns(4)
@@ -701,6 +724,26 @@ with tab3:
         )
         st.caption("Yellow cloud = proposed binding pocket on p53 (illustrative).")
 
+    # ── 🕸 Synthetic Lethality (DepMap-derived) ──
+    st.divider()
+    st.markdown("### 🕸 Synthetic-Lethal Targets")
+    st.caption("Genes whose inhibition selectively kills TP53-mutant cells "
+               "(curated from DepMap dependency signals + published p53 SL screens).")
+    try:
+        from agents.synthetic_lethality import SyntheticLethalityModeler
+        sl = SyntheticLethalityModeler().model(mut_input)
+        st.plotly_chart(synthetic_lethal_network(sl), use_container_width=True)
+        sl_df = pd.DataFrame([
+            {"Target": t["gene"], "Mechanism": t["mechanism"],
+             "Drug": t.get("drug", "—"), "Evidence": t["evidence"],
+             "Druggability": t["druggability"]}
+            for t in sl["targets"]
+        ])
+        st.dataframe(sl_df, use_container_width=True, hide_index=True)
+        st.caption(f"⚠️ {sl['disclaimer']}")
+    except Exception as e:
+        st.error(f"Synthetic-lethality model unavailable: {str(e)[:160]}")
+
 # ── TAB 4: Visualization ──────────────────────────────────────────
 with tab4:
     st.markdown("## 📊 Visualization & Metrics")
@@ -784,6 +827,38 @@ with tab5:
             result["answer"],
             file_name=f"report_{rep_mutation}_{datetime.now().strftime('%Y%m%d')}.md",
         )
+
+    # ── 📑 IND Draft Generator (regulatory) ──
+    st.divider()
+    st.markdown("### 📑 IND Draft Generator")
+    st.caption("Draft FDA Investigational New Drug skeleton for a mutation + lead "
+               "candidate. Rule-based scaffold — **not a submission-ready document**.")
+    icol1, icol2 = st.columns(2)
+    with icol1:
+        ind_mut = st.text_input("Mutation:", value="R175H", key="ind_mut")
+    with icol2:
+        ind_cancer = st.text_input("Cancer type:", value="breast cancer", key="ind_cancer")
+
+    if st.button("📑 Generate IND Draft", use_container_width=True, key="ind_go"):
+        try:
+            from agents.ind_generator import INDGenerator
+            from utils.viz import dock_candidates
+            cands = dock_candidates(ind_mut)  # reuse ranked candidates as leads
+            gen = INDGenerator()
+            ind = gen.generate(ind_mut, ind_cancer, drug_candidates=cands)
+            st.success(f"{ind['message']} · readiness {ind['readiness_pct']}%")
+            st.plotly_chart(ind_section_chart(ind), use_container_width=True)
+            md = gen.render_markdown(ind)
+            with st.expander("Preview IND draft", expanded=True):
+                st.markdown(md)
+            st.download_button(
+                "⬇️ Download IND Draft (Markdown)", md,
+                file_name=f"IND_draft_{ind_mut}_{datetime.now().strftime('%Y%m%d')}.md",
+                key="ind_dl",
+            )
+            st.caption(f"⚠️ {ind['draft']['disclaimer']}")
+        except Exception as e:
+            st.error(f"IND generation unavailable: {str(e)[:160]}")
 
 # ── TAB 6: Structure ──────────────────────────────────────────────
 with tab6:

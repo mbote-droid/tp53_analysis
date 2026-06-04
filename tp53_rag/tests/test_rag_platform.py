@@ -780,6 +780,235 @@ class TestVCFParser:
         assert vcf_variant_chart([]).to_json()  # never empty
 
 
+class TestINDGenerator:
+    """IND draft generator — rule-based regulatory scaffold."""
+
+    def _gen(self):
+        from agents.ind_generator import INDGenerator
+        return INDGenerator()
+
+    def test_generates_six_sections(self):
+        r = self._gen().generate("R175H", "breast cancer",
+                                  [{"name": "APR-246", "mechanism": "Mutant p53 reactivator"}])
+        assert r["status"] == "success" and r["section_count"] == 6
+        assert r["draft"]["lead_candidate"] == "APR-246"
+
+    def test_strategy_detection(self):
+        from agents.ind_generator import _strategy_for
+        assert _strategy_for("MDM2 inhibitor") == "mdm2_inhibitor"
+        assert _strategy_for("Y220C pocket stabiliser") == "stabiliser"
+        assert _strategy_for("Mutant p53 reactivator") == "reactivator"
+        assert _strategy_for("carboplatin DNA crosslink") == "chemotherapy"
+
+    def test_never_empty_without_candidates(self):
+        r = self._gen().generate("R248W", "")
+        assert r["section_count"] == 6
+        assert r["draft"]["lead_candidate"] == "TP53-targeting candidate"
+
+    def test_empty_mutation_handled(self):
+        r = self._gen().generate("", "")
+        assert r["status"] == "success" and r["section_count"] == 6
+
+    def test_readiness_pct(self):
+        r = self._gen().generate("R175H", "lung")
+        assert 0 <= r["readiness_pct"] <= 100
+
+    def test_sections_have_required_fields(self):
+        r = self._gen().generate("R273H", "ovarian")
+        for s in r["draft"]["sections"]:
+            assert s["number"] and s["title"] and s["content"]
+
+    def test_mutation_appears_in_draft(self):
+        r = self._gen().generate("Y220C", "sarcoma")
+        joined = " ".join(s["content"] for s in r["draft"]["sections"])
+        assert "Y220C" in joined
+
+    def test_render_markdown(self):
+        g = self._gen()
+        md = g.render_markdown(g.generate("R175H", "breast", [{"name": "X", "mechanism": "MDM2 inhibitor"}]))
+        assert "# DRAFT IND" in md and md.count("## ") == 6
+        assert "DRAFT scaffold" in md
+
+    def test_render_markdown_empty_safe(self):
+        assert self._gen().render_markdown({}) and self._gen().render_markdown(None)
+
+    def test_render_markdown_malformed_draft(self):
+        # regression: a non-dict draft / non-dict sections must not crash
+        g = self._gen()
+        assert g.render_markdown({"draft": "notadict"})
+        assert g.render_markdown({"draft": {"sections": ["x", None, {"number": "1"}]}})
+
+    def test_disclaimer_present(self):
+        r = self._gen().generate("R175H", "breast")
+        assert "not a" in r["draft"]["disclaimer"].lower()
+
+    def test_json_serialisable_and_registry(self):
+        import json
+        from config.settings import AGENT_REGISTRY
+        from agents.ind_generator import generate_ind
+        assert json.dumps(generate_ind("R175H", "breast"))
+        assert "ind_generator" in AGENT_REGISTRY
+
+    def test_ind_section_viz(self):
+        from utils.viz import ind_section_chart
+        r = self._gen().generate("R175H", "breast")
+        assert ind_section_chart(r).to_json()
+        assert ind_section_chart({}).to_json()  # never empty
+
+
+class TestSyntheticLethality:
+    """Synthetic-lethal target modeler (DepMap-derived, curated)."""
+
+    def _m(self):
+        from agents.synthetic_lethality import SyntheticLethalityModeler
+        return SyntheticLethalityModeler()
+
+    def test_returns_ranked_targets(self):
+        r = self._m().model("R175H")
+        assert r["status"] == "success" and r["count"] >= 5
+        scores = [t["sl_score"] for t in r["targets"]]
+        assert scores == sorted(scores, reverse=True)
+
+    def test_top_target_is_high_evidence(self):
+        r = self._m().model("R248W")
+        assert r["targets"][0]["evidence"] == "high"
+        assert r["top_target"] in {"WEE1", "ATR", "CHEK1"}
+
+    def test_evidence_filter(self):
+        r = self._m().model("R175H", min_evidence="high")
+        assert all(t["evidence"] == "high" for t in r["targets"])
+        assert r["count"] >= 1
+
+    def test_never_empty(self):
+        assert self._m().model("")["count"] >= 5
+        assert self._m().model("nonsense")["count"] >= 5
+
+    def test_network_edges(self):
+        r = self._m().model("R273H")
+        assert len(r["network_edges"]) == r["count"]
+        assert all(e["source"] == "TP53" for e in r["network_edges"])
+
+    def test_known_targets_present(self):
+        genes = {t["gene"] for t in self._m().model("R175H")["targets"]}
+        assert {"WEE1", "ATR"}.issubset(genes)
+
+    def test_targets_have_fields(self):
+        for t in self._m().model("R175H")["targets"]:
+            for k in ("gene", "mechanism", "evidence", "druggability", "source"):
+                assert t.get(k) is not None
+
+    def test_disclaimer(self):
+        assert "research" in self._m().model("R175H")["disclaimer"].lower()
+
+    def test_json_and_registry(self):
+        import json
+        from config.settings import AGENT_REGISTRY
+        from agents.synthetic_lethality import model_synthetic_lethality
+        assert json.dumps(model_synthetic_lethality("R175H"))
+        assert "synthetic_lethality" in AGENT_REGISTRY
+
+    def test_network_viz(self):
+        from utils.viz import synthetic_lethal_network
+        r = self._m().model("R175H")
+        assert synthetic_lethal_network(r).to_json()
+        assert synthetic_lethal_network({}).to_json()  # never empty
+
+
+class TestPubMedCitations:
+    """PubMed inline citations — Entrez E-utilities, offline-honest fallback."""
+
+    _ES = {"esearchresult": {"idlist": ["111", "222"]}}
+    _SUMM = {"result": {"uids": ["111", "222"],
+             "111": {"title": "p53 reactivation.", "authors": [{"name": "Smith J"}, {"name": "Doe A"}],
+                     "pubdate": "2020 Jan", "source": "Nature"},
+             "222": {"title": "WEE1 inhibition.", "authors": [{"name": "Lee K"}],
+                     "pubdate": "2019", "source": "Cell"}}}
+
+    def test_parse_esearch(self):
+        from utils.pubmed_citations import parse_esearch
+        assert parse_esearch(self._ES) == ["111", "222"]
+        assert parse_esearch(None) == [] and parse_esearch({"x": 1}) == []
+
+    def test_parse_esummary(self):
+        from utils.pubmed_citations import parse_esummary
+        recs = parse_esummary(self._SUMM)
+        assert len(recs) == 2 and recs[0]["pmid"] == "111" and recs[0]["year"] == "2020"
+        assert recs[0]["authors"] == ["Smith J", "Doe A"]
+
+    def test_parse_esummary_none_safe(self):
+        from utils.pubmed_citations import parse_esummary
+        assert parse_esummary(None) == [] and parse_esummary({}) == []
+
+    def test_format_citation(self):
+        from utils.pubmed_citations import format_citation
+        s = format_citation({"pmid": "111", "authors": ["Smith J", "Doe A"],
+                             "source": "Nature", "year": "2020"})
+        assert "Smith J et al." in s and "[PMID: 111]" in s
+
+    def test_live_cite(self):
+        from unittest.mock import patch
+        from utils.pubmed_citations import PubMedClient
+        c = PubMedClient()
+        with patch.object(PubMedClient, "_get_json", side_effect=[self._ES, self._SUMM]):
+            out = c.cite("R175H")
+        assert out["live"] and out["count"] == 2
+        assert out["inline"][0].startswith("Smith J et al.")
+
+    def test_fallback_no_fake_pmids(self):
+        from unittest.mock import patch
+        from utils.pubmed_citations import PubMedClient
+        c = PubMedClient()
+        with patch.object(PubMedClient, "_get_json", return_value=None):
+            out = c.cite("R248W")
+        assert out["live"] is False and out["count"] == 1
+        assert out["citations"][0]["pmid"] is None
+        assert "pubmed" in out["citations"][0]["url"].lower()
+
+    def test_tp53_prepended(self):
+        from unittest.mock import patch
+        from utils.pubmed_citations import PubMedClient
+        c = PubMedClient()
+        with patch.object(PubMedClient, "_get_json", return_value=None):
+            out = c.cite("R175H")
+        assert out["query"].startswith("TP53")
+
+    def test_caching(self):
+        from unittest.mock import patch
+        from utils.pubmed_citations import PubMedClient
+        c = PubMedClient()
+        with patch.object(PubMedClient, "_get_json", side_effect=[self._ES, self._SUMM]) as m:
+            c.cite("R175H")
+            c.cite("R175H")  # second hit cache
+        assert m.call_count == 2  # esearch + esummary once, not twice each
+
+    def test_empty_query_handled(self):
+        from unittest.mock import patch
+        from utils.pubmed_citations import PubMedClient
+        with patch.object(PubMedClient, "_get_json", return_value=None):
+            out = PubMedClient().cite("")
+        assert out["status"] == "success" and out["count"] >= 1
+
+    def test_search_url_helpers(self):
+        from utils.pubmed_citations import pubmed_search_url, pubmed_abstract_url
+        assert "term=TP53" in pubmed_search_url("TP53 R175H")
+        assert pubmed_abstract_url("123").endswith("/123/")
+
+    def test_convenience_function(self):
+        from unittest.mock import patch
+        from utils.pubmed_citations import pubmed_cite, PubMedClient
+        with patch.object(PubMedClient, "_get_json", return_value=None):
+            assert pubmed_cite("R175H")["status"] == "success"
+
+    def test_cite_survives_fetch_exception(self):
+        # regression: an unexpected error in the fetch layer must degrade,
+        # not crash
+        from unittest.mock import patch
+        from utils.pubmed_citations import PubMedClient
+        with patch.object(PubMedClient, "_get_json", side_effect=Exception("boom")):
+            out = PubMedClient().cite("R175H")
+        assert out["status"] == "success" and out["live"] is False and out["count"] >= 1
+
+
 class TestBenchmarkScoring:
     """Pure scoring helpers in benchmarks/scoring.py."""
 

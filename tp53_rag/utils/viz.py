@@ -494,6 +494,91 @@ _ISO3 = {
 }
 
 
+def synthetic_lethal_network(sl_result) -> go.Figure:
+    """Radial TP53-centric synthetic-lethal network: TP53 at the centre, SL
+    target genes around it; edge/node colour by evidence, node size by score.
+    Never empty.
+    """
+    import math
+    targets = (sl_result or {}).get("targets", []) if isinstance(sl_result, dict) else []
+    targets = [t for t in targets if isinstance(t, dict)][:12]
+    if not targets:
+        return _empty_fig("No synthetic-lethal targets")
+
+    ev_col = {"high": "#e74c3c", "medium": "#f39c12", "emerging": "#3498db"}
+    n = len(targets)
+    cx, cy = 0.0, 0.0
+    xs = [math.cos(2 * math.pi * i / n - math.pi / 2) for i in range(n)]
+    ys = [math.sin(2 * math.pi * i / n - math.pi / 2) for i in range(n)]
+
+    fig = go.Figure()
+    # edges TP53 -> each target
+    for i, t in enumerate(targets):
+        fig.add_trace(go.Scatter(
+            x=[cx, xs[i]], y=[cy, ys[i]], mode="lines",
+            line=dict(color=ev_col.get(t.get("evidence"), "#5a6b7a"),
+                      width=1 + t.get("sl_score", 1) / 2),
+            hoverinfo="skip", showlegend=False))
+    # target nodes
+    fig.add_trace(go.Scatter(
+        x=xs, y=ys, mode="markers+text",
+        text=[t.get("gene", "?") for t in targets], textposition="top center",
+        textfont=dict(color="#c2ccd6", size=10, family="JetBrains Mono"),
+        marker=dict(
+            size=[16 + 3 * t.get("sl_score", 1) for t in targets],
+            color=[ev_col.get(t.get("evidence"), "#5a6b7a") for t in targets],
+            line=dict(color="#0d1117", width=1.5)),
+        customdata=[[t.get("drug", "—"), t.get("evidence", "?")] for t in targets],
+        hovertemplate="%{text} · %{customdata[1]} evidence<br>%{customdata[0]}<extra></extra>",
+    ))
+    # TP53 hub
+    fig.add_trace(go.Scatter(
+        x=[cx], y=[cy], mode="markers+text", text=["TP53"],
+        textposition="middle center", textfont=dict(color="#0d1117", size=11),
+        marker=dict(size=44, color="#00d4ff", line=dict(color="#0d1117", width=2)),
+        hovertemplate="TP53 (mutant)<extra></extra>", showlegend=False))
+    fig.update_layout(
+        template="plotly_dark", height=460, showlegend=False,
+        title=dict(text="Synthetic-lethal network — 🔴 high · 🟠 medium · 🔵 emerging",
+                   font=dict(size=14)),
+        xaxis=dict(visible=False, range=[-1.5, 1.5], fixedrange=True),
+        yaxis=dict(visible=False, range=[-1.5, 1.5], scaleanchor="x", fixedrange=True),
+        margin=dict(l=10, r=10, t=50, b=10),
+    )
+    return fig
+
+
+def ind_section_chart(ind_result) -> go.Figure:
+    """IND draft section coverage — each section green (drafted) or amber
+    (placeholder / to-be-completed). Never empty.
+    """
+    draft = (ind_result or {}).get("draft", {}) if isinstance(ind_result, dict) else {}
+    sections = draft.get("sections", []) if isinstance(draft, dict) else []
+    if not sections:
+        return _empty_fig("No IND sections")
+    titles, colors, status = [], [], []
+    for s in sections:
+        content = str(s.get("content", ""))
+        placeholder = "[TO BE COMPLETED" in content or "[Populate" in content
+        titles.append(f"{s.get('number','?')}. {str(s.get('title',''))[:34]}")
+        colors.append("#f39c12" if placeholder else "#2ecc71")
+        status.append("placeholder" if placeholder else "drafted")
+    titles = titles[::-1]; colors = colors[::-1]; status = status[::-1]
+    fig = go.Figure(go.Bar(
+        x=[1] * len(titles), y=titles, orientation="h",
+        marker=dict(color=colors), customdata=status,
+        hovertemplate="%{y}: %{customdata}<extra></extra>",
+        text=status, textposition="inside", insidetextanchor="start",
+    ))
+    fig.update_layout(
+        template="plotly_dark", height=max(220, 34 * len(titles) + 70),
+        title=dict(text="IND draft coverage — 🟢 drafted · 🟠 to complete",
+                   font=dict(size=14)),
+        xaxis=dict(visible=False, range=[0, 1]), margin=dict(l=10, r=10, t=50, b=10),
+    )
+    return fig
+
+
 def vcf_variant_chart(variants) -> go.Figure:
     """TP53 variants from a VCF by QUAL, coloured by significance
     (hotspot = red, annotated = blue, unannotated = grey). Never empty.
