@@ -46,8 +46,9 @@ RUN if [ "$TARGETARCH" = "amd64" ]; then \
 FROM python:3.11-slim
 
 # libgomp1 = OpenMP for onnxruntime/torch/numpy; ffmpeg = optional voice transcription
+# gosu = drop from root to appuser in the entrypoint after fixing volume perms
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        libgomp1 ffmpeg \
+        libgomp1 ffmpeg gosu \
     && rm -rf /var/lib/apt/lists/*
 
 # Bring in the installed Python packages (base + torch stack) from the builder
@@ -60,14 +61,34 @@ COPY . .
 RUN useradd --create-home --uid 10001 appuser \
     && mkdir -p /app/data /app/logs \
     && chown -R appuser:appuser /app
-USER appuser
+
+# Entrypoint: container starts as root JUST long enough to (1) create the data
+# dirs and (2) fix ownership of the mounted volume (named volumes mount as root
+# and would block our non-root user), then drops to appuser to run the app.
+# Pre-creating + chowning the exact subdirs means the app's mkdir(exist_ok=True)
+# is a no-op and never needs write permission on the volume root.
+# Built with printf '%s\n' so every line is LF-terminated (no Windows CRLF that
+# would break /bin/sh in Linux). The echo lines are diagnostics in the logs.
+RUN printf '%s\n' \
+        '#!/bin/sh' \
+        'set -e' \
+        'echo "[entrypoint] starting as $(id)"' \
+        'mkdir -p /app/data/chroma_db /app/data/documents /app/logs' \
+        'chown -R appuser:appuser /app/data /app/logs || echo "[entrypoint] chown failed"' \
+        'echo "[entrypoint] /app/data -> $(ls -ld /app/data)"' \
+        'exec gosu appuser "$@"' \
+        > /usr/local/bin/docker-entrypoint.sh \
+    && chmod +x /usr/local/bin/docker-entrypoint.sh
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
 
 ENV HOME=/app \
     PYTHONUNBUFFERED=1 \
     STREAMLIT_SERVER_HEADLESS=true \
     STREAMLIT_SERVER_PORT=8501 \
     STREAMLIT_SERVER_ADDRESS=0.0.0.0 \
-    INFERENCE_MODE=api
+    INFERENCE_MODE=api \
+    ANONYMIZED_TELEMETRY=False \
+    CHROMA_TELEMETRY_ENABLED=FALSE
 
 EXPOSE 8501
 

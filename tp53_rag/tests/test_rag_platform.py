@@ -1327,7 +1327,11 @@ class TestDockerPackaging:
     def test_dockerfile_is_multistage_and_nonroot(self):
         text = (self.ROOT / "Dockerfile").read_text(encoding="utf-8")
         assert "AS builder" in text          # multi-stage keeps build tools out
-        assert "USER appuser" in text         # never run as root
+        # The app runs as the non-root appuser: the entrypoint fixes mounted-
+        # volume ownership as root, then drops via gosu before exec.
+        assert "appuser" in text
+        assert "gosu appuser" in text
+        assert "ENTRYPOINT" in text
 
     def test_dockerfile_runs_app_and_exposes_8501(self):
         text = (self.ROOT / "Dockerfile").read_text(encoding="utf-8")
@@ -1390,6 +1394,6 @@ class TestDockerPackaging:
     def test_dockerfile_full_shares_base_entrypoint(self):
         text = (self.ROOT / "Dockerfile.full").read_text(encoding="utf-8")
         assert "python:3.11-slim" in text
-        assert "USER appuser" in text
+        assert "gosu appuser" in text          # same non-root drop as the base
         assert "app.py" in text
         assert "EXPOSE 8501" in text
