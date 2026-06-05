@@ -1,0 +1,41 @@
+# Keep the build context small + reproducible.
+# VCS / editor / agent
+.git
+.gitignore
+.claude
+.vscode
+
+# Secrets — never bake into the image (compose still reads .env at runtime via env_file)
+.env
+.env.*
+!.env.example
+
+# Python caches / envs
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+venv/
+.venv/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Regenerated runtime artifacts (the app rebuilds these)
+data/chroma_db/
+data/semantic_cache.db
+tp53_rag/
+logs/
+*.log
+benchmarks/results/
+
+# Heavy / unneeded in the image
+models/*.gguf
+models/*.bin
+*.ipynb_checkpoints
+demo_output.txt
+
+# Docs (not needed at runtime)
+BUILD_STATUS.md
+LOCKFILE.md

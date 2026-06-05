@@ -1,0 +1,65 @@
+# ============================================================
+# TP53 RAG Platform — local / edge multi-service stack
+# Dedicated to tp53_rag. Build context = this directory.
+#
+# Prerequisite:  cp .env.example .env   (and fill in GOOGLE_API_KEY etc.)
+# Run:           docker compose up --build
+#   Streamlit UI -> http://localhost:8501
+#   FastAPI API  -> http://localhost:8000/docs
+#   n8n          -> http://localhost:5678
+#
+# Raspberry Pi / ARM64: all three images are multi-arch; build with
+#   docker buildx build --platform linux/arm64 -t tp53-rag:arm64 .
+# ============================================================
+
+services:
+  streamlit:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: tp53-rag:latest
+    container_name: tp53-streamlit
+    ports:
+      - "8501:8501"
+    env_file:
+      - .env
+    environment:
+      - INFERENCE_MODE=${INFERENCE_MODE:-api}
+    volumes:
+      - tp53_data:/app/data            # persist the auto-built knowledge base
+    restart: unless-stopped
+
+  fastapi:
+    build:                              # same image (cached) so the tag exists
+      context: .
+      dockerfile: Dockerfile
+    image: tp53-rag:latest
+    container_name: tp53-fastapi
+    depends_on:
+      - streamlit
+    command: ["uvicorn", "api.server:app", "--host", "0.0.0.0", "--port", "8000"]
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      - INFERENCE_MODE=${INFERENCE_MODE:-api}
+    volumes:
+      - tp53_data:/app/data
+    restart: unless-stopped
+
+  n8n:
+    image: n8nio/n8n:latest             # official, multi-arch (arm64 ok)
+    container_name: tp53-n8n
+    ports:
+      - "5678:5678"
+    environment:
+      - N8N_SECURE_COOKIE=false
+      - GENERIC_TIMEZONE=Africa/Nairobi
+    volumes:
+      - n8n_data:/home/node/.n8n
+    restart: unless-stopped
+
+volumes:
+  tp53_data:
+  n8n_data:

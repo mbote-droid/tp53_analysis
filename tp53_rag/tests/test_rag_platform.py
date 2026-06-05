@@ -1297,3 +1297,99 @@ class TestVariantCuratorClassification:
         from agents.variant_curator import VariantCurator
         out = VariantCurator().classify("R273H")["classification"]
         assert out["codon"] == 273
+
+
+class TestDockerPackaging:
+    """Static validation of the dedicated tp53_rag container setup.
+
+    These assert the Dockerfile / docker-compose.yml / .dockerignore are
+    internally consistent and point at files that actually exist. They do
+    NOT run docker (unavailable here) — the real ARM64 build is exercised
+    on the user's machine via `docker buildx --platform linux/arm64`.
+    """
+
+    from pathlib import Path as _Path
+    ROOT = _Path(__file__).resolve().parent.parent
+
+    def test_dockerfile_exists(self):
+        assert (self.ROOT / "Dockerfile").is_file()
+
+    def test_dockerignore_exists(self):
+        assert (self.ROOT / ".dockerignore").is_file()
+
+    def test_compose_exists(self):
+        assert (self.ROOT / "docker-compose.yml").is_file()
+
+    def test_dockerfile_uses_python311_slim(self):
+        text = (self.ROOT / "Dockerfile").read_text(encoding="utf-8")
+        assert "python:3.11-slim" in text
+
+    def test_dockerfile_is_multistage_and_nonroot(self):
+        text = (self.ROOT / "Dockerfile").read_text(encoding="utf-8")
+        assert "AS builder" in text          # multi-stage keeps build tools out
+        assert "USER appuser" in text         # never run as root
+
+    def test_dockerfile_runs_app_and_exposes_8501(self):
+        text = (self.ROOT / "Dockerfile").read_text(encoding="utf-8")
+        assert "app.py" in text
+        assert "EXPOSE 8501" in text
+
+    def test_dockerfile_referenced_files_exist(self):
+        # COPY requirements.txt + the streamlit entrypoint must be real.
+        assert (self.ROOT / "requirements.txt").is_file()
+        assert (self.ROOT / "app.py").is_file()
+
+    def test_dockerignore_excludes_runtime_artifacts(self):
+        text = (self.ROOT / ".dockerignore").read_text(encoding="utf-8")
+        assert "data/chroma_db/" in text
+        assert "tp53_rag/" in text            # the nested duplicate folder
+        assert ".git" in text
+
+    def test_compose_parses_and_has_three_services(self):
+        yaml = pytest.importorskip("yaml")
+        data = yaml.safe_load((self.ROOT / "docker-compose.yml").read_text(encoding="utf-8"))
+        assert set(data["services"]) == {"streamlit", "fastapi", "n8n"}
+
+    def test_compose_streamlit_builds_local_dockerfile(self):
+        yaml = pytest.importorskip("yaml")
+        data = yaml.safe_load((self.ROOT / "docker-compose.yml").read_text(encoding="utf-8"))
+        svc = data["services"]["streamlit"]
+        assert svc["build"]["dockerfile"] == "Dockerfile"
+        assert "8501:8501" in svc["ports"]
+
+    def test_compose_fastapi_serves_api_server_app(self):
+        yaml = pytest.importorskip("yaml")
+        data = yaml.safe_load((self.ROOT / "docker-compose.yml").read_text(encoding="utf-8"))
+        svc = data["services"]["fastapi"]
+        assert "8000:8000" in svc["ports"]
+        assert "api.server:app" in svc["command"]
+        # the entrypoint module the command targets must actually exist
+        assert (self.ROOT / "api" / "server.py").is_file()
+
+    def test_compose_declares_named_volumes(self):
+        yaml = pytest.importorskip("yaml")
+        data = yaml.safe_load((self.ROOT / "docker-compose.yml").read_text(encoding="utf-8"))
+        assert "tp53_data" in data["volumes"]
+        assert "n8n_data" in data["volumes"]
+
+    def test_dockerfile_full_exists(self):
+        assert (self.ROOT / "Dockerfile.full").is_file()
+
+    def test_dockerfile_full_installs_pathology_stack(self):
+        text = (self.ROOT / "Dockerfile.full").read_text(encoding="utf-8")
+        for pkg in ("torch", "torchvision", "timm"):
+            assert pkg in text, pkg
+
+    def test_dockerfile_full_is_arch_aware(self):
+        # Must branch on TARGETARCH so amd64 gets the small CPU wheel and
+        # arm64 (Pi / Oracle Ampere) still builds from default PyPI.
+        text = (self.ROOT / "Dockerfile.full").read_text(encoding="utf-8")
+        assert "TARGETARCH" in text
+        assert "download.pytorch.org/whl/cpu" in text
+
+    def test_dockerfile_full_shares_base_entrypoint(self):
+        text = (self.ROOT / "Dockerfile.full").read_text(encoding="utf-8")
+        assert "python:3.11-slim" in text
+        assert "USER appuser" in text
+        assert "app.py" in text
+        assert "EXPOSE 8501" in text
