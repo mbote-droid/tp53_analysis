@@ -187,7 +187,9 @@ Visit: `http://localhost:8501` (or `8502` locally)
 ### Docker (One-Command Deployment)
 
 ```bash
-docker-compose up
+cd tp53_rag
+cp .env.example .env          # then add your GOOGLE_API_KEY etc.
+docker compose up --build     # first run builds the image
 ```
 
 Access:
@@ -375,8 +377,23 @@ All outputs are HL7 FHIR R4 compatible for EHR integration:
 ## 🐳 Docker Deployment
 
 ```bash
-docker-compose up
-# Access: Web=:8501, API=:8000, n8n=:5678
+cd tp53_rag
+cp .env.example .env              # add your secrets first
+docker compose up --build         # Web=:8501, API=:8000, n8n=:5678
+```
+
+For a Raspberry Pi / ARM64 host, the same image cross-builds with:
+
+```bash
+docker buildx build --platform linux/arm64 -t tp53-rag:arm64 .
+```
+
+The pathology vision agent (torch/timm) is excluded from the default
+lean image to fit low-RAM hosts; use `Dockerfile.full` on a machine
+with spare RAM to enable it:
+
+```bash
+docker build -f Dockerfile.full -t tp53-rag:full .
 ```
 
 ## 📝 License
