@@ -19,9 +19,9 @@ Architecture:
       → TNMAgent           (AJCC/UICC staging + Kenya roadmap)
     → Unified platform response
 
-One model (Gemma 4 e2B) serving 16 specialised clinical/research
-functions via intelligent routing, RAG grounding, and thread-safe
-shared state (recursive/telepathic inter-agent communication).
+One local model serving multiple specialised clinical/research
+functions via intent routing, RAG grounding, and thread-safe
+shared state for inter-agent communication.
 ============================================================
 """
 
@@ -87,7 +87,7 @@ class AgentDispatcher:
 
     def __init__(self, vector_store: TP53VectorStore):
         self.rag_chain = TP53RAGChain(vector_store=vector_store)
-        log.info("AgentDispatcher initialised with 16 specialised agents")
+        log.info("AgentDispatcher initialised")
 
     def dispatch_single(
         self,
@@ -197,9 +197,9 @@ class AgentDispatcher:
         Dispatch pipeline output to ALL agents.
         Includes pathology vision (Agent #15) and TNM staging (Agent #16).
 
-        Agent communication is recursive/telepathic — agents write structured
-        Python objects directly into shared_state, and downstream agents read
-        from it without any text serialisation step.
+        Inter-agent communication uses shared_state: agents write structured
+        Python objects directly into it, and downstream agents read from it
+        without any text serialisation step.
 
         Args:
             pipeline_data: Complete TP53 pipeline output
@@ -210,7 +210,7 @@ class AgentDispatcher:
             Dict mapping agent_name → AgentResult
         """
         log.info("═" * 60)
-        log.info("  TP53 Multi-Agent Platform — Full Dispatch (16 agents)")
+        log.info("  TP53 Multi-Agent Platform — Full Dispatch")
         log.info("═" * 60)
 
         results = {}
@@ -271,7 +271,7 @@ class AgentDispatcher:
             from agents.tnm_staging import TNMStagingAgent
             log.info("Dispatching to agent: tnm_staging")
 
-            # Read from shared_state (telepathic communication pattern)
+            # Read from shared_state (in-process inter-agent communication)
             stored_pathology = shared_state.get_all_outputs().get(
                 "pathology_vision", pathology_result
             )

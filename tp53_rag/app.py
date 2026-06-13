@@ -407,6 +407,23 @@ with st.sidebar:
 **Privacy:** {_privacy}
 """)
 
+# ── Persistent Research-Use-Only banner (shown above every tab) ───
+st.markdown(
+    """
+    <div style="background:#fff6e0;border-left:4px solid #e0a200;
+         padding:8px 14px;border-radius:6px;margin:0 0 10px 0;
+         font-size:0.85rem;color:#5a4500;line-height:1.4;">
+      <b>⚠️ Research Use Only.</b> Not a diagnostic device and not for clinical
+      decisions. All outputs are informational — confirm with a CLIA-certified
+      laboratory and a qualified clinician. <b>Do not enter real, identifiable
+      patient data.</b>
+      <a href="https://github.com/mbote-droid/tp53_analysis/blob/main/tp53_rag/DISCLAIMER.md"
+         target="_blank" style="color:#9a6b00;">Full disclaimer&nbsp;↗</a>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
+
 # ── Tabs ──────────────────────────────────────────────────────────
 (tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10, tab11,
  tab12) = st.tabs([

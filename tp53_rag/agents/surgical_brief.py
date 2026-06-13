@@ -3,16 +3,16 @@
 TP53 RAG Platform - Agent #10: Pre-Incision Surgical Brief
 ============================================================
 Generates a strict, high-contrast surgical briefing designed
-for display on an iPad or overhead screen inside an
-operating room. 90 seconds to read. No fluff.
+for display on a tablet or overhead screen inside an
+operating room. ~90 seconds to read. Concise by design.
 
 Answers exactly three critical surgical questions:
   1. Infiltration Risk — wider margins needed?
   2. Vascular Aggression — intraoperative bleeding risk?
   3. Adjuvant Timeline — optimal post-op chemo window?
 
-This is the demo wow moment — a UI that looks like a
-tactical military dashboard, not a tech demo.
+Research-use-only decision support — not a directive; the
+operating surgeon's judgement governs.
 ============================================================
 """
 

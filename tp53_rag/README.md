@@ -420,12 +420,15 @@ quality/throughput back up:
   offline video demos — it returns clearly-labelled `[DEMO DATA]` canned
   answers instead of live inference. Never ship/showcase with `DEMO_MODE` on.
 
-### Pre-marketplace hardening — still outstanding
-- App-wide **Research-Use-Only** banner in the UI + disclaimers on all exports
-  (FHIR/PDF/JSON) + a top-level `DISCLAIMER.md`.
-- **Mobile/responsive** CSS pass.
-- **Tone cleanup** for clinical credibility (remove demo/marketing language).
-- **Repo split** — separate `tp53_rag` into its own standalone repository.
+### Pre-marketplace hardening
+- ✅ App-wide **Research-Use-Only** banner in the UI + top-level
+  [`DISCLAIMER.md`](DISCLAIMER.md).
+- ✅ **Tone cleanup** for clinical credibility (demo/marketing language removed).
+- ✅ **Honest dispatch** — real RAG by default; canned answers only under an
+  explicit, clearly-labelled `DEMO_MODE`.
+- ⬜ RUO disclaimers embedded in all exports (FHIR/PDF/JSON).
+- ⬜ **Mobile/responsive** CSS pass.
+- ⬜ **Repo split** — separate `tp53_rag` into its own standalone repository.
 
 ### Evidence & docs
 - **Benchmark the RAG answers**, not just the rule-based variant curator (today
