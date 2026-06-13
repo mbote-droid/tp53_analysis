@@ -1397,3 +1397,62 @@ class TestDockerPackaging:
         assert "gosu appuser" in text          # same non-root drop as the base
         assert "app.py" in text
         assert "EXPOSE 8501" in text
+
+
+class TestDispatcherIntegrity:
+    """Lock the fix for the fabricated 'VIDEO DEMO' override: the dispatcher must
+    run the REAL RAG pipeline by default, and only return canned answers when
+    DEMO_MODE is explicitly set (and clearly label them as demo data)."""
+
+    class _StubRAG:
+        """Minimal stand-in for TP53RAGChain so we don't need chromadb/an LLM."""
+        def __init__(self, raises: bool = False):
+            self.calls = []
+            self._raises = raises
+
+        def query(self, question, pipeline_data=None, agent_type=None):
+            self.calls.append((question, agent_type))
+            if self._raises:
+                raise RuntimeError("backend down")
+            return {
+                "answer": "R175H is a conformational hotspot that disrupts DNA binding.",
+                "agent_used": agent_type or "mutation_analysis",
+                "sources": [{"source": "curated", "relevance_score": 0.9}],
+            }
+
+    def _dispatcher(self, raises: bool = False):
+        from agents.dispatcher import AgentDispatcher
+        d = AgentDispatcher.__new__(AgentDispatcher)   # bypass real __init__
+        d.rag_chain = self._StubRAG(raises=raises)
+        return d
+
+    def test_real_path_calls_rag(self, monkeypatch):
+        monkeypatch.delenv("DEMO_MODE", raising=False)
+        d = self._dispatcher()
+        res = d.dispatch_single("mutation_analysis", {"mutations": []})
+        assert d.rag_chain.calls, "real path must call rag_chain.query"
+        assert "R175H" in res.answer
+        assert res.success is True
+
+    def test_real_path_handles_failure_gracefully(self, monkeypatch):
+        monkeypatch.delenv("DEMO_MODE", raising=False)
+        d = self._dispatcher(raises=True)
+        res = d.dispatch_single("clinical_interpretation", {})
+        assert res.success is False
+        assert res.error and "backend down" in res.error
+
+    def test_demo_mode_returns_labelled_canned_answer(self, monkeypatch):
+        monkeypatch.setenv("DEMO_MODE", "1")
+        d = self._dispatcher()
+        res = d.dispatch_single("mutation_analysis", {})
+        assert "[DEMO DATA]" in res.answer, "demo answers must be clearly labelled"
+        assert not d.rag_chain.calls, "demo mode must NOT call the real RAG"
+
+    def test_demo_flag_parsing(self, monkeypatch):
+        from agents.dispatcher import _demo_mode
+        for on in ("1", "true", "YES", "On"):
+            monkeypatch.setenv("DEMO_MODE", on)
+            assert _demo_mode() is True
+        for off in ("0", "false", "", "no"):
+            monkeypatch.setenv("DEMO_MODE", off)
+            assert _demo_mode() is False

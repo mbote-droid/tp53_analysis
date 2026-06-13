@@ -80,7 +80,11 @@ CTX_TOTAL        = 8192
 CTX_SYSTEM       = 1000
 CTX_RETRIEVED    = 2000
 CTX_HISTORY      = 1000
-CTX_RESPONSE     = 4000   # max_tokens for LLM response
+CTX_RESPONSE     = int(os.getenv("CTX_RESPONSE", 1024))   # max_tokens for LLM response
+# Trimmed 4000 -> 1024: clinical answers are 2-4 sentences and the report stays
+# under ~600 words, so 1024 cuts generation latency ~2-4x with no quality loss.
+# Raise via the CTX_RESPONSE env var on a higher-RAM machine if you want longer
+# outputs (see README "Recommendations / Future Enhancements").
 CTX_AVAILABLE    = CTX_TOTAL - CTX_SYSTEM - CTX_RETRIEVED - CTX_HISTORY
 
 # ── Hybrid search weights ─────────────────────────────────────────

@@ -396,6 +396,48 @@ with spare RAM to enable it:
 docker build -f Dockerfile.full -t tp53-rag:full .
 ```
 
+## 🧭 Recommendations / Future Enhancements
+
+Running notes so nothing is forgotten. Tackle as time/hardware allow.
+
+### Performance — unlock on a higher-RAM machine
+The platform is tuned for 8 GB RAM / no GPU. On a bigger machine you can dial
+quality/throughput back up:
+- **Longer answers:** raise `CTX_RESPONSE` (env var; default `1024`, trimmed
+  from 4000 for latency). Set e.g. `CTX_RESPONSE=2048+` for fuller reports.
+- **Parallel dispatch (API mode):** "Full Analysis" runs ~6 agents
+  sequentially. In `INFERENCE_MODE=api` (no local-RAM cost) these can be run
+  concurrently to cut full-dispatch latency toward single-call time.
+- **Higher concurrency:** raise the inference semaphore cap (app.py) once RAM
+  allows more simultaneous LLM calls.
+- **Pathology vision:** build `Dockerfile.full` (adds torch/timm) to enable the
+  H&E tissue-classification agent.
+- **Larger local model:** swap the Gemma 2B Q4_K_M for a larger quant once you
+  have the RAM/VRAM headroom.
+
+### Demo vs real
+- Real, grounded RAG is the **default**. Set `DEMO_MODE=1` **only** for fast
+  offline video demos — it returns clearly-labelled `[DEMO DATA]` canned
+  answers instead of live inference. Never ship/showcase with `DEMO_MODE` on.
+
+### Pre-marketplace hardening — still outstanding
+- App-wide **Research-Use-Only** banner in the UI + disclaimers on all exports
+  (FHIR/PDF/JSON) + a top-level `DISCLAIMER.md`.
+- **Mobile/responsive** CSS pass.
+- **Tone cleanup** for clinical credibility (remove demo/marketing language).
+- **Repo split** — separate `tp53_rag` into its own standalone repository.
+
+### Evidence & docs
+- **Benchmark the RAG answers**, not just the rule-based variant curator (today
+  only the curator has measured accuracy).
+- **Build-journey / decision-log document** — capture *why* each design choice
+  was made (RAG vs fine-tune, modular monolith vs microservices, local vs cloud
+  inference, etc.) for reuse in future projects.
+
+### Scalability (Steps 4–5)
+- Load/stress testing, horizontal scaling of the API surface, database and
+  fault-injection experiments, monitoring/observability.
+
 ## 📝 License
 
 MIT License — See [LICENSE](LICENSE)

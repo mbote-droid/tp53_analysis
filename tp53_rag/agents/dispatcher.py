@@ -25,6 +25,7 @@ shared state (recursive/telepathic inter-agent communication).
 ============================================================
 """
 
+import os
 from typing import Dict, Any, List, Optional
 from dataclasses import dataclass
 
@@ -32,6 +33,13 @@ from agents.rag_chain import TP53RAGChain
 from knowledge_base.vector_store import TP53VectorStore
 from utils.logger import log
 from utils.shared_state import shared_state
+
+
+def _demo_mode() -> bool:
+    """True when the DEMO_MODE env flag is set. In demo mode the dispatcher
+    returns clearly-labelled canned answers for fast, offline video demos
+    instead of running the (slower) real RAG pipeline. Default = OFF (real)."""
+    return os.getenv("DEMO_MODE", "").strip().lower() in ("1", "true", "yes", "on")
 
 
 @dataclass
@@ -87,15 +95,40 @@ class AgentDispatcher:
         pipeline_data: Dict[str, Any],
         custom_question: Optional[str] = None,
     ) -> AgentResult:
-        """
-        EMERGENCY HARDWARE OPTIMISATION OVERRIDE FOR VIDEO DEMO
-        """
-        import time
+        """Run one agent. Real, grounded RAG by default; only DEMO_MODE returns
+        the clearly-labelled canned answers below (for fast offline demos)."""
         question = custom_question or self.AUTOMATIC_QUERIES.get(
             agent_type,
             f"Analyse the provided TP53 data from a {agent_type} perspective."
         )
 
+        # ── Real path (DEFAULT): full grounded, safety-checked RAG pipeline.
+        # rag_chain.query already guarantees a non-empty, PII-scrubbed answer
+        # with self-correction + zero-result fallback.
+        if not _demo_mode():
+            try:
+                result = self.rag_chain.query(
+                    question=question,
+                    pipeline_data=pipeline_data,
+                    agent_type=agent_type,
+                )
+                answer = (result.get("answer") or "").strip()
+                return AgentResult(
+                    agent=result.get("agent_used", agent_type),
+                    question=question,
+                    answer=answer,
+                    sources=result.get("sources", []),
+                    success=bool(answer),
+                )
+            except Exception as e:
+                log.error(f"Agent '{agent_type}' failed: {e}")
+                return AgentResult(
+                    agent=agent_type, question=question,
+                    answer=f"[{agent_type}] agent unavailable: {e}",
+                    sources=[], success=False, error=str(e),
+                )
+
+        # ── DEMO_MODE only: canned, clearly-labelled illustrative answers ──
         mock_answers = {
             "mutation_analysis": (
                 "🧬 MUTATION ANALYSIS SUMMARY:\n"
@@ -140,13 +173,17 @@ class AgentDispatcher:
             ),
         }
 
-        time.sleep(0.4)
-
+        import time
+        time.sleep(0.4)  # smooth cadence for the demo only
+        banner = ("[DEMO DATA] Illustrative canned output for an offline demo "
+                  "(DEMO_MODE is ON) — NOT real analysis. Unset DEMO_MODE for "
+                  "real grounded results.\n\n")
         return AgentResult(
             agent=agent_type,
             question=question,
-            answer=mock_answers.get(agent_type, "Analysis complete. Data grounded cleanly in local context index."),
-            sources=[{"document": "NCBI_TP53_Core", "relevance": 0.98}],
+            answer=banner + mock_answers.get(
+                agent_type, "Analysis complete (demo placeholder)."),
+            sources=[{"document": "DEMO — not a real source", "relevance": 0.0}],
             success=True,
         )
 
