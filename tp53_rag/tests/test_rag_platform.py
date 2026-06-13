@@ -1493,3 +1493,76 @@ class TestDispatcherIntegrity:
         for off in ("0", "false", "", "no"):
             monkeypatch.setenv("DEMO_MODE", off)
             assert _demo_mode() is False
+
+
+class TestConversationMemory:
+    """Long-term, PII-scrubbed conversation memory (utils/memory.py)."""
+
+    def _mem(self, tmp_path, **kw):
+        from utils.memory import ConversationMemory
+        return ConversationMemory(db_path=str(tmp_path / "mem.db"), **kw)
+
+    def test_remember_and_recent_roundtrip(self, tmp_path):
+        m = self._mem(tmp_path)
+        assert m.remember("s1", "What is R175H?", "A conformational hotspot.", "mutation_analysis")
+        rec = m.recent("s1")
+        assert len(rec) == 1
+        assert rec[0]["question"] == "What is R175H?"
+        assert rec[0]["agent_type"] == "mutation_analysis"
+
+    def test_persists_across_instances(self, tmp_path):
+        # A new object on the same db file must still see prior turns (the whole
+        # point: conversations don't start from zero after a restart).
+        self._mem(tmp_path).remember("s1", "q1", "a1")
+        m2 = self._mem(tmp_path)
+        assert any(t["question"] == "q1" for t in m2.recent("s1"))
+
+    def test_pii_is_scrubbed_before_storage(self, tmp_path):
+        m = self._mem(tmp_path)
+        m.remember("s1", "Patient PT-2024-001 email a@b.com", "phone +254712345678")
+        t = m.recent("s1")[0]
+        assert "PT-2024-001" not in t["question"]
+        assert "a@b.com" not in t["question"]
+        assert "+254712345678" not in t["answer"]
+        assert "[PATIENT_ID]" in t["question"]
+
+    def test_history_strings_format(self, tmp_path):
+        m = self._mem(tmp_path)
+        m.remember("s1", "q1", "a1")
+        hs = m.history_strings("s1")
+        assert hs == ["User: q1", "Assistant: a1"]
+
+    def test_session_isolation(self, tmp_path):
+        m = self._mem(tmp_path)
+        m.remember("s1", "q1", "a1")
+        m.remember("s2", "q2", "a2")
+        assert len(m.recent("s1")) == 1 and len(m.recent("s2")) == 1
+        assert m.recent("s1")[0]["question"] == "q1"
+
+    def test_cap_prunes_oldest(self, tmp_path):
+        m = self._mem(tmp_path, max_turns_per_session=3)
+        for i in range(6):
+            m.remember("s1", f"q{i}", f"a{i}")
+        rec = m.recent("s1", limit=50)
+        assert len(rec) == 3
+        assert rec[-1]["question"] == "q5"          # newest kept
+        assert all(t["question"] != "q0" for t in rec)  # oldest pruned
+
+    def test_clear_session(self, tmp_path):
+        m = self._mem(tmp_path)
+        m.remember("s1", "q1", "a1")
+        m.clear("s1")
+        assert m.recent("s1") == []
+
+    def test_graceful_on_bad_input(self, tmp_path):
+        m = self._mem(tmp_path)
+        assert m.remember("", "q", "a") is False        # no session id
+        assert m.remember("s1", "", "") is False        # nothing to store
+        assert m.recent("") == []                        # never raises
+
+    def test_stats(self, tmp_path):
+        m = self._mem(tmp_path)
+        m.remember("s1", "q1", "a1")
+        m.remember("s2", "q2", "a2")
+        s = m.stats()
+        assert s["turns"] == 2 and s["sessions"] == 2

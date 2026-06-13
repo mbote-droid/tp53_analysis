@@ -256,6 +256,19 @@ if "tnm_result" not in st.session_state:
     st.session_state.tnm_result = {}
 if "last_pathology_result" not in st.session_state:
     st.session_state.last_pathology_result = {}
+if "session_id" not in st.session_state:
+    # Isolated per browser-session by default (no cross-user leakage on a shared
+    # deployment). Set MEMORY_SESSION_ID locally for persistent single-user
+    # memory that survives restarts ("don't start from zero").
+    import os as _os, uuid as _uuid
+    st.session_state.session_id = _os.getenv("MEMORY_SESSION_ID") or _uuid.uuid4().hex[:12]
+if "memory" not in st.session_state:
+    try:
+        from utils.memory import get_memory
+        st.session_state.memory = get_memory()
+    except Exception as _e:
+        log.warning(f"Conversation memory unavailable: {_e}")
+        st.session_state.memory = None
 
 # ── Helper functions ──────────────────────────────────────────────
 import threading
@@ -269,15 +282,25 @@ def safe_query(question: str, agent_type=None) -> dict:
             "cache_hit": False,
             "retries": 0,
         }
+    mem = st.session_state.get("memory")
+    sid = st.session_state.get("session_id", "default")
+    # Pull recent (PII-scrubbed) turns so the model has continuity across reruns
+    # and restarts — the conversation doesn't start from zero.
+    history = mem.history_strings(sid, limit=6) if mem else None
     try:
         # Cap concurrent inferences so parallel sessions can't exhaust the
         # 8GB RAM budget. Acquire/release is handled by the context manager.
         with _inference_lock:
-            return st.session_state.rag.query(
+            result = st.session_state.rag.query(
                 question=question,
                 pipeline_data=st.session_state.pipeline_data or None,
                 agent_type=agent_type,
+                conversation_history=history,
             )
+        if mem:
+            mem.remember(sid, question, result.get("answer", ""),
+                         result.get("agent_used", ""))
+        return result
     except Exception as e:
         return {
             "answer": f"Query error: {str(e)[:300]}",
@@ -1139,6 +1162,27 @@ with tab8:
             st.json(stats)
         except Exception:
             pass
+
+    # ── Conversation memory (persistent, PII-scrubbed) ──
+    _mem = st.session_state.get("memory")
+    if _mem is not None:
+        st.markdown("### 🧠 Conversation Memory")
+        st.caption(
+            "Past turns are stored locally (PII-scrubbed) so conversations "
+            "resume across restarts. Session: "
+            f"`{st.session_state.get('session_id', '?')}`"
+        )
+        try:
+            st.json(_mem.stats())
+        except Exception:
+            pass
+        mc1, mc2 = st.columns(2)
+        if mc1.button("🗑 Clear this session's memory"):
+            _mem.clear(st.session_state.get("session_id"))
+            st.success("Session memory cleared")
+        if mc2.button("🗑 Clear ALL memory"):
+            _mem.clear(None)
+            st.success("All conversation memory cleared")
 
     st.markdown("### Test Query")
     test_q = st.text_input("Test question:", value="What is R175H?")

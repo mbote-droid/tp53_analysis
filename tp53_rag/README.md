@@ -426,9 +426,18 @@ quality/throughput back up:
 - ✅ **Tone cleanup** for clinical credibility (demo/marketing language removed).
 - ✅ **Honest dispatch** — real RAG by default; canned answers only under an
   explicit, clearly-labelled `DEMO_MODE`.
+- ✅ **Mobile/responsive** CSS pass (scrollable tabs, fluid charts, breakpoints).
 - ⬜ RUO disclaimers embedded in all exports (FHIR/PDF/JSON).
-- ⬜ **Mobile/responsive** CSS pass.
-- ⬜ **Repo split** — separate `tp53_rag` into its own standalone repository.
+- ⬜ **Repo split** — separate `tp53_rag` into its own standalone repository
+  (deferred until the project is otherwise complete).
+
+### New since v1 (this hardening pass)
+- **Interactive 3D multi-agent graph** (WebGL force-directed, Obsidian-style) in
+  the Visualization tab, with an offline-safe 2D fallback.
+- **Persistent conversation memory** — past turns are stored locally and
+  **PII-scrubbed**, so conversations resume across restarts instead of starting
+  from zero. Isolated per session by default; set `MEMORY_SESSION_ID` for
+  persistent single-user memory. Clear it anytime in Debug & Admin.
 
 ### Evidence & docs
 - **Benchmark the RAG answers**, not just the rule-based variant curator (today

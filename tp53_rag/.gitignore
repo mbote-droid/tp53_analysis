@@ -49,10 +49,18 @@ progress.md
 # Internal build notes (not for publication)
 BUILD_STATUS.md
 
+# Whitepaper PDF — generated locally on demand, kept off the repo
+WHITEPAPER.pdf
+
+# Private founder notes — not for publication
+IDEAS_AND_RESEARCH.md
+DECISIONS.md
+
 #llama files
 models/*.gguf
 models/*.exe
 models/*.bin
 # Runtime artifacts (regenerated — never commit)
 data/semantic_cache.db
+data/conversation_memory.db
 tp53_rag/
