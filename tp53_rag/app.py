@@ -138,6 +138,39 @@ def inject_theme() -> None:
             70%  { box-shadow: 0 0 0 7px rgba(0,212,255,0); }
             100% { box-shadow: 0 0 0 0 rgba(0,212,255,0); }
         }
+
+        /* ── Tabs: never let 12 tabs overflow — scroll horizontally ── */
+        .stTabs [data-baseweb="tab-list"] {
+            overflow-x: auto;
+            scrollbar-width: thin;
+        }
+        .stTabs [data-baseweb="tab"] { white-space: nowrap; }
+
+        /* Charts and tables stay inside the viewport on any width */
+        [data-testid="stPlotlyChart"], [data-testid="stDataFrame"] {
+            max-width: 100%;
+            overflow-x: auto;
+        }
+
+        /* ── Mobile / small screens (phones, narrow windows) ── */
+        @media (max-width: 768px) {
+            /* reclaim the wasted side padding */
+            .block-container {
+                padding: 1rem 0.7rem 2rem 0.7rem !important;
+            }
+            h1 { font-size: 1.5rem !important; }
+            h2 { font-size: 1.2rem !important; }
+            h3 { font-size: 1.05rem !important; }
+            /* tighter tab labels so more fit before scrolling */
+            .stTabs [data-baseweb="tab"] {
+                padding: 6px 8px;
+                font-size: 0.82rem;
+            }
+            /* status badges wrap gracefully */
+            .tp53-badge { font-size: 0.78rem; padding: 6px 9px; }
+            /* keep metrics from overflowing */
+            [data-testid="stMetricValue"] { font-size: 1.1rem; }
+        }
         </style>
         """,
         unsafe_allow_html=True,
@@ -284,7 +317,7 @@ def render_clinvar_safety(answer_text: str, key_prefix: str = "") -> None:
         with st.expander("ClinVar concordance details",
                          expanded=chk["conflicts_found"] > 0):
             st.plotly_chart(clinvar_conflict_chart(findings),
-                            use_container_width=True,
+                            width="stretch",
                             key=f"clinvar_chart_{key_prefix}")
             for f in findings:
                 icon = {"high": "🔴", "medium": "🟠"}.get(f["severity"], "🟢")
@@ -454,9 +487,9 @@ with tab1:
 
     col1, col2 = st.columns([3, 1])
     with col1:
-        submit = st.button("🚀 Ask Gemma 4", use_container_width=True)
+        submit = st.button("🚀 Ask Gemma 4", width="stretch")
     with col2:
-        if st.button("🗑 Clear", use_container_width=True):
+        if st.button("🗑 Clear", width="stretch"):
             st.session_state.messages = []
             st.success("Cleared")
 
@@ -536,7 +569,7 @@ with tab2:
                            f"· {parsed['skipped']} malformed line(s) skipped")
                 if parsed["variants"]:
                     st.plotly_chart(vcf_variant_chart(parsed["variants"]),
-                                    use_container_width=True)
+                                    width="stretch")
                     st.dataframe(
                         pd.DataFrame([
                             {"AA": v["amino_acid_change"] or "—",
@@ -545,7 +578,7 @@ with tab2:
                              "Hotspot": "🔴" if v["is_hotspot"] else ""}
                             for v in parsed["variants"]
                         ]),
-                        use_container_width=True, hide_index=True,
+                        width="stretch", hide_index=True,
                     )
                     opts = [v["amino_acid_change"] for v in parsed["variants"]
                             if v.get("amino_acid_change")]
@@ -567,7 +600,7 @@ with tab2:
     cancer = st.selectbox("Cancer type:", ["Colorectal", "Breast", "Ovarian", "Lung", "Gastric"])
     vaf = st.number_input("Variant Allele Frequency (%):", 0.0, 100.0, 50.0)
 
-    if st.button("🧬 Run Multi-Agent Analysis", use_container_width=True):
+    if st.button("🧬 Run Multi-Agent Analysis", width="stretch"):
         st.session_state.pipeline_data = {
             "mutation": mutation,
             "cancer_type": cancer,
@@ -631,13 +664,13 @@ with tab2:
                 st.plotly_chart(
                     pathogenicity_gauge(c.get("clinical_significance"),
                                         c.get("confidence_score")),
-                    use_container_width=True,
+                    width="stretch",
                 )
             except Exception as e:
                 st.caption(f"Variant classification unavailable: {str(e)[:80]}")
 
             try:  # Liquid Biopsy → VAF burden gauge (from the VAF input)
-                st.plotly_chart(vaf_gauge(vaf), use_container_width=True)
+                st.plotly_chart(vaf_gauge(vaf), width="stretch")
             except Exception as e:
                 st.caption(f"VAF gauge unavailable: {str(e)[:80]}")
 
@@ -649,7 +682,7 @@ with tab2:
                 st.plotly_chart(
                     tme_donut(p.get("immune_infiltration_score", p.get("t_cell_fraction", 0.2)),
                               p.get("immune_status", "")),
-                    use_container_width=True,
+                    width="stretch",
                 )
             except Exception as e:
                 st.caption(f"Immunogenicity unavailable: {str(e)[:80]}")
@@ -659,7 +692,7 @@ with tab2:
             prof = get_expression_profile(mutation)
             st.plotly_chart(
                 pathway_diverging_bar(prof.pathways_activated, prof.pathways_suppressed),
-                use_container_width=True,
+                width="stretch",
             )
         except Exception as e:
             st.caption(f"Pathway profile unavailable for {mutation}: {str(e)[:80]}")
@@ -678,7 +711,7 @@ with tab3:
 
     mut_input = st.text_input("Mutation for drug search:", value="R175H")
 
-    if st.button("🔍 Find Therapeutic Targets", use_container_width=True):
+    if st.button("🔍 Find Therapeutic Targets", width="stretch"):
         with st.spinner("Searching drug databases..."):
             result = safe_query(
                 f"Best drug candidates for {mut_input}? Focus on mechanism and Kenya/KEML availability.",
@@ -705,9 +738,9 @@ with tab3:
              "Source": d.get("source", "?")}
             for d in data["compounds"]
         ])
-        st.dataframe(drug_df, use_container_width=True, hide_index=True)
+        st.dataframe(drug_df, width="stretch", hide_index=True)
         st.plotly_chart(chembl_phase_chart(data["compounds"]),
-                        use_container_width=True)
+                        width="stretch")
         st.caption("Real compound/clinical-phase data from ChEMBL (EBI), "
                    "with a curated TP53-pathway fallback. ChEMBL IDs link out for verification.")
     except Exception as e:
@@ -728,11 +761,11 @@ with tab3:
          "ΔG (kcal/mol)": c["affinity"], "Why": c["rationale"]}
         for c in candidates
     ])
-    st.dataframe(rank_df, use_container_width=True, hide_index=True)
+    st.dataframe(rank_df, width="stretch", hide_index=True)
 
     dcol1, dcol2 = st.columns([3, 2])
     with dcol1:
-        st.plotly_chart(docking_affinity_chart(candidates), use_container_width=True)
+        st.plotly_chart(docking_affinity_chart(candidates), width="stretch")
     with dcol2:
         top = candidates[0]
         st.markdown(f"**Top candidate:** {top['name']}  \nΔG ≈ **{top['affinity']} kcal/mol**")
@@ -753,7 +786,7 @@ with tab3:
         dock_drug_pick = st.selectbox("Drug to dock:", cand_names, key="dock_pick")
         dock_mech = next((c["mechanism"] for c in dock_candidates(mut_input)
                           if c["name"] == dock_drug_pick), "")
-        if st.button("🧬 Run Docking", use_container_width=True, key="dock_go"):
+        if st.button("🧬 Run Docking", width="stretch", key="dock_go"):
             from agents.molecular_docking import MolecularDockingAgent
             dres = MolecularDockingAgent().dock(mut_input, dock_drug_pick,
                                                 mechanism=dock_mech)
@@ -763,7 +796,7 @@ with tab3:
                 st.info(f"⚪ Heuristic estimate (Vina not installed) — {dres['message']}")
             dgcol1, dgcol2 = st.columns([3, 2])
             with dgcol1:
-                st.plotly_chart(docking_affinity_gauge(dres), use_container_width=True)
+                st.plotly_chart(docking_affinity_gauge(dres), width="stretch")
             with dgcol2:
                 st.markdown("**Predicted interactions:**")
                 for it in dres["interactions"]:
@@ -781,14 +814,14 @@ with tab3:
     try:
         from agents.synthetic_lethality import SyntheticLethalityModeler
         sl = SyntheticLethalityModeler().model(mut_input)
-        st.plotly_chart(synthetic_lethal_network(sl), use_container_width=True)
+        st.plotly_chart(synthetic_lethal_network(sl), width="stretch")
         sl_df = pd.DataFrame([
             {"Target": t["gene"], "Mechanism": t["mechanism"],
              "Drug": t.get("drug", "—"), "Evidence": t["evidence"],
              "Druggability": t["druggability"]}
             for t in sl["targets"]
         ])
-        st.dataframe(sl_df, use_container_width=True, hide_index=True)
+        st.dataframe(sl_df, width="stretch", hide_index=True)
         st.caption(f"⚠️ {sl['disclaimer']}")
     except Exception as e:
         st.error(f"Synthetic-lethality model unavailable: {str(e)[:160]}")
@@ -806,7 +839,7 @@ with tab4:
             vafs=[50, 48, 45, 42, 38, 35],
             mrd_threshold=5.0,
         )
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
 
     with col2:
         st.markdown("### TP53 Hotspot Frequency")
@@ -815,7 +848,7 @@ with tab4:
             codons=["175", "248", "273", "249", "282", "220"],
             freqs=[8.0, 7.5, 7.0, 6.5, 4.0, 3.5],
         )
-        st.plotly_chart(fig2, use_container_width=True)
+        st.plotly_chart(fig2, width="stretch")
 
     st.markdown("### TP53 Protein Domain Map")
     domain_df = pd.DataFrame({
@@ -826,7 +859,7 @@ with tab4:
                      "DNA-binding (hotspot region)", "Nuclear signal",
                      "Tetramerization", "Regulatory"],
     })
-    st.dataframe(domain_df, use_container_width=True, hide_index=True)
+    st.dataframe(domain_df, width="stretch", hide_index=True)
 
     st.markdown("### Multi-Agent Dispatch Network")
     st.caption("Press ▶ Trace dispatch to watch the orchestrator fan out to each agent.")
@@ -836,7 +869,7 @@ with tab4:
         "pathology_vision", "tnm_staging", "variant_curator", "immunogenicity",
     ])
     st.plotly_chart(
-        arch_fig, use_container_width=True,
+        arch_fig, width="stretch",
         # Lock zoom so a stray click/scroll can't jump the diagram, and
         # drop the zoom buttons from the toolbar (it's a fixed layout).
         config={
@@ -858,7 +891,7 @@ with tab5:
     rep_cancer   = st.selectbox("Cancer:", ["Colorectal", "Breast", "Ovarian", "Lung"])
     include_keml = st.checkbox("Include Kenya/KEML resources", value=True)
 
-    if st.button("📋 Generate Clinical Report", use_container_width=True):
+    if st.button("📋 Generate Clinical Report", width="stretch"):
         with st.spinner("Generating comprehensive report via Gemma 4..."):
             query = (
                 f"Generate a comprehensive clinical report for: "
@@ -888,7 +921,7 @@ with tab5:
     with icol2:
         ind_cancer = st.text_input("Cancer type:", value="breast cancer", key="ind_cancer")
 
-    if st.button("📑 Generate IND Draft", use_container_width=True, key="ind_go"):
+    if st.button("📑 Generate IND Draft", width="stretch", key="ind_go"):
         try:
             from agents.ind_generator import INDGenerator
             from utils.viz import dock_candidates
@@ -896,7 +929,7 @@ with tab5:
             gen = INDGenerator()
             ind = gen.generate(ind_mut, ind_cancer, drug_candidates=cands)
             st.success(f"{ind['message']} · readiness {ind['readiness_pct']}%")
-            st.plotly_chart(ind_section_chart(ind), use_container_width=True)
+            st.plotly_chart(ind_section_chart(ind), width="stretch")
             md = gen.render_markdown(ind)
             with st.expander("Preview IND draft", expanded=True):
                 st.markdown(md)
@@ -968,7 +1001,7 @@ with tab6:
                 lambda row: [f"background-color: {P53_DOMAINS[row.name]['color']}33"] * len(row),
                 axis=1,
             ),
-            use_container_width=True, hide_index=True,
+            width="stretch", hide_index=True,
         )
         st.caption("🔴 Red spheres = hotspot residues (175 / 248 / 273) + your selection.")
 
@@ -979,11 +1012,11 @@ with tab6:
             "Type":     ["Conform.", "Contact", "Contact",
                          "Contact", "Contact", "Conform."],
         })
-        st.dataframe(hotspot_ref, use_container_width=True, hide_index=True)
+        st.dataframe(hotspot_ref, width="stretch", hide_index=True)
 
     # ── Domain map (side chart, colours match the 3D structure) ──
     st.markdown("### Structure Colour Map")
-    st.plotly_chart(domain_legend_chart(), use_container_width=True)
+    st.plotly_chart(domain_legend_chart(), width="stretch")
 
     # ── Multimodal RAG narration: type or speak ──
     st.markdown("### 🧠 Structure Narration")
@@ -1030,7 +1063,7 @@ with tab6:
         sa = StructuralAnalyzer().analyse(sa_mut)
         scol1, scol2 = st.columns([3, 2])
         with scol1:
-            st.plotly_chart(structural_profile_radar(sa), use_container_width=True)
+            st.plotly_chart(structural_profile_radar(sa), width="stretch")
         with scol2:
             st.metric("ΔΔG (destabilisation)", f"{sa['ddG_kcal_mol']} kcal/mol")
             st.metric("Druggability", f"{sa['druggability']:.0%}")
@@ -1072,7 +1105,7 @@ with tab7:
     st.markdown("### ⌨️ Or Type Your Question")
     voice_text = st.text_area("Type here:", height=100,
                               placeholder="e.g., What is the prognosis for R175H?")
-    if st.button("🚀 Submit", use_container_width=True):
+    if st.button("🚀 Submit", width="stretch"):
         if voice_text:
             with st.spinner("Processing..."):
                 result = safe_query(voice_text, agent_type=forced_agent)
@@ -1131,9 +1164,9 @@ with tab9:
         )
 
         if uploaded:
-            st.image(uploaded, caption="Uploaded slide", use_container_width=True)
+            st.image(uploaded, caption="Uploaded slide", width="stretch")
 
-        if uploaded and st.button("🔬 Analyse Slide", use_container_width=True):
+        if uploaded and st.button("🔬 Analyse Slide", width="stretch"):
             # FIXED: safe load with None check — won't crash on cloud if torch missing
             agent = load_pathology_agent()
 
@@ -1170,7 +1203,7 @@ with tab9:
 
                     st.markdown("### Tissue Classifications")
                     tissue_df = pd.DataFrame(result["tissue_classifications"])
-                    st.dataframe(tissue_df, use_container_width=True, hide_index=True)
+                    st.dataframe(tissue_df, width="stretch", hide_index=True)
 
                     if result["mutation_correlations"]:
                         st.markdown("### TP53 Mutation Correlation")
@@ -1270,7 +1303,7 @@ with tab10:
             value=bool(st.session_state.last_pathology_result),
         )
 
-        if st.button("📍 Run TNM Staging", use_container_width=True):
+        if st.button("📍 Run TNM Staging", width="stretch"):
             try:
                 from agents.tnm_staging import TNMStagingAgent
                 pipeline_input = {
@@ -1340,7 +1373,7 @@ not a replacement for pathological staging.*
         }
         badge = stage_colors.get(stage, "⚪")
         st.markdown(f"## {badge} Stage **{stage}** — {t_code} {n_code} {m_code}")
-        st.plotly_chart(tnm_stage_bar(stage), use_container_width=True)
+        st.plotly_chart(tnm_stage_bar(stage), width="stretch")
 
         equity = result.get("equity_flag")
         if equity:
@@ -1407,7 +1440,7 @@ with tab11:
 
         # ── Continental map (always shown) ──
         st.plotly_chart(african_atlas_map(_atlas.country_burden()),
-                        use_container_width=True)
+                        width="stretch")
 
         st.divider()
         st.markdown("### 🔎 Explore by mutation, region or cancer")
@@ -1431,7 +1464,7 @@ with tab11:
         mcols = st.columns([3, 2])
         with mcols[0]:
             st.plotly_chart(african_burden_bar(atlas["matched_profiles"]),
-                            use_container_width=True)
+                            width="stretch")
         with mcols[1]:
             st.metric("Profiles matched", len(atlas["matched_profiles"]))
             if atlas["key_mutations"]:
@@ -1472,7 +1505,7 @@ with tab12:
     with tc3:
         ct_live = st.checkbox("Live API", value=True, key="ct_live")
 
-    if st.button("🔎 Find Trials", use_container_width=True, key="ct_go"):
+    if st.button("🔎 Find Trials", width="stretch", key="ct_go"):
         try:
             from agents.clinical_trials import ClinicalTrialsMatcher
             with st.spinner("Searching ClinicalTrials.gov..."):
@@ -1492,7 +1525,7 @@ with tab12:
             m3.metric("🇰🇪 Kenyan sites", res["kenya_count"])
 
             st.plotly_chart(trials_priority_chart(res["trials"]),
-                            use_container_width=True)
+                            width="stretch")
 
             for t in res["trials"]:
                 flag = "🇰🇪" if t.get("kenya_site") else ("🌍" if t.get("african_priority") else "🌐")
