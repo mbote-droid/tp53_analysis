@@ -438,6 +438,13 @@ quality/throughput back up:
   **PII-scrubbed**, so conversations resume across restarts instead of starting
   from zero. Isolated per session by default; set `MEMORY_SESSION_ID` for
   persistent single-user memory. Clear it anytime in Debug & Admin.
+- **Real variant annotation** (Analysis tab) — molecular consequence + SIFT /
+  PolyPhen from **Ensembl VEP**, plus **ClinVar** significance, **gnomAD** allele
+  frequency and **CADD** from **MyVariant.info**. Offline-first: a curated
+  hotspot baseline always works; live APIs supply exact current values on
+  demand. (Local VEP/SnpEff are intentionally avoided — their multi-GB caches
+  don't fit the 8 GB / offline-first target; the REST route gives the same real
+  data.)
 
 ### Evidence & docs
 - **Benchmark the RAG answers**, not just the rule-based variant curator (today

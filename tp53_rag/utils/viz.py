@@ -281,6 +281,44 @@ def agent_graph_3d_html(graph_data: Optional[dict] = None, height: int = 560) ->
             .replace("__H__", str(inner_h)))
 
 
+def variant_annotation_table(result: Optional[dict]) -> go.Figure:
+    """Render a real-variant annotation dict (utils.variant_annotation) as a
+    clean two-column table. Pure + never-empty.
+    """
+    result = result or {}
+    rows = [
+        ("Protein change", result.get("protein_change") or "—"),
+        ("Gene", result.get("gene") or "TP53"),
+        ("rsID", result.get("rsid") or "—"),
+        ("HGVS (c.)", result.get("hgvs_c") or "—"),
+        ("Consequence", result.get("consequence") or "unknown"),
+        ("Impact", result.get("impact") or "unknown"),
+        ("SIFT", result.get("sift") or "unknown"),
+        ("PolyPhen", result.get("polyphen") or "unknown"),
+        ("CADD (phred)", result.get("cadd_phred") if result.get("cadd_phred") is not None else "—"),
+        ("ClinVar", result.get("clinvar_significance") or "not_provided"),
+        ("gnomAD AF", result.get("gnomad_af") or "unknown"),
+        ("Structural class", result.get("structural_class") or "—"),
+        ("Source", result.get("method") or "curated_fallback"),
+    ]
+    fields = [r[0] for r in rows]
+    values = [str(r[1]) for r in rows]
+    fig = go.Figure(data=[go.Table(
+        columnwidth=[34, 66],
+        header=dict(values=["<b>Field</b>", "<b>Value</b>"],
+                    fill_color="#0b3d63", font=dict(color="white", size=13),
+                    align="left", height=28),
+        cells=dict(values=[fields, values],
+                   fill_color=[["#161b22", "#0d1117"] * len(rows)],
+                   font=dict(color="#e6edf3", size=12),
+                   align="left", height=24),
+    )])
+    fig.update_layout(margin=dict(l=0, r=0, t=10, b=0),
+                      height=30 * len(rows) + 40,
+                      paper_bgcolor="rgba(0,0,0,0)")
+    return fig
+
+
 def agent_architecture_diagram(agent_names,
                                spin_revolutions: float = DISPATCH_SPIN_REVOLUTIONS
                                ) -> go.Figure:

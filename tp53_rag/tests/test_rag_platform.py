@@ -1566,3 +1566,116 @@ class TestConversationMemory:
         m.remember("s2", "q2", "a2")
         s = m.stats()
         assert s["turns"] == 2 and s["sessions"] == 2
+
+
+_VEP_PAYLOAD = [{
+    "most_severe_consequence": "missense_variant",
+    "transcript_consequences": [
+        {"gene_symbol": "TP53", "impact": "MODERATE",
+         "sift_prediction": "deleterious", "polyphen_prediction": "probably_damaging"},
+    ],
+}]
+_MYVARIANT_PAYLOAD = {
+    "clinvar": {"rcv": {"clinical_significance": "Pathogenic"}},
+    "cadd": {"phred": 29.4},
+    "gnomad_genome": {"af": {"af": 0.0000012}},
+    "dbnsfp": {"sift": {"pred": "D"}, "polyphen2": {"hdiv": {"pred": "D"}}},
+}
+
+
+class TestVariantAnnotation:
+    """Real multi-source variant annotation (utils/variant_annotation.py).
+    All offline/deterministic — the network is mocked; one live smoke test skips
+    when offline."""
+
+    def test_normalise_protein_change(self):
+        from utils.variant_annotation import normalise_protein_change
+        assert normalise_protein_change("R175H") == "R175H"
+        assert normalise_protein_change("p.R175H") == "R175H"
+        assert normalise_protein_change("the r273h mutant") == "R273H"
+        assert normalise_protein_change("no variant here") == ""
+
+    def test_parse_vep(self):
+        from utils.variant_annotation import parse_vep
+        out = parse_vep(_VEP_PAYLOAD)
+        assert out["consequence"] == "missense_variant"
+        assert out["sift"] == "deleterious"
+        assert out["polyphen"] == "probably_damaging"
+        assert parse_vep(None) == {} and parse_vep("bad") == {}
+
+    def test_parse_myvariant(self):
+        from utils.variant_annotation import parse_myvariant
+        out = parse_myvariant(_MYVARIANT_PAYLOAD)
+        assert out["clinvar_significance"] == "Pathogenic"
+        assert out["cadd_phred"] == 29.4
+        assert "e-" in out["gnomad_af"].lower()
+        assert parse_myvariant(None) == {}
+
+    def test_curated_fallback_offline(self):
+        from utils.variant_annotation import VariantAnnotator
+        res = VariantAnnotator().annotate("R175H", use_live=False)
+        assert res.protein_change == "R175H"
+        assert res.rsid == "rs28934578"               # resolved from curated map
+        assert res.hgvs_c.endswith("c.524G>A")
+        assert res.clinvar_significance == "Pathogenic"
+        assert res.structural_class == "conformational"
+        assert res.method == "curated_fallback"
+
+    def test_unknown_variant_graceful(self):
+        from utils.variant_annotation import VariantAnnotator
+        res = VariantAnnotator().annotate("A159V", use_live=False)
+        assert res.protein_change == "A159V"
+        assert res.method == "curated_fallback"
+        assert res.notes                                # flags it's non-curated
+
+    def test_unparseable_input_never_raises(self):
+        from utils.variant_annotation import VariantAnnotator
+        res = VariantAnnotator().annotate("???", use_live=False)
+        assert res.query == "???"
+        assert res.notes                                # explains the failure
+
+    def test_live_path_overrides_with_mock(self, monkeypatch):
+        from utils.variant_annotation import VariantAnnotator
+        a = VariantAnnotator()
+
+        def fake_get(url):
+            if "rest.ensembl.org" in url:
+                return _VEP_PAYLOAD
+            if "myvariant.info" in url:
+                return _MYVARIANT_PAYLOAD
+            return None
+        monkeypatch.setattr(a, "_get_json", fake_get)
+
+        res = a.annotate("R175H", use_live=True)
+        assert res.method == "live"
+        assert res.consequence == "missense_variant"
+        assert res.clinvar_significance == "Pathogenic"
+        assert res.cadd_phred == 29.4
+        assert "e-" in res.gnomad_af.lower()           # real numeric AF, not the curated label
+        assert any("VEP" in s for s in res.sources)
+
+    def test_rsid_input_is_parsed(self):
+        from utils.variant_annotation import VariantAnnotator
+        res = VariantAnnotator().annotate("rs28934578", use_live=False)
+        assert res.rsid == "rs28934578"
+
+    def test_convenience_returns_dict(self):
+        from utils.variant_annotation import annotate_variant
+        d = annotate_variant("R248W", use_live=False)
+        assert isinstance(d, dict) and d["protein_change"] == "R248W"
+
+    def test_annotation_table_viz_never_empty(self):
+        from utils.viz import variant_annotation_table
+        from utils.variant_annotation import annotate_variant
+        fig = variant_annotation_table(annotate_variant("R175H", use_live=False))
+        assert fig is not None and fig.data
+        # empty input still yields a valid figure
+        assert variant_annotation_table({}).data
+
+    @requires_network
+    def test_live_smoke(self):
+        # Real network call — skipped offline. Just must not raise + be populated.
+        from utils.variant_annotation import VariantAnnotator
+        res = VariantAnnotator().annotate("R175H", use_live=True)
+        assert res.protein_change == "R175H"
+        assert res.consequence

@@ -112,6 +112,12 @@ AGENT_REGISTRY = {
         "keywords": ["structural", "structure", "cavity", "pocket", "ddg", "stability",
                      "destabilis", "druggability", "mechanics", "fold"],
     },
+    "variant_annotation": {
+        "description": "Real functional annotation (Ensembl VEP consequence/SIFT/PolyPhen + "
+                       "ClinVar significance + gnomAD allele frequency + CADD), offline-first",
+        "keywords": ["annotate", "annotation", "vep", "ensembl", "consequence", "sift",
+                     "polyphen", "cadd", "gnomad", "allele frequency", "rsid", "myvariant"],
+    },
     "sequence_fetch": {
         "description": "Fetch and validate TP53 sequences from NCBI",
         "keywords": ["fetch", "accession", "ncbi", "sequence", "download", "retrieve"],

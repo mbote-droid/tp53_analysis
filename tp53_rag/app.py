@@ -29,6 +29,7 @@ from utils.viz import (
     agent_architecture_diagram,
     build_agent_graph_data,
     agent_graph_3d_html,
+    variant_annotation_table,
     domain_legend_chart,
     parse_residues,
     protein_viewer_html,
@@ -50,6 +51,7 @@ from utils.viz import (
     docking_affinity_gauge,
     structural_profile_radar,
 )
+from utils.variant_annotation import annotate_variant
 
 st.set_page_config(
     page_title="TP53 RAG Platform",
@@ -624,6 +626,29 @@ with tab2:
     mutation = st.text_input("TP53 Mutation:", placeholder="e.g., R175H", value=_default_mut)
     cancer = st.selectbox("Cancer type:", ["Colorectal", "Breast", "Ovarian", "Lung", "Gastric"])
     vaf = st.number_input("Variant Allele Frequency (%):", 0.0, 100.0, 50.0)
+
+    # ── Real variant annotation (Ensembl VEP · ClinVar · gnomAD) ──
+    with st.expander("🔬 Real variant annotation (Ensembl VEP · ClinVar · gnomAD)", expanded=True):
+        use_live_anno = st.checkbox(
+            "Fetch live from Ensembl / MyVariant APIs",
+            value=False,
+            help="Off = instant curated baseline. On = live SIFT/PolyPhen/CADD/"
+                 "gnomAD allele-frequency/ClinVar (needs internet; a few seconds).",
+        )
+        try:
+            anno = annotate_variant(mutation, use_live=use_live_anno)
+            badge = "🟢 live (Ensembl/MyVariant)" if anno.get("method") == "live" \
+                else "⚪ curated baseline"
+            srcs = ", ".join(anno.get("sources", []))
+            st.caption(f"Source: {badge}" + (f" · {srcs}" if srcs else ""))
+            st.plotly_chart(
+                variant_annotation_table(anno), width="stretch",
+                config={"displayModeBar": False},
+            )
+            if anno.get("notes"):
+                st.info(anno["notes"])
+        except Exception as e:
+            st.warning(f"Annotation unavailable: {str(e)[:160]}")
 
     if st.button("🧬 Run Multi-Agent Analysis", width="stretch"):
         st.session_state.pipeline_data = {
