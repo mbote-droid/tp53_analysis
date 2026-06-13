@@ -223,6 +223,43 @@ class TestVizHelpers:
         out = agent_status_badge("x", "not-a-state")
         assert out and "tp53-badge" in out  # degrades, never empty
 
+    def test_agent_graph_data_shape(self):
+        from utils.viz import build_agent_graph_data
+        g = build_agent_graph_data()
+        ids = {n["id"] for n in g["nodes"]}
+        assert {"dispatcher", "rag_core"} <= ids          # core nodes present
+        assert "variant_curator" in ids                    # at least one agent
+        assert len(g["links"]) >= len(g["nodes"]) - 1      # connected-ish
+        # every link references real nodes
+        for ln in g["links"]:
+            assert ln["source"] in ids and ln["target"] in ids
+
+    def test_agent_graph_data_filter(self):
+        from utils.viz import build_agent_graph_data
+        g = build_agent_graph_data(agent_names=["drug_discovery"])
+        ids = {n["id"] for n in g["nodes"]}
+        assert "drug_discovery" in ids
+        assert "variant_curator" not in ids                # filtered out
+        assert "dispatcher" in ids                          # core always kept
+
+    def test_agent_graph_data_never_empty(self):
+        from utils.viz import build_agent_graph_data
+        g = build_agent_graph_data(agent_names=["does_not_exist"])
+        assert g["nodes"], "must never be empty — at least the Dispatcher"
+
+    def test_agent_graph_3d_html_self_contained(self):
+        from utils.viz import agent_graph_3d_html
+        html = agent_graph_3d_html(height=500)
+        assert "ForceGraph3D" in html                      # the WebGL lib
+        assert "3d-force-graph" in html                    # CDN script
+        assert "tp53-agraph-fallback" in html              # offline fallback
+        assert "Variant Curator" in html                   # node names embedded
+
+    def test_agent_graph_3d_html_handles_empty_input(self):
+        from utils.viz import agent_graph_3d_html
+        html = agent_graph_3d_html(graph_data={"nodes": []})
+        assert "ForceGraph3D" in html and "Dispatcher" in html  # rebuilds default
+
     def test_vaf_timeline_valid(self):
         from utils.viz import animated_vaf_timeline
         fig = animated_vaf_timeline([0, 5, 10, 15], [50, 48, 45, 40])

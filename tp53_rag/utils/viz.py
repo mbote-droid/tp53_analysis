@@ -8,6 +8,7 @@ gracefully on bad input.
 """
 from __future__ import annotations
 
+import json
 import math
 from typing import Optional
 
@@ -149,6 +150,135 @@ def animated_hotspot_bar(codons, freqs) -> go.Figure:
         )],
     )
     return fig
+
+
+# ── 3D agent graph (Obsidian-style WebGL force-directed network) ──────────
+# Curated architecture: agents grouped by domain, plus semantic edges between
+# agents that actually pass data/context to each other.
+_AGENT_GRAPH_GROUPS = {
+    "Genomics":          (["variant_curator", "mutation_analysis", "domain_annotation",
+                           "gene_expression", "vcf_parser"], "#2ecc71"),
+    "Clinical":          (["clinical_interpretation", "tnm_staging", "surgical_brief",
+                           "immunogenicity", "liquid_biopsy"], "#00d4ff"),
+    "Drug discovery":    (["drug_discovery", "molecular_docking", "synthetic_lethality",
+                           "structural_analyzer", "ind_generator"], "#ff6b9d"),
+    "Imaging":           (["pathology_vision", "structure_viz"], "#f39c12"),
+    "Equity & evidence": (["african_atlas", "clinvar_conflict_checker",
+                           "clinical_trials", "pubmed_citations"], "#a29bfe"),
+}
+_AGENT_GRAPH_EDGES = [
+    ("variant_curator", "clinvar_conflict_checker"),
+    ("variant_curator", "mutation_analysis"),
+    ("mutation_analysis", "drug_discovery"),
+    ("drug_discovery", "molecular_docking"),
+    ("molecular_docking", "structural_analyzer"),
+    ("drug_discovery", "synthetic_lethality"),
+    ("structural_analyzer", "ind_generator"),
+    ("pathology_vision", "tnm_staging"),
+    ("clinical_interpretation", "tnm_staging"),
+    ("clinical_interpretation", "clinical_trials"),
+    ("gene_expression", "immunogenicity"),
+    ("african_atlas", "variant_curator"),
+]
+
+
+def build_agent_graph_data(agent_names: Optional[list] = None) -> dict:
+    """Build {nodes, links} for the 3D multi-agent graph. Pure data, never empty.
+
+    Central `Dispatcher` → `RAG Core` → every agent, plus curated agent-to-agent
+    semantic edges. If `agent_names` is given, only those agents are included
+    (others are dropped, but the graph is always at least the Dispatcher node).
+    """
+    keep = set(agent_names) if agent_names else None
+
+    def _pretty(s: str) -> str:
+        return str(s).replace("_", " ").title()
+
+    nodes = [
+        {"id": "dispatcher", "name": "Dispatcher", "group": "Core", "val": 26, "color": "#ffffff"},
+        {"id": "rag_core", "name": "RAG Core", "group": "Core", "val": 18, "color": "#00d4ff"},
+    ]
+    links = [{"source": "dispatcher", "target": "rag_core"}]
+
+    present = {"dispatcher", "rag_core"}
+    for group, (members, color) in _AGENT_GRAPH_GROUPS.items():
+        for agent in members:
+            if keep is not None and agent not in keep:
+                continue
+            nodes.append({"id": agent, "name": _pretty(agent), "group": group,
+                          "val": 7, "color": color})
+            links.append({"source": "rag_core", "target": agent})
+            present.add(agent)
+
+    for a, b in _AGENT_GRAPH_EDGES:
+        if a in present and b in present:
+            links.append({"source": a, "target": b})
+
+    return {"nodes": nodes, "links": links}
+
+
+def agent_graph_3d_html(graph_data: Optional[dict] = None, height: int = 560) -> str:
+    """Self-contained HTML for an interactive 3D force-directed agent graph.
+
+    Uses the `3d-force-graph` WebGL library (drag to rotate, scroll to zoom,
+    click a node to focus). Obsidian-style organic network. Always returns a
+    non-empty HTML string; if the CDN library can't load (offline/edge), it
+    shows a graceful fallback message instead of a blank box.
+    """
+    if not graph_data or not graph_data.get("nodes"):
+        graph_data = build_agent_graph_data()
+    data_json = json.dumps(graph_data)
+    inner_h = max(int(height) - 8, 200)
+
+    template = """
+<div style="width:100%;background:#0d1117;border-radius:10px;overflow:hidden;">
+  <div id="tp53-agraph" style="width:100%;height:__H__px;"></div>
+  <div id="tp53-agraph-fallback" style="display:none;padding:18px;color:#8b98a5;
+       font-family:sans-serif;font-size:0.85rem;">
+    3D agent graph needs internet access once to load the WebGL library.
+    Offline? The 2D dispatch diagram below still works.
+  </div>
+</div>
+<script src="https://unpkg.com/3d-force-graph"></script>
+<script>
+(function(){
+  var DATA = __DATA__;
+  function boot(){
+    if (typeof ForceGraph3D === 'undefined') {
+      document.getElementById('tp53-agraph-fallback').style.display = 'block';
+      return;
+    }
+    var el = document.getElementById('tp53-agraph');
+    var Graph = ForceGraph3D()(el)
+      .graphData(DATA)
+      .backgroundColor('#0d1117')
+      .nodeLabel(function(n){ return n.name; })
+      .nodeVal(function(n){ return n.val; })
+      .nodeColor(function(n){ return n.color; })
+      .nodeOpacity(0.95)
+      .nodeResolution(16)
+      .linkColor(function(){ return 'rgba(0,212,255,0.22)'; })
+      .linkWidth(0.6)
+      .linkDirectionalParticles(2)
+      .linkDirectionalParticleWidth(1.4)
+      .linkDirectionalParticleSpeed(0.006)
+      .warmupTicks(60)
+      .cooldownTicks(160)
+      .onNodeClick(function(node){
+        var ratio = 1 + 90 / Math.max(Math.hypot(node.x, node.y, node.z || 1), 1);
+        Graph.cameraPosition(
+          {x: node.x * ratio, y: node.y * ratio, z: (node.z || 1) * ratio},
+          node, 1400);
+      });
+  }
+  if (document.readyState === 'complete') boot();
+  else window.addEventListener('load', boot);
+})();
+</script>
+"""
+    return (template
+            .replace("__DATA__", data_json)
+            .replace("__H__", str(inner_h)))
 
 
 def agent_architecture_diagram(agent_names,

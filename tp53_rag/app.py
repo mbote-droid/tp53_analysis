@@ -27,6 +27,8 @@ from utils.viz import (
     animated_vaf_timeline,
     animated_hotspot_bar,
     agent_architecture_diagram,
+    build_agent_graph_data,
+    agent_graph_3d_html,
     domain_legend_chart,
     parse_residues,
     protein_viewer_html,
@@ -861,25 +863,35 @@ with tab4:
     })
     st.dataframe(domain_df, width="stretch", hide_index=True)
 
-    st.markdown("### Multi-Agent Dispatch Network")
-    st.caption("Press ▶ Trace dispatch to watch the orchestrator fan out to each agent.")
-    arch_fig = agent_architecture_diagram([
-        "mutation_analysis", "drug_discovery", "clinical_interpretation",
-        "liquid_biopsy", "gene_expression", "domain_annotation",
-        "pathology_vision", "tnm_staging", "variant_curator", "immunogenicity",
-    ])
-    st.plotly_chart(
-        arch_fig, width="stretch",
-        # Lock zoom so a stray click/scroll can't jump the diagram, and
-        # drop the zoom buttons from the toolbar (it's a fixed layout).
-        config={
-            "scrollZoom": False, "displaylogo": False, "doubleClick": False,
-            "modeBarButtonsToRemove": [
-                "zoom2d", "zoomIn2d", "zoomOut2d", "pan2d",
-                "autoScale2d", "select2d", "lasso2d", "resetScale2d",
-            ],
-        },
+    st.markdown("### Multi-Agent Network")
+    st.caption(
+        "Interactive 3D map of how the agents connect — drag to rotate, "
+        "scroll to zoom, click a node to focus. Colours group agents by domain."
     )
+    components.html(
+        agent_graph_3d_html(build_agent_graph_data(), height=560),
+        height=580,
+    )
+
+    with st.expander("▶ 2D dispatch animation (offline-safe fallback)"):
+        st.caption("Press ▶ Trace dispatch to watch the orchestrator fan out to each agent.")
+        arch_fig = agent_architecture_diagram([
+            "mutation_analysis", "drug_discovery", "clinical_interpretation",
+            "liquid_biopsy", "gene_expression", "domain_annotation",
+            "pathology_vision", "tnm_staging", "variant_curator", "immunogenicity",
+        ])
+        st.plotly_chart(
+            arch_fig, width="stretch",
+            # Lock zoom so a stray click/scroll can't jump the diagram, and
+            # drop the zoom buttons from the toolbar (it's a fixed layout).
+            config={
+                "scrollZoom": False, "displaylogo": False, "doubleClick": False,
+                "modeBarButtonsToRemove": [
+                    "zoom2d", "zoomIn2d", "zoomOut2d", "pan2d",
+                    "autoScale2d", "select2d", "lasso2d", "resetScale2d",
+                ],
+            },
+        )
 
 # ── TAB 5: Report ─────────────────────────────────────────────────
 with tab5:
