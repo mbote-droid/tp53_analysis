@@ -20,19 +20,26 @@ from knowledge_base.ingestion import TP53DocumentIngester, CURATED_TP53_KNOWLEDG
 from agents.rag_chain import IntentRouter
 
 
-def _has_network(host: str = "api-inference.huggingface.co",
-                 port: int = 443, timeout: float = 3.0) -> bool:
-    """True if an embeddings backend is reachable. Integration tests that build
-    a real vector store need this; they skip (not fail) when offline."""
-    try:
-        socket.create_connection((host, port), timeout=timeout).close()
-        return True
-    except OSError:
-        return False
+def _has_network(timeout: float = 3.0) -> bool:
+    """True if there is general internet connectivity. Network integration tests
+    skip (not fail) when offline.
+
+    Probes a couple of always-on infrastructure hosts (Cloudflare/Google DNS)
+    rather than a specific API host — the previous probe pointed at the
+    decommissioned api-inference.huggingface.co, so these tests skipped even
+    when online and never actually ran.
+    """
+    for host, port in (("1.1.1.1", 443), ("8.8.8.8", 53)):
+        try:
+            socket.create_connection((host, port), timeout=timeout).close()
+            return True
+        except OSError:
+            continue
+    return False
 
 
 requires_network = pytest.mark.skipif(
-    not _has_network(), reason="requires network access to an embeddings backend"
+    not _has_network(), reason="requires internet access"
 )
 
 
@@ -151,31 +158,67 @@ class TestVectorStoreIntegration:
     """Integration tests for the vector store (require Ollama)."""
 
     @pytest.mark.integration
-    @requires_network
-    @patch('langchain_ollama.embeddings.OllamaEmbeddings.embed_documents') # 2. Intercept embedding requests
+    @patch('langchain_ollama.embeddings.OllamaEmbeddings.embed_documents')
     @patch('langchain_ollama.embeddings.OllamaEmbeddings.embed_query')
-    def test_build_and_query(self, mock_embed_query, mock_embed_docs, tmp_path):
-        """Full build + query cycle. Requires Ollama running."""
-        
-        # 5. Define fake vector dimensions (768 numbers long, which matches nomic-embed-text)
-        mock_embed_docs.return_value = [[0.1] * 768 for _ in range(20)]
+    def test_build_and_query(self, mock_embed_query, mock_embed_docs, tmp_path, monkeypatch):
+        """Full build + query cycle with a mocked (deterministic) embedder.
+
+        Fully isolated: a fresh temp ChromaDB dir and the Ollama embedder forced
+        + mocked, so it never touches the real persisted store and needs no
+        network. (Embeddings are mocked, so this is hermetic — no @requires_network.)
+        """
+        # Force the Ollama embedding path so our mock is actually used (the
+        # default embedder is env-dependent — ONNX in api mode would bypass it).
+        monkeypatch.setenv("INFERENCE_MODE", "ollama")
+        # One 768-dim vector per input text (nomic-embed-text dimension).
+        mock_embed_docs.side_effect = lambda texts: [[0.1] * 768 for _ in texts]
         mock_embed_query.return_value = [0.1] * 768
-        
+
+        # Real isolation: patch the name vector_store imported, not settings.
+        import knowledge_base.vector_store as vs
+        monkeypatch.setattr(vs, "CHROMA_DIR", tmp_path / "chroma_test")
+
         from knowledge_base.ingestion import TP53DocumentIngester
-        from knowledge_base.vector_store import TP53VectorStore
-        from config import settings
-        settings.CHROMA_DIR = tmp_path / "chroma_test"
-    
         ingester = TP53DocumentIngester()
         docs = ingester.load_curated_knowledge()
         chunks = ingester.chunk_documents(docs)
-    
-        store = TP53VectorStore()
+
+        store = vs.TP53VectorStore()
         store.build(chunks[:20])
 
         results = store.similarity_search("R175H mutation cancer", k=3)
         assert len(results) > 0
         assert all(isinstance(doc, Document) for doc, _ in results)
+
+    @pytest.mark.integration
+    def test_rebuilds_on_embedder_dimension_change(self, tmp_path, monkeypatch):
+        """If a persisted collection was built at a different embedding dimension
+        (e.g. INFERENCE_MODE switched between Ollama 768-d and ONNX 384-d),
+        build() must auto-rebuild instead of crashing on the first query."""
+        monkeypatch.setenv("INFERENCE_MODE", "ollama")
+        import knowledge_base.vector_store as vs
+        monkeypatch.setattr(vs, "CHROMA_DIR", tmp_path / "chroma_dim")
+
+        from knowledge_base.ingestion import TP53DocumentIngester
+        ing = TP53DocumentIngester()
+        docs = ing.chunk_documents(ing.load_curated_knowledge())[:10]
+
+        ED = "langchain_ollama.embeddings.OllamaEmbeddings.embed_documents"
+        EQ = "langchain_ollama.embeddings.OllamaEmbeddings.embed_query"
+
+        # Phase 1: build the persisted collection at 768-dim.
+        with patch(ED, side_effect=lambda t: [[0.1] * 768 for _ in t]), \
+             patch(EQ, return_value=[0.1] * 768):
+            vs.TP53VectorStore().build(docs)
+
+        # Phase 2: a new store with a 384-dim embedder must detect the mismatch,
+        # rebuild, and serve queries (instead of raising a dimension error).
+        with patch(ED, side_effect=lambda t: [[0.2] * 384 for _ in t]), \
+             patch(EQ, return_value=[0.2] * 384):
+            store2 = vs.TP53VectorStore()
+            store2.build(docs)
+            results = store2.similarity_search("R175H mutation", k=2)
+            assert len(results) > 0
 
 
 class TestPipelineDataFormatting:

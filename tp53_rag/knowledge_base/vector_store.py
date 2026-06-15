@@ -106,7 +106,24 @@ class TP53VectorStore:
                     collection_name=CHROMA_COLLECTION_NAME,
                     embedding_function=self.embedding_model,
                 )
-                return self
+                # Guard: a persisted collection built with a different embedding
+                # dimension (e.g. INFERENCE_MODE switched between Ollama 768-dim
+                # and local ONNX 384-dim) would crash on the first query. Probe
+                # once; on any incompatibility, drop and rebuild below instead of
+                # failing later.
+                try:
+                    self._vectorstore.similarity_search("dimension probe", k=1)
+                    return self
+                except Exception as e:
+                    log.warning(
+                        f"Existing collection incompatible with the current "
+                        f"embedder ({e}); rebuilding from {len(documents)} documents."
+                    )
+                    try:
+                        self._client.delete_collection(CHROMA_COLLECTION_NAME)
+                    except Exception:
+                        pass
+                    # fall through to the rebuild below
         except Exception:
             pass
         log.info(f"Building vector store with {len(documents)} documents...")
