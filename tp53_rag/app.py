@@ -30,6 +30,7 @@ from utils.viz import (
     build_agent_graph_data,
     agent_graph_3d_html,
     variant_annotation_table,
+    variant_effect_gauge,
     domain_legend_chart,
     parse_residues,
     protein_viewer_html,
@@ -52,6 +53,7 @@ from utils.viz import (
     structural_profile_radar,
 )
 from utils.variant_annotation import annotate_variant
+from utils.variant_effect import predict_effect
 
 st.set_page_config(
     page_title="TP53 RAG Platform",
@@ -649,6 +651,18 @@ with tab2:
                 st.info(anno["notes"])
         except Exception as e:
             st.warning(f"Annotation unavailable: {str(e)[:160]}")
+
+        # ── ESM-2 protein-language-model variant effect (offline, precomputed) ──
+        st.markdown("**ESM-2 variant effect** — protein language model "
+                    "(masked-marginal log-likelihood)")
+        try:
+            eff = predict_effect(mutation)
+            st.plotly_chart(variant_effect_gauge(eff), width="stretch",
+                            config={"displayModeBar": False})
+            if not eff.get("available") and eff.get("notes"):
+                st.caption(f"ℹ️ {eff['notes']}")
+        except Exception as e:
+            st.warning(f"ESM-2 effect unavailable: {str(e)[:160]}")
 
     if st.button("🧬 Run Multi-Agent Analysis", width="stretch"):
         st.session_state.pipeline_data = {

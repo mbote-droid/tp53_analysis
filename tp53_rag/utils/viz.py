@@ -319,6 +319,52 @@ def variant_annotation_table(result: Optional[dict]) -> go.Figure:
     return fig
 
 
+def variant_effect_gauge(result: Optional[dict]) -> go.Figure:
+    """Gauge for an ESM-2 variant-effect result (utils.variant_effect).
+
+    Shows the masked-marginal log-likelihood ratio (more negative = more
+    deleterious). If the score is unavailable (matrix not precomputed), returns
+    a clear 'pending' indicator instead of a fabricated value. Never empty.
+    """
+    result = result or {}
+    score = result.get("esm2_score")
+    if score is None:
+        fig = go.Figure(go.Indicator(
+            mode="number",
+            value=0,
+            number={"prefix": "", "suffix": "", "font": {"size": 1, "color": "rgba(0,0,0,0)"}},
+            title={"text": "ESM-2 score<br><span style='font-size:0.8em;color:#8b98a5'>"
+                           "not precomputed — run tools/precompute_esm2.py</span>"},
+        ))
+        fig.update_layout(height=180, margin=dict(l=20, r=20, t=50, b=10),
+                          paper_bgcolor="rgba(0,0,0,0)", font={"color": "#e6edf3"})
+        return fig
+
+    label = result.get("interpretation", "")
+    fig = go.Figure(go.Indicator(
+        mode="gauge+number",
+        value=float(score),
+        number={"font": {"size": 34, "color": "#e6edf3"}, "valueformat": ".2f"},
+        title={"text": f"ESM-2 effect (LLR)<br><span style='font-size:0.8em;color:#8b98a5'>"
+                       f"{label}</span>"},
+        gauge={
+            "axis": {"range": [-15, 5], "tickcolor": "#8b98a5"},
+            "bar": {"color": "#00d4ff"},
+            "steps": [
+                {"range": [-15, -7.5], "color": "#5b1a1a"},   # likely deleterious
+                {"range": [-7.5, -4], "color": "#6b4a16"},    # possibly
+                {"range": [-4, 0], "color": "#2a3340"},       # uncertain
+                {"range": [0, 5], "color": "#1e3a2a"},        # likely tolerated
+            ],
+            "threshold": {"line": {"color": "#ff4b4b", "width": 3},
+                          "thickness": 0.75, "value": -7.5},
+        },
+    ))
+    fig.update_layout(height=240, margin=dict(l=20, r=20, t=60, b=10),
+                      paper_bgcolor="rgba(0,0,0,0)", font={"color": "#e6edf3"})
+    return fig
+
+
 def agent_architecture_diagram(agent_names,
                                spin_revolutions: float = DISPATCH_SPIN_REVOLUTIONS
                                ) -> go.Figure:

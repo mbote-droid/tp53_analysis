@@ -118,6 +118,12 @@ AGENT_REGISTRY = {
         "keywords": ["annotate", "annotation", "vep", "ensembl", "consequence", "sift",
                      "polyphen", "cadd", "gnomad", "allele frequency", "rsid", "myvariant"],
     },
+    "variant_effect": {
+        "description": "ESM-2 protein-language-model variant-effect score "
+                       "(masked-marginal LLR; precomputed offline, no torch at runtime)",
+        "keywords": ["esm", "esm-2", "esm2", "variant effect", "language model",
+                     "deleterious", "llr", "log-likelihood", "deep mutational", "zero-shot"],
+    },
     "sequence_fetch": {
         "description": "Fetch and validate TP53 sequences from NCBI",
         "keywords": ["fetch", "accession", "ncbi", "sequence", "download", "retrieve"],

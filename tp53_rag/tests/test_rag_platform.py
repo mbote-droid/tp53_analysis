@@ -1679,3 +1679,78 @@ class TestVariantAnnotation:
         res = VariantAnnotator().annotate("R175H", use_live=True)
         assert res.protein_change == "R175H"
         assert res.consequence
+
+
+class TestVariantEffectESM2:
+    """ESM-2 variant-effect runtime loader (utils/variant_effect.py). No torch:
+    tests use a synthetic precomputed matrix written to a temp file."""
+
+    def _matrix_file(self, tmp_path):
+        import json as _json
+        seq = list("A" * 393)
+        seq[174] = "R"   # position 175 (1-based) is R, so R175x is valid
+        data = {
+            "model": "test-esm2", "uniprot": "P04637",
+            "sequence": "".join(seq), "sequence_length": 393,
+            "method": "masked_marginal_llr",
+            "scores": {"175": {"H": -9.0, "W": -5.0, "C": -2.0, "K": 1.5}},
+        }
+        p = tmp_path / "esm2.json"
+        p.write_text(_json.dumps(data), encoding="utf-8")
+        return str(p)
+
+    def _pred(self, tmp_path):
+        from utils.variant_effect import VariantEffectPredictor
+        return VariantEffectPredictor(matrix_path=self._matrix_file(tmp_path))
+
+    def test_parse_variant(self):
+        from utils.variant_effect import parse_variant
+        assert parse_variant("R175H") == ("R", 175, "H")
+        assert parse_variant("p.R175H") == ("R", 175, "H")
+        assert parse_variant("nonsense") is None
+
+    def test_unavailable_when_no_matrix(self, tmp_path):
+        from utils.variant_effect import VariantEffectPredictor
+        p = VariantEffectPredictor(matrix_path=str(tmp_path / "missing.json"))
+        assert p.available is False
+        res = p.predict("R175H")
+        assert res.available is False
+        assert "precompute" in res.notes.lower()        # honest, no fabricated score
+        assert res.esm2_score is None
+
+    def test_lookup_and_interpretation_buckets(self, tmp_path):
+        p = self._pred(tmp_path)
+        assert p.available is True
+        assert p.predict("R175H").interpretation == "likely deleterious"   # -9.0
+        assert p.predict("R175W").interpretation == "possibly deleterious"  # -5.0
+        assert p.predict("R175C").interpretation == "uncertain"             # -2.0
+        assert p.predict("R175K").interpretation == "likely tolerated"      # +1.5
+        assert p.predict("R175H").esm2_score == -9.0
+        assert p.predict("R175H").source == "esm2_precomputed"
+
+    def test_wild_type_mismatch_flagged(self, tmp_path):
+        p = self._pred(tmp_path)
+        res = p.predict("A175H")            # ref position 175 is R, not A
+        assert res.available is False
+        assert "mismatch" in res.notes.lower()
+
+    def test_missing_substitution(self, tmp_path):
+        p = self._pred(tmp_path)
+        res = p.predict("R175Q")            # Q not in stored scores
+        assert res.available is False
+        assert "no esm-2 score" in res.notes.lower()
+
+    def test_convenience_dict(self, tmp_path):
+        from utils.variant_effect import VariantEffectPredictor, VariantEffect
+        # convenience uses the module singleton; just assert dataclass->dict shape
+        res = VariantEffectPredictor(matrix_path=self._matrix_file(tmp_path)).predict("R175H")
+        assert isinstance(res, VariantEffect)
+        d = res.to_dict()
+        assert d["mutant"] == "H" and d["position"] == 175
+
+    def test_effect_gauge_viz_never_empty(self, tmp_path):
+        from utils.viz import variant_effect_gauge
+        p = self._pred(tmp_path)
+        assert variant_effect_gauge(p.predict("R175H").to_dict()).data   # available
+        assert variant_effect_gauge({}).data                            # pending state
+        assert variant_effect_gauge(None).data                          # null-safe

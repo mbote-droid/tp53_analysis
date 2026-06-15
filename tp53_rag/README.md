@@ -445,6 +445,13 @@ quality/throughput back up:
   demand. (Local VEP/SnpEff are intentionally avoided — their multi-GB caches
   don't fit the 8 GB / offline-first target; the REST route gives the same real
   data.)
+- **ESM-2 variant-effect prediction** — real protein-language-model scoring
+  (masked-marginal log-likelihood) for TP53 missense variants. The heavy compute
+  runs **once** on a torch/GPU host via `tools/precompute_esm2.py` (fetches the
+  canonical sequence from UniProt, scores every substitution), producing a small
+  JSON matrix the app then serves **offline with no torch at runtime**. Until the
+  matrix is generated the app honestly reports "not computed" — no fabricated
+  scores. Shown as a gauge in the Analysis tab.
 
 ### Evidence & docs
 - **Benchmark the RAG answers**, not just the rule-based variant curator (today
