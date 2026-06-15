@@ -405,6 +405,10 @@ The platform is tuned for 8 GB RAM / no GPU. On a bigger machine you can dial
 quality/throughput back up:
 - **Longer answers:** raise `CTX_RESPONSE` (env var; default `1024`, trimmed
   from 4000 for latency). Set e.g. `CTX_RESPONSE=2048+` for fuller reports.
+- **ESM-2 effect labelling:** the deleterious/uncertain/tolerated cut-offs are
+  env-configurable (no code edit) — `ESM2_THRESH_DELETERIOUS` (-7.5),
+  `ESM2_THRESH_POSSIBLY` (-4.0), `ESM2_THRESH_UNCERTAIN` (0.0). Tune after
+  calibrating against labelled data.
 - **Parallel dispatch (API mode):** "Full Analysis" runs ~6 agents
   sequentially. In `INFERENCE_MODE=api` (no local-RAM cost) these can be run
   concurrently to cut full-dispatch latency toward single-call time.

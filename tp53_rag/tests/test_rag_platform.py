@@ -1728,6 +1728,22 @@ class TestVariantEffectESM2:
         assert p.predict("R175H").esm2_score == -9.0
         assert p.predict("R175H").source == "esm2_precomputed"
 
+    def test_thresholds_are_env_configurable(self, tmp_path, monkeypatch):
+        p = self._pred(tmp_path)
+        # Default: -2.0 (R175C) is "uncertain".
+        monkeypatch.delenv("ESM2_THRESH_UNCERTAIN", raising=False)
+        assert p.predict("R175C").interpretation == "uncertain"
+        # Tighten the "uncertain" ceiling below -2.0 -> -2.0 now "likely tolerated".
+        monkeypatch.setenv("ESM2_THRESH_UNCERTAIN", "-3.0")
+        assert p.predict("R175C").interpretation == "likely tolerated"
+        # Loosen the deleterious cut so -2.0 counts as deleterious.
+        monkeypatch.setenv("ESM2_THRESH_DELETERIOUS", "-1.0")
+        assert p.predict("R175C").interpretation == "likely deleterious"
+        # Garbage env value falls back to the default (no crash).
+        monkeypatch.setenv("ESM2_THRESH_DELETERIOUS", "not-a-number")
+        monkeypatch.delenv("ESM2_THRESH_UNCERTAIN", raising=False)
+        assert p.predict("R175C").interpretation == "uncertain"
+
     def test_wild_type_mismatch_flagged(self, tmp_path):
         p = self._pred(tmp_path)
         res = p.predict("A175H")            # ref position 175 is R, not A

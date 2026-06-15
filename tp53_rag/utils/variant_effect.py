@@ -28,6 +28,7 @@ More negative  ->  the model finds the mutant less likely  ->  more deleterious.
 from __future__ import annotations
 
 import json
+import os
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -40,18 +41,42 @@ DEFAULT_MATRIX_PATH = Path("data/esm2_tp53_effect.json")
 _VARIANT_RE = re.compile(r'\b([A-Z])\s*(\d{1,3})\s*([A-Z])\b', re.I)
 
 # Qualitative buckets for the ESM-2 LLR. Thresholds are heuristic (the ESM
-# variant-effect literature does not fix a universal cut-off); they are reported
-# as guidance, not a clinical call.
-_BUCKETS = [
-    (-7.5, "likely deleterious"),
-    (-4.0, "possibly deleterious"),
-    (0.0, "uncertain"),
-    (float("inf"), "likely tolerated"),
-]
+# variant-effect literature does not fix a universal cut-off) and so are
+# CONFIGURABLE via environment variables — tune the labelling without touching
+# code (e.g. after calibrating against labelled data). More negative = more
+# deleterious; thresholds should stay in ascending order.
+#   ESM2_THRESH_DELETERIOUS  (default -7.5)  score <= this -> "likely deleterious"
+#   ESM2_THRESH_POSSIBLY     (default -4.0)  score <= this -> "possibly deleterious"
+#   ESM2_THRESH_UNCERTAIN    (default  0.0)  score <= this -> "uncertain"; else "likely tolerated"
+_DEFAULT_THRESHOLDS = {
+    "ESM2_THRESH_DELETERIOUS": -7.5,
+    "ESM2_THRESH_POSSIBLY": -4.0,
+    "ESM2_THRESH_UNCERTAIN": 0.0,
+}
+
+
+def _env_float(name: str, default: float) -> float:
+    try:
+        return float(os.getenv(name, default))
+    except (TypeError, ValueError):
+        return default
+
+
+def _buckets() -> List[tuple]:
+    """Thresholds read fresh from env each call so they're runtime-configurable."""
+    return [
+        (_env_float("ESM2_THRESH_DELETERIOUS", _DEFAULT_THRESHOLDS["ESM2_THRESH_DELETERIOUS"]),
+         "likely deleterious"),
+        (_env_float("ESM2_THRESH_POSSIBLY", _DEFAULT_THRESHOLDS["ESM2_THRESH_POSSIBLY"]),
+         "possibly deleterious"),
+        (_env_float("ESM2_THRESH_UNCERTAIN", _DEFAULT_THRESHOLDS["ESM2_THRESH_UNCERTAIN"]),
+         "uncertain"),
+        (float("inf"), "likely tolerated"),
+    ]
 
 
 def _bucket(score: float) -> str:
-    for thresh, label in _BUCKETS:
+    for thresh, label in _buckets():
         if score <= thresh:
             return label
     return "uncertain"
