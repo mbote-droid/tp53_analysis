@@ -124,6 +124,12 @@ AGENT_REGISTRY = {
         "keywords": ["esm", "esm-2", "esm2", "variant effect", "language model",
                      "deleterious", "llr", "log-likelihood", "deep mutational", "zero-shot"],
     },
+    "alphafold_structure": {
+        "description": "Fetch the real AlphaFold-predicted TP53 structure (UniProt P04637) "
+                       "with per-residue pLDDT confidence; render coloured 3D viewer",
+        "keywords": ["alphafold", "structure", "plddt", "predicted", "fold", "3d",
+                     "confidence", "pdb", "model", "uniprot"],
+    },
     "sequence_fetch": {
         "description": "Fetch and validate TP53 sequences from NCBI",
         "keywords": ["fetch", "accession", "ncbi", "sequence", "download", "retrieve"],

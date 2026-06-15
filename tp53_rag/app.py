@@ -31,6 +31,8 @@ from utils.viz import (
     agent_graph_3d_html,
     variant_annotation_table,
     variant_effect_gauge,
+    alphafold_viewer_html,
+    plddt_profile_chart,
     domain_legend_chart,
     parse_residues,
     protein_viewer_html,
@@ -54,6 +56,7 @@ from utils.viz import (
 )
 from utils.variant_annotation import annotate_variant
 from utils.variant_effect import predict_effect
+from utils.alphafold_client import get_tp53_structure
 
 st.set_page_config(
     page_title="TP53 RAG Platform",
@@ -1062,6 +1065,34 @@ with tab6:
                 height=480,
                 scrolling=False,
             )
+
+        # ── AlphaFold predicted structure (real, pLDDT-coloured) ──
+        with st.expander("🧬 AlphaFold predicted structure (real, pLDDT confidence)"):
+            if st.checkbox("Load AlphaFold model for TP53 (UniProt P04637)",
+                           value=False,
+                           help="Fetches the real AlphaFold-predicted structure and "
+                                "colours it by per-residue confidence (pLDDT)."):
+                with st.spinner("Fetching AlphaFold model…"):
+                    struct = get_tp53_structure(use_live=True)
+                if struct.available:
+                    st.caption(
+                        f"Source: 🟢 AlphaFold DB · mean pLDDT **{struct.mean_plddt}** · "
+                        f"{struct.n_residues} residues · [model file]({struct.model_url})"
+                    )
+                    components.html(
+                        alphafold_viewer_html(
+                            struct.pdb_text, residues=parse_residues(highlight),
+                            mean_plddt=struct.mean_plddt),
+                        height=500)
+                    st.plotly_chart(
+                        plddt_profile_chart(struct.per_residue, mean_plddt=struct.mean_plddt),
+                        width="stretch")
+                    hp = ", ".join(f"{r}: {v:.0f}" for r, v in struct.hotspot_plddt.items()
+                                   if v is not None)
+                    if hp:
+                        st.caption(f"Hotspot residue confidence (pLDDT): {hp}")
+                else:
+                    st.info(struct.notes or "AlphaFold model unavailable.")
 
     with col2:
         st.markdown("### Colour Legend")

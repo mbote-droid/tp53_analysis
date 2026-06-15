@@ -1813,3 +1813,110 @@ class TestVariantEffectESM2:
         assert variant_effect_gauge(p.predict("R175H").to_dict()).data   # available
         assert variant_effect_gauge({}).data                            # pending state
         assert variant_effect_gauge(None).data                          # null-safe
+
+
+def _ca_line(resseq: int, bfac: float) -> str:
+    """Build a column-correct PDB CA ATOM line with a given residue + B-factor."""
+    line = [" "] * 80
+    line[0:6] = list("ATOM  ")
+    line[12:16] = list(" CA ")
+    line[17:20] = list("ALA")
+    line[21] = "A"
+    line[22:26] = list(f"{resseq:>4}")
+    line[30:54] = list(f"{10.0:8.3f}{10.0:8.3f}{10.0:8.3f}")
+    line[54:60] = list(f"{1.0:6.2f}")
+    line[60:66] = list(f"{bfac:6.2f}")
+    return "".join(line).rstrip()
+
+
+# Synthetic mini "AlphaFold" PDB: residues across all four confidence bands.
+_SYNTH_PDB = "\n".join([
+    _ca_line(175, 95.0),   # very high
+    _ca_line(248, 80.0),   # confident
+    _ca_line(273, 60.0),   # low
+    _ca_line(282, 40.0),   # very low
+]) + "\nEND\n"
+
+
+class TestAlphaFoldStructure:
+    """Real AlphaFold structure client (utils/alphafold_client.py). Offline/
+    deterministic — network mocked; one live smoke test skips when offline."""
+
+    def test_parse_plddt(self):
+        from utils.alphafold_client import parse_plddt
+        out = parse_plddt(_SYNTH_PDB)
+        assert out["n"] == 4
+        assert out["per_residue"][175] == 95.0
+        assert out["mean"] == round((95 + 80 + 60 + 40) / 4, 1)
+        assert out["bands"] == {"very_high": 1, "confident": 1, "low": 1, "very_low": 1}
+        assert parse_plddt(None)["n"] == 0 and parse_plddt("")["n"] == 0
+
+    def test_plddt_band(self):
+        from utils.alphafold_client import plddt_band
+        assert plddt_band(95) == "very high"
+        assert plddt_band(80) == "confident"
+        assert plddt_band(60) == "low"
+        assert plddt_band(40) == "very low"
+        assert plddt_band(None) == "unknown"
+
+    def test_disabled_when_not_live(self):
+        from utils.alphafold_client import AlphaFoldClient
+        res = AlphaFoldClient().get_structure(use_live=False)
+        assert res.available is False
+        assert res.method == "unavailable"
+        assert "AF-P04637" in res.model_url        # version-agnostic
+
+    def test_live_path_with_mock(self, monkeypatch):
+        from utils.alphafold_client import AlphaFoldClient
+        c = AlphaFoldClient()
+        monkeypatch.setattr(c, "_get_json", lambda url: [{"pdbUrl": "http://x/AF-P04637.pdb"}])
+        monkeypatch.setattr(c, "_get_text", lambda url: _SYNTH_PDB)
+        res = c.get_structure(use_live=True)
+        assert res.available is True
+        assert res.method == "alphafold_live"
+        assert res.mean_plddt == 68.8
+        assert res.hotspot_plddt[175] == 95.0
+        assert res.n_residues == 4
+        assert res.pdb_text                      # PDB retained for the viewer
+
+    def test_unreachable_falls_back_gracefully(self, monkeypatch):
+        from utils.alphafold_client import AlphaFoldClient
+        c = AlphaFoldClient()
+        monkeypatch.setattr(c, "_get_json", lambda url: None)
+        monkeypatch.setattr(c, "_get_text", lambda url: None)
+        res = c.get_structure(use_live=True)
+        assert res.available is False
+        assert "unreachable" in res.notes.lower()   # honest, no invented structure
+
+    def test_to_dict_is_compact(self, monkeypatch):
+        from utils.alphafold_client import AlphaFoldClient
+        c = AlphaFoldClient()
+        monkeypatch.setattr(c, "_get_json", lambda url: [{"pdbUrl": "http://x/AF.pdb"}])
+        monkeypatch.setattr(c, "_get_text", lambda url: _SYNTH_PDB)
+        d = c.get_structure(use_live=True).to_dict()
+        assert "pdb_text" not in d and "per_residue" not in d
+        assert d["pdb_bytes"] > 0
+
+    def test_viewer_html_never_empty(self):
+        from utils.viz import alphafold_viewer_html
+        html = alphafold_viewer_html(_SYNTH_PDB, residues=[175, 248], mean_plddt=68.8)
+        assert "addModel" in html and "afviewer" in html
+        # no model -> graceful message, still non-empty
+        assert "not loaded" in alphafold_viewer_html("")
+
+    def test_plddt_profile_chart_never_empty(self):
+        from utils.viz import plddt_profile_chart
+        per_res = {175: 95.0, 248: 80.0, 273: 60.0, 282: 40.0}
+        assert plddt_profile_chart(per_res, mean_plddt=68.8).data
+        # placeholder is a valid figure with a message (annotation), not a trace
+        assert plddt_profile_chart({}).layout.annotations
+        assert plddt_profile_chart(None).layout.annotations
+
+    @requires_network
+    def test_live_smoke(self):
+        from utils.alphafold_client import get_tp53_structure
+        res = get_tp53_structure(use_live=True)
+        if not res.available:
+            pytest.skip("AlphaFold service unreachable from this host")
+        assert res.n_residues == 393                 # human p53 length
+        assert 0 < res.mean_plddt <= 100

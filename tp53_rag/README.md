@@ -456,6 +456,13 @@ quality/throughput back up:
   JSON matrix the app then serves **offline with no torch at runtime**. Until the
   matrix is generated the app honestly reports "not computed" — no fabricated
   scores. Shown as a gauge in the Analysis tab.
+- **AlphaFold real structure** (Structure tab) — fetches the genuine
+  AlphaFold-predicted p53 structure (UniProt P04637) from the AlphaFold DB and
+  renders it in 3D **coloured by per-residue pLDDT confidence** (very high →
+  very low), with a confidence profile and hotspot-residue pLDDT. Version-proof
+  (resolves the current model via the AlphaFold API); offline-first (falls back
+  to the experimental-structure viewer if unreachable). Fetched server-side, so
+  no browser CORS issues.
 
 ### Evidence & docs
 - **Benchmark the RAG answers**, not just the rule-based variant curator (today

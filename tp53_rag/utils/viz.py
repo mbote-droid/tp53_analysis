@@ -581,6 +581,120 @@ def protein_viewer_html(pdb_id: str, residues) -> str:
     """
 
 
+def alphafold_viewer_html(pdb_text: Optional[str], residues=None,
+                          mean_plddt: Optional[float] = None, height: int = 480) -> str:
+    """Self-contained 3Dmol.js viewer for a real AlphaFold model, coloured by the
+    standard pLDDT confidence scheme (blue=very high ... orange=very low).
+
+    The PDB text is embedded directly (fetched server-side by AlphaFoldClient) so
+    there is no browser CORS issue. Hotspot residues are highlighted. Always
+    returns a non-empty HTML string; shows a clear message if no model/library.
+    """
+    if not pdb_text:
+        return ("<div style='padding:1rem;color:#8b98a5;font-family:monospace;"
+                "background:#0d1117;border-radius:8px;'>AlphaFold model not loaded "
+                "(offline or fetch failed). Use the experimental-structure viewer.</div>")
+    resi_js = ",".join(str(int(r)) for r in (residues or []))
+    pdb_js = json.dumps(pdb_text)
+    mean_txt = (f"mean pLDDT {mean_plddt}" if mean_plddt is not None
+                else "pLDDT confidence")
+    template = """
+    <div style="position:relative;">
+      <div id="afviewer" style="width:100%;height:__H__px;background:#0d1117;
+           border-radius:8px;"></div>
+      <div style="position:absolute;top:8px;right:10px;background:rgba(13,17,23,0.85);
+           padding:6px 9px;border-radius:6px;font-family:sans-serif;font-size:11px;
+           color:#c9d1d9;line-height:1.5;">
+        <b>__MEAN__</b><br>
+        <span style="color:#0053D6;">&#9608;</span> very high (&gt;90)<br>
+        <span style="color:#65CBF3;">&#9608;</span> confident (70-90)<br>
+        <span style="color:#FFDB13;">&#9608;</span> low (50-70)<br>
+        <span style="color:#FF7D45;">&#9608;</span> very low (&lt;50)
+      </div>
+    </div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/3Dmol/2.1.0/3Dmol-min.js"></script>
+    <script>
+      (function() {
+        try {
+          var el = document.getElementById('afviewer');
+          var viewer = $3Dmol.createViewer(el, {backgroundColor: '#0d1117'});
+          viewer.addModel(__PDB__, 'pdb');
+          function plddt(atom) {
+            var b = atom.b;
+            if (b > 90) return 0x0053D6;
+            if (b > 70) return 0x65CBF3;
+            if (b > 50) return 0xFFDB13;
+            return 0xFF7D45;
+          }
+          viewer.setStyle({}, {cartoon: {colorfunc: plddt}});
+          var resi = [__RESI__];
+          resi.forEach(function(r) {
+            viewer.setStyle({resi: r}, {
+              cartoon: {colorfunc: plddt},
+              stick: {colorscheme: 'redCarbon', radius: 0.3},
+              sphere: {color: '#ff3b3b', radius: 0.9}
+            });
+            viewer.addLabel('Res ' + r, {
+              inFront: true, fontSize: 11, fontColor: '#ff6b6b',
+              backgroundColor: '#0d1117', backgroundOpacity: 0.7,
+              position: {resi: r}
+            });
+          });
+          viewer.zoomTo();
+          viewer.render();
+          viewer.spin('y', 0.5);
+        } catch (e) {
+          document.getElementById('afviewer').innerHTML =
+            '<p style=\"color:#8b98a5;font-family:monospace;padding:1rem\">'
+            + '3D viewer needs an internet connection to load the library.</p>';
+        }
+      })();
+    </script>
+    """
+    return (template
+            .replace("__PDB__", pdb_js)
+            .replace("__RESI__", resi_js)
+            .replace("__MEAN__", mean_txt)
+            .replace("__H__", str(int(height))))
+
+
+def plddt_profile_chart(per_residue: Optional[dict],
+                        mean_plddt: Optional[float] = None) -> go.Figure:
+    """Per-residue AlphaFold pLDDT confidence profile. Pure + never-empty."""
+    if not per_residue:
+        return _empty_fig("pLDDT profile — load the AlphaFold model")
+    items = sorted(((int(k), float(v)) for k, v in per_residue.items()), key=lambda x: x[0])
+    xs = [i for i, _ in items]
+    ys = [v for _, v in items]
+
+    def _col(v):
+        if v > 90: return "#0053D6"
+        if v > 70: return "#65CBF3"
+        if v > 50: return "#FFDB13"
+        return "#FF7D45"
+
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(
+        x=xs, y=ys, mode="lines", line=dict(color="#3a4756", width=1),
+        hoverinfo="skip", showlegend=False))
+    fig.add_trace(go.Scatter(
+        x=xs, y=ys, mode="markers",
+        marker=dict(size=4, color=[_col(v) for v in ys]),
+        text=[f"residue {i}: pLDDT {v:.0f}" for i, v in items],
+        hoverinfo="text", showlegend=False))
+    for thr in (50, 70, 90):
+        fig.add_hline(y=thr, line=dict(color="#2a3340", width=1, dash="dot"))
+    title = "AlphaFold per-residue confidence (pLDDT)"
+    if mean_plddt is not None:
+        title += f" — mean {mean_plddt}"
+    fig.update_layout(
+        title=title, height=300, margin=dict(l=10, r=10, t=40, b=10),
+        xaxis_title="Residue", yaxis_title="pLDDT",
+        yaxis=dict(range=[0, 100]), paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#e6edf3"))
+    return fig
+
+
 def pathogenicity_gauge(significance: str, confidence: Optional[float] = None) -> go.Figure:
     """Benign -> Pathogenic gauge for a variant classification. Never empty."""
     pos = {
