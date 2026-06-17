@@ -1920,3 +1920,91 @@ class TestAlphaFoldStructure:
             pytest.skip("AlphaFold service unreachable from this host")
         assert res.n_residues == 393                 # human p53 length
         assert 0 < res.mean_plddt <= 100
+
+
+class TestExportDisclaimer:
+    """RUO disclaimer stamping on exported artifacts (utils/export_disclaimer.py).
+    Pure + deterministic — every download leaving the app must carry the notice."""
+
+    def test_markdown_wraps_content(self):
+        from utils.export_disclaimer import stamp_markdown, RUO_DISCLAIMER
+        out = stamp_markdown("## My Report\nFindings here.")
+        assert "Research Use Only" in out
+        assert RUO_DISCLAIMER in out
+        assert "Findings here." in out          # original body preserved
+        assert out.startswith(">")              # header blockquote first
+
+    def test_markdown_title_optional(self):
+        from utils.export_disclaimer import stamp_markdown
+        assert "# TNM Report" in stamp_markdown("body", title="TNM Report")
+        assert "# " not in stamp_markdown("body").split("body")[0].replace(
+            "# Research", "")  # no spurious title when omitted
+
+    def test_markdown_never_empty(self):
+        from utils.export_disclaimer import stamp_markdown, RUO_DISCLAIMER
+        for junk in (None, "", "   "):
+            out = stamp_markdown(junk)
+            assert RUO_DISCLAIMER in out and len(out) > 50
+
+    def test_dict_injects_metadata_without_mutating(self):
+        from utils.export_disclaimer import stamp_dict, RUO_DISCLAIMER
+        original = {"mutation": "R175H", "vaf": 42}
+        stamped = stamp_dict(original)
+        assert stamped["_disclaimer"] == RUO_DISCLAIMER
+        assert stamped["mutation"] == "R175H"
+        assert "_generated_utc" in stamped and "_source" in stamped
+        assert "_disclaimer" not in original     # caller object untouched
+
+    def test_dict_preserves_colliding_user_key(self):
+        from utils.export_disclaimer import stamp_dict, RUO_DISCLAIMER
+        stamped = stamp_dict({"_disclaimer": "user wrote this"})
+        assert stamped["_disclaimer"] == RUO_DISCLAIMER     # ours wins
+        assert stamped["_user_disclaimer"] == "user wrote this"  # theirs kept
+
+    def test_dict_wraps_non_dict(self):
+        from utils.export_disclaimer import stamp_dict
+        stamped = stamp_dict([1, 2, 3])
+        assert stamped["data"] == [1, 2, 3]
+        assert "_disclaimer" in stamped
+
+    def test_json_valid_and_embeds_notice(self):
+        from utils.export_disclaimer import stamp_json, RUO_DISCLAIMER
+        import json as _json
+        text = stamp_json({"stage": "IIIA"})
+        parsed = _json.loads(text)               # must be valid JSON
+        assert parsed["_disclaimer"] == RUO_DISCLAIMER
+        assert parsed["stage"] == "IIIA"
+
+    def test_json_survives_unserialisable(self):
+        from utils.export_disclaimer import stamp_json
+        from datetime import datetime as _dt
+        import json as _json
+        text = stamp_json({"when": _dt.now()})       # datetime not native JSON
+        _json.loads(text)                            # must not raise
+
+    def test_fhir_adds_security_tag(self):
+        from utils.export_disclaimer import stamp_fhir
+        res = stamp_fhir({"resourceType": "ClinicalImpression", "status": "completed"})
+        codes = [c["code"] for c in res["meta"]["security"]]
+        assert "HRESCH" in codes
+        assert res["resourceType"] == "ClinicalImpression"   # schema intact
+        assert any("Research Use Only" in n["text"] for n in res["note"])
+
+    def test_fhir_idempotent(self):
+        from utils.export_disclaimer import stamp_fhir
+        once = stamp_fhir({"resourceType": "Basic"})
+        twice = stamp_fhir(once)
+        # security tag not duplicated
+        assert sum(c["code"] == "HRESCH" for c in twice["meta"]["security"]) == 1
+
+    def test_fhir_handles_empty(self):
+        from utils.export_disclaimer import stamp_fhir
+        res = stamp_fhir(None)
+        assert res["resourceType"] == "Basic"
+        assert res["meta"]["security"][0]["code"] == "HRESCH"
+
+    def test_fhir_does_not_mutate_input(self):
+        from utils.export_disclaimer import stamp_fhir
+        original = {"resourceType": "Observation"}
+        stamp_fhir(original)
+        assert "meta" not in original

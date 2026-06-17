@@ -57,6 +57,7 @@ from utils.viz import (
 from utils.variant_annotation import annotate_variant
 from utils.variant_effect import predict_effect
 from utils.alphafold_client import get_tp53_structure
+from utils.export_disclaimer import stamp_markdown, stamp_json, stamp_fhir
 
 st.set_page_config(
     page_title="TP53 RAG Platform",
@@ -767,7 +768,7 @@ with tab2:
         if st.button("💾 Download JSON"):
             st.download_button(
                 "Download",
-                json.dumps({"mutation": mutation, "cancer": cancer}, indent=2),
+                stamp_json({"mutation": mutation, "cancer": cancer}),
                 f"tp53_{mutation}_{datetime.now().strftime('%Y%m%d')}.json",
                 "application/json",
             )
@@ -983,7 +984,7 @@ with tab5:
 
         st.download_button(
             "⬇️ Download Report",
-            result["answer"],
+            stamp_markdown(result["answer"], title=f"TP53 Clinical Report — {rep_mutation}"),
             file_name=f"report_{rep_mutation}_{datetime.now().strftime('%Y%m%d')}.md",
         )
 
@@ -1344,7 +1345,8 @@ with tab9:
 
                     st.download_button(
                         "⬇️ Download Report",
-                        data=result["llm_narration"],
+                        data=stamp_markdown(result["llm_narration"],
+                                            title="TP53 Pathology Report"),
                         file_name="pathology_report.md",
                         mime="text/markdown"
                     )
@@ -1544,12 +1546,12 @@ not a replacement for pathological staging.*
         st.divider()
         st.download_button(
             "⬇️ Download TNM Report (JSON)",
-            data=json.dumps(result, indent=2),
+            data=stamp_json(result),
             file_name=f"tnm_{result.get('mutation', 'unknown')}_{result.get('stage_group', 'unknown')}.json",
             mime="application/json",
         )
         if st.checkbox("Show FHIR R4 ClinicalImpression resource"):
-            st.json(result.get("fhir_resource", {}))
+            st.json(stamp_fhir(result.get("fhir_resource", {})))
 
 # ── TAB 11: African TP53 Atlas ────────────────────────────────────
 with tab11:
