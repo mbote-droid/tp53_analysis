@@ -239,15 +239,10 @@ def agent_graph_3d_html(graph_data: Optional[dict] = None, height: int = 560) ->
     Offline? The 2D dispatch diagram below still works.
   </div>
 </div>
-<script src="https://unpkg.com/3d-force-graph"></script>
 <script>
 (function(){
   var DATA = __DATA__;
   function boot(){
-    if (typeof ForceGraph3D === 'undefined') {
-      document.getElementById('tp53-agraph-fallback').style.display = 'block';
-      return;
-    }
     var el = document.getElementById('tp53-agraph');
     var Graph = ForceGraph3D()(el)
       .graphData(DATA)
@@ -271,8 +266,20 @@ def agent_graph_3d_html(graph_data: Optional[dict] = None, height: int = 560) ->
           node, 1400);
       });
   }
-  if (document.readyState === 'complete') boot();
-  else window.addEventListener('load', boot);
+  function showFallback(){
+    document.getElementById('tp53-agraph-fallback').style.display = 'block';
+  }
+  var s = document.createElement('script');
+  s.src = 'https://unpkg.com/3d-force-graph';
+  s.onload = boot;
+  s.onerror = function(){
+    var s2 = document.createElement('script');
+    s2.src = 'https://cdn.jsdelivr.net/npm/3d-force-graph';
+    s2.onload = boot;
+    s2.onerror = showFallback;
+    document.head.appendChild(s2);
+  };
+  document.head.appendChild(s);
 })();
 </script>
 """
