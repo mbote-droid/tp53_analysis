@@ -491,10 +491,11 @@ st.markdown(
 )
 
 # ── Tabs ──────────────────────────────────────────────────────────
-(tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10, tab11,
+(tab1, tab2, tab13, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10, tab11,
  tab12) = st.tabs([
     "🔍 Query",
     "🧬 Analysis",
+    "⭐ Tumour Board",
     "💊 Drug Discovery",
     "📊 Visualization",
     "📋 Report",
@@ -795,6 +796,53 @@ with tab2:
                 f"tp53_{mutation}_{datetime.now().strftime('%Y%m%d')}.json",
                 "application/json",
             )
+
+# ── TAB: Live AI Tumour Board (hero) ──────────────────────────────
+with tab13:
+    st.markdown("## ⭐ Live AI Tumour Board")
+    st.caption(
+        "Six AI specialists deliberate a TP53 case, cross-examine each other, "
+        "and vote toward a consensus recommendation — each with a confidence "
+        "earned from the strength of the underlying evidence."
+    )
+    tb_col1, tb_col2, tb_col3 = st.columns([2, 2, 1])
+    with tb_col1:
+        tb_mut = st.text_input("TP53 mutation", value="R175H", key="tb_mut")
+    with tb_col2:
+        tb_cancer = st.selectbox(
+            "Cancer type",
+            ["Breast", "Colorectal", "Lung", "Ovarian", "Gastric", "Other"],
+            key="tb_cancer",
+        )
+    with tb_col3:
+        tb_stage = st.selectbox("Stage", ["I", "II", "III", "IV", "Unknown"],
+                                key="tb_stage")
+
+    if st.button("🧑‍⚕️ Convene the board", width="stretch", key="tb_go"):
+        try:
+            from agents.tumor_board import convene_tumor_board
+            from utils.viz import tumor_board_html
+            board = convene_tumor_board(
+                tb_mut, {"cancer": tb_cancer, "stage": tb_stage})
+            st.session_state["tb_board"] = board
+        except Exception as e:
+            st.error(f"Tumour board unavailable: {str(e)[:160]}")
+
+    board = st.session_state.get("tb_board")
+    if board:
+        from utils.viz import tumor_board_html
+        components.html(tumor_board_html(board), height=760, scrolling=True)
+        with st.expander("⬇️ Export consensus (JSON, RUO-stamped)"):
+            st.download_button(
+                "Download tumour-board consensus",
+                stamp_json(board),
+                file_name=f"tumour_board_{board.get('mutation','case')}.json",
+                mime="application/json",
+                key="tb_dl",
+            )
+    else:
+        st.info("Enter a mutation and convene the board to watch the debate.")
+
 
 # ── TAB 3: Drug Discovery ─────────────────────────────────────────
 with tab3:

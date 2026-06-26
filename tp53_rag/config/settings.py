@@ -130,6 +130,14 @@ AGENT_REGISTRY = {
         "keywords": ["alphafold", "structure", "plddt", "predicted", "fold", "3d",
                      "confidence", "pdb", "model", "uniprot"],
     },
+    "tumor_board": {
+        "description": "Convene a simulated multidisciplinary tumour board "
+                       "(pathologist/geneticist/oncologist/surgeon/pharmacologist/"
+                       "equity) that debates and votes toward a consensus with "
+                       "calibrated confidence",
+        "keywords": ["tumour board", "tumor board", "board", "consensus", "debate",
+                     "multidisciplinary", "mdt", "panel", "specialists", "vote"],
+    },
     "sequence_fetch": {
         "description": "Fetch and validate TP53 sequences from NCBI",
         "keywords": ["fetch", "accession", "ncbi", "sequence", "download", "retrieve"],

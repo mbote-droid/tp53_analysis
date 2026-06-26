@@ -2107,3 +2107,128 @@ class TestNeedlePlot:
         from utils.viz import needle_plot
         fig = needle_plot([{"position": 175}], title="My Cohort")
         assert "My Cohort" in fig.layout.title.text
+
+
+class TestTumorBoard:
+    """Live AI Tumour Board (agents/tumor_board.py). Deterministic, offline,
+    curated. Confidence is earned: hotspots → high, VUS → reclassify."""
+
+    def test_parse_contact_mutant(self):
+        from agents.tumor_board import parse_variant
+        vp = parse_variant("R248Q")
+        assert vp.codon == 248 and vp.klass == "contact"
+        assert vp.in_dbd and vp.reactivatable
+
+    def test_parse_conformational_mutant(self):
+        from agents.tumor_board import parse_variant
+        vp = parse_variant("p.R175H")
+        assert vp.codon == 175 and vp.klass == "conformational"
+        assert vp.reactivatable
+
+    def test_parse_truncating(self):
+        from agents.tumor_board import parse_variant
+        vp = parse_variant("R213*")
+        assert vp.klass == "truncating" and not vp.reactivatable
+
+    def test_parse_non_hotspot_missense(self):
+        from agents.tumor_board import parse_variant
+        vp = parse_variant("A159V")
+        assert vp.klass == "non_hotspot_missense"
+
+    def test_parse_garbage_is_unknown_not_crash(self):
+        from agents.tumor_board import parse_variant
+        for junk in ("", None, "???", "hello"):
+            vp = parse_variant(junk)
+            assert vp.klass == "unknown" and vp.codon is None
+
+    def test_convene_has_all_six_members(self):
+        from agents.tumor_board import convene_tumor_board
+        out = convene_tumor_board("R175H", {"cancer": "Breast", "stage": "II"})
+        assert len(out["members"]) == 6
+        roles = {m["member"] for m in out["members"]}
+        assert "Pathologist" in roles and "Equity Officer" in roles
+
+    def test_convene_never_empty_and_labelled(self):
+        from agents.tumor_board import convene_tumor_board
+        out = convene_tumor_board("")
+        assert out["members"] and out["consensus"]["recommendation"]
+        assert "research use only" in out["disclaimer"].lower()
+
+    def test_hotspot_consensus_is_confident(self):
+        from agents.tumor_board import convene_tumor_board, THEME_RECLASSIFY
+        out = convene_tumor_board("R248Q", {"cancer": "Colorectal", "stage": "II"})
+        c = out["consensus"]
+        assert c["recommendation"] != THEME_RECLASSIFY        # enough evidence
+        assert c["confidence"] >= 0.5
+
+    def test_vus_is_cautious_and_flagged(self):
+        from agents.tumor_board import convene_tumor_board
+        out = convene_tumor_board("A159V")                    # non-hotspot VUS
+        gen = next(m for m in out["members"]
+                   if m["member"] == "Clinical Geneticist")
+        assert "uncertain" in gen["stance"].lower() or "vus" in gen["stance"].lower()
+        # Earned-low confidence: a VUS panel is less certain than a hotspot panel.
+        assert out["consensus"]["confidence"] <= 0.5
+
+    def test_unknown_variant_consensus_reclassify(self):
+        from agents.tumor_board import convene_tumor_board, THEME_RECLASSIFY
+        out = convene_tumor_board("???")                      # unparseable
+        assert out["consensus"]["recommendation"] == THEME_RECLASSIFY
+
+    def test_reactivatable_hotspot_surfaces_reactivation(self):
+        from agents.tumor_board import convene_tumor_board, THEME_REACTIVATION
+        out = convene_tumor_board("R175H", {"cancer": "Breast", "stage": "II"})
+        recs = {m["recommendation"] for m in out["members"]}
+        assert THEME_REACTIVATION in recs                     # pharmacologist/geneticist
+
+    def test_confidence_in_unit_range(self):
+        from agents.tumor_board import convene_tumor_board
+        out = convene_tumor_board("R273H", {"cancer": "Lung", "stage": "IV"})
+        for m in out["members"]:
+            assert 0.0 <= m["confidence"] <= 1.0
+        assert 0.0 <= out["consensus"]["confidence"] <= 1.0
+
+    def test_debate_generates_exchanges(self):
+        from agents.tumor_board import convene_tumor_board
+        out = convene_tumor_board("A159V")
+        assert out["debate"]                                  # never empty
+        assert all("text" in d and "type" in d for d in out["debate"])
+
+    def test_metastatic_surgeon_defers_resection(self):
+        from agents.tumor_board import convene_tumor_board
+        out = convene_tumor_board("R248Q", {"cancer": "Gastric", "stage": "IV"})
+        surgeon = next(m for m in out["members"] if m["member"] == "Surgical Oncologist")
+        assert "systemic" in surgeon["stance"].lower() or "not primary" in surgeon["stance"].lower()
+
+    def test_agreement_ratio_and_dissents_consistent(self):
+        from agents.tumor_board import convene_tumor_board
+        out = convene_tumor_board("R175H", {"cancer": "Breast", "stage": "II"})
+        c = out["consensus"]
+        assert 0.0 <= c["agreement_ratio"] <= 1.0
+        # dissent count + backers should equal total members
+        backers = round(c["agreement_ratio"] * len(out["members"]))
+        assert backers + len(c["dissents"]) == len(out["members"])
+
+    def test_board_html_renders_and_is_injection_safe(self):
+        from utils.viz import tumor_board_html
+        from agents.tumor_board import convene_tumor_board
+        out = convene_tumor_board("R248Q", {"cancer": "Colorectal", "stage": "II"})
+        html_str = tumor_board_html(out)
+        assert "Live AI Tumour Board" in html_str
+        assert "Consensus recommendation" in html_str
+        # injection-safe: a script-laden mutation must be escaped
+        evil = convene_tumor_board("<script>alert(1)</script>")
+        safe = tumor_board_html(evil)
+        assert "<script>alert(1)</script>" not in safe
+        assert "&lt;script&gt;" in safe
+
+    def test_board_html_never_empty(self):
+        from utils.viz import tumor_board_html
+        out = tumor_board_html(None)
+        assert "tumour board" in out.lower() and len(out) > 50
+        assert tumor_board_html({"members": []})  # graceful
+
+    def test_registered_in_agent_registry(self):
+        from config.settings import AGENT_REGISTRY
+        assert "tumor_board" in AGENT_REGISTRY
+        assert AGENT_REGISTRY["tumor_board"]["keywords"]

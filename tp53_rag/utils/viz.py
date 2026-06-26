@@ -8,6 +8,7 @@ gracefully on bad input.
 """
 from __future__ import annotations
 
+import html
 import json
 import math
 from typing import Optional
@@ -1584,3 +1585,186 @@ def docking_pose_html(pdb_id: str, residues, drug_name: str = "",
       }})();
     </script>
     """
+
+
+# ── Live AI Tumour Board (the hero visual) ────────────────────────
+_THEME_TAG_COLOR = {
+    "p53-reactivation pathway (trial / molecular board referral)": "#00d4ff",
+    "stage-directed standard of care with TP53-aware prognosis": "#2ecc71",
+    "reclassify the variant before acting (insufficient evidence)": "#f1c40f",
+}
+
+
+def _conf_color(c: float) -> str:
+    """Confidence → colour ramp (red→amber→green)."""
+    try:
+        c = float(c)
+    except (TypeError, ValueError):
+        c = 0.0
+    if c >= 0.75:
+        return "#2ecc71"
+    if c >= 0.5:
+        return "#f1c40f"
+    return "#ff6b6b"
+
+
+def tumor_board_html(board: Optional[dict], height: int = 720) -> str:
+    """Self-contained HTML for the Live AI Tumour Board — specialist cards with
+    confidence meters, a sequentially-revealed debate stream, and a consensus
+    banner. Year-2100 aesthetic. Pure + never-empty; injection-safe (all
+    case-derived text is HTML-escaped).
+    """
+    board = board or {}
+    members = board.get("members") or []
+    debate = board.get("debate") or []
+    consensus = board.get("consensus") or {}
+    mutation = html.escape(str(board.get("mutation") or "—"))
+
+    if not members:
+        return ("<div style='padding:24px;color:#8b98a5;font-family:sans-serif;"
+                "background:#0d1117;border-radius:12px'>No case convened yet — "
+                "enter a TP53 mutation to assemble the tumour board.</div>")
+
+    # ── Member cards ─────────────────────────────────────────────
+    cards = []
+    for i, m in enumerate(members):
+        conf = float(m.get("confidence", 0.0))
+        conf_pct = max(0, min(100, round(conf * 100)))
+        ccol = _conf_color(conf)
+        rec = m.get("recommendation", "")
+        tag_col = _THEME_TAG_COLOR.get(rec, "#8b98a5")
+        concerns = "".join(
+            f"<li>{html.escape(str(c))}</li>" for c in (m.get("concerns") or [])
+        )
+        concerns_block = (f"<ul class='tb-concerns'>{concerns}</ul>"
+                          if concerns else "")
+        cards.append(
+            "<div class='tb-card' style='animation-delay:%dms'>" % (i * 180)
+            + f"<div class='tb-card-head'><span class='tb-icon'>"
+              f"{html.escape(str(m.get('icon','•')))}</span>"
+              f"<div><div class='tb-name'>{html.escape(str(m.get('member','')))}</div>"
+              f"<div class='tb-spec'>{html.escape(str(m.get('specialty','')))}</div>"
+              f"</div></div>"
+            + f"<div class='tb-stance'>{html.escape(str(m.get('stance','')))}</div>"
+            + f"<div class='tb-rationale'>{html.escape(str(m.get('rationale','')))}</div>"
+            + "<div class='tb-conf-row'><span class='tb-conf-label'>confidence</span>"
+              f"<div class='tb-conf-track'><div class='tb-conf-fill' "
+              f"style='width:{conf_pct}%;background:{ccol}'></div></div>"
+              f"<span class='tb-conf-val' style='color:{ccol}'>{conf_pct}%</span></div>"
+            + f"<div class='tb-tag' style='border-color:{tag_col};color:{tag_col}'>"
+              f"{html.escape(str(rec))}</div>"
+            + concerns_block
+            + "</div>"
+        )
+    cards_html = "\n".join(cards)
+
+    # ── Debate stream ────────────────────────────────────────────
+    base_delay = len(members) * 180 + 200
+    bubbles = []
+    for j, d in enumerate(debate):
+        kind = d.get("type", "note")
+        icon = {"agreement": "🤝", "challenge": "⚔️", "note": "📋"}.get(kind, "💬")
+        col = {"agreement": "#2ecc71", "challenge": "#ff6b6b"}.get(kind, "#8b98a5")
+        bubbles.append(
+            "<div class='tb-bubble' style='animation-delay:%dms;border-left-color:%s'>"
+            % (base_delay + j * 320, col)
+            + f"<span class='tb-bubble-ic'>{icon}</span>"
+            + f"<span>{html.escape(str(d.get('text','')))}</span></div>"
+        )
+    bubbles_html = "\n".join(bubbles)
+
+    # ── Consensus banner ─────────────────────────────────────────
+    cc = float(consensus.get("confidence", 0.0))
+    cc_pct = max(0, min(100, round(cc * 100)))
+    cc_col = _conf_color(cc)
+    agree_pct = round(float(consensus.get("agreement_ratio", 0.0)) * 100)
+    rec_text = html.escape(str(consensus.get("recommendation", "—")))
+    rationale = html.escape(str(consensus.get("rationale", "")))
+    dissents = consensus.get("dissents") or []
+    dissent_html = ("<div class='tb-dissent'>Dissent: "
+                    + html.escape("; ".join(str(x) for x in dissents)) + "</div>"
+                    ) if dissents else ""
+    consensus_delay = base_delay + len(debate) * 320 + 200
+
+    template = """
+<div class="tb-root">
+  <style>
+    .tb-root{font-family:'Inter',system-ui,sans-serif;background:radial-gradient(
+        circle at 20% 0%,#16203a 0%,#0d1117 60%);border-radius:14px;padding:18px;
+        color:#e6edf3;border:1px solid #1f2937;}
+    .tb-title{font-size:1.05rem;font-weight:700;letter-spacing:.3px;margin-bottom:2px;}
+    .tb-sub{font-size:.78rem;color:#8b98a5;margin-bottom:14px;}
+    .tb-mut{color:#00d4ff;font-family:'JetBrains Mono',monospace;}
+    .tb-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));
+        gap:12px;margin-bottom:16px;}
+    .tb-card{background:rgba(22,32,58,.55);border:1px solid #25304a;border-radius:11px;
+        padding:13px;opacity:0;transform:translateY(10px);
+        animation:tbIn .5s ease forwards;backdrop-filter:blur(4px);}
+    .tb-card-head{display:flex;gap:9px;align-items:center;margin-bottom:8px;}
+    .tb-icon{font-size:1.4rem;}
+    .tb-name{font-weight:650;font-size:.9rem;}
+    .tb-spec{font-size:.7rem;color:#8b98a5;}
+    .tb-stance{font-size:.82rem;font-weight:600;color:#cdd9e5;margin-bottom:5px;}
+    .tb-rationale{font-size:.74rem;color:#9aa7b4;line-height:1.4;margin-bottom:9px;}
+    .tb-conf-row{display:flex;align-items:center;gap:7px;margin-bottom:9px;}
+    .tb-conf-label{font-size:.62rem;text-transform:uppercase;color:#6b7685;
+        letter-spacing:.5px;}
+    .tb-conf-track{flex:1;height:6px;background:#1b2435;border-radius:4px;overflow:hidden;}
+    .tb-conf-fill{height:100%;border-radius:4px;animation:tbGrow 1s ease forwards;}
+    .tb-conf-val{font-size:.72rem;font-weight:700;font-family:'JetBrains Mono',monospace;}
+    .tb-tag{font-size:.66rem;border:1px solid;border-radius:20px;padding:3px 9px;
+        display:inline-block;margin-bottom:6px;}
+    .tb-concerns{margin:4px 0 0;padding-left:16px;font-size:.68rem;color:#c9a24a;}
+    .tb-stream{margin:6px 0 16px;}
+    .tb-bubble{background:rgba(13,17,23,.6);border-left:3px solid;border-radius:7px;
+        padding:8px 11px;margin-bottom:7px;font-size:.78rem;color:#cdd9e5;
+        display:flex;gap:8px;opacity:0;animation:tbIn .45s ease forwards;}
+    .tb-bubble-ic{flex-shrink:0;}
+    .tb-consensus{background:linear-gradient(135deg,rgba(0,212,255,.08),
+        rgba(46,204,113,.06));border:1px solid #2a3a52;border-radius:12px;padding:16px;
+        opacity:0;animation:tbIn .6s ease forwards;}
+    .tb-consensus-h{font-size:.7rem;text-transform:uppercase;letter-spacing:1px;
+        color:#8b98a5;margin-bottom:6px;}
+    .tb-rec{font-size:1rem;font-weight:700;margin-bottom:8px;}
+    .tb-meters{display:flex;gap:22px;margin:10px 0;flex-wrap:wrap;}
+    .tb-meter-v{font-size:1.5rem;font-weight:800;font-family:'JetBrains Mono',monospace;}
+    .tb-meter-l{font-size:.66rem;color:#8b98a5;text-transform:uppercase;}
+    .tb-crationale{font-size:.8rem;color:#b6c2cf;line-height:1.5;}
+    .tb-dissent{font-size:.72rem;color:#c9a24a;margin-top:8px;}
+    .tb-foot{font-size:.66rem;color:#6b7685;margin-top:14px;border-top:1px solid #1f2937;
+        padding-top:9px;}
+    @keyframes tbIn{to{opacity:1;transform:translateY(0);}}
+    @keyframes tbGrow{from{width:0;}}
+  </style>
+  <div class="tb-title">🧑‍⚕️ Live AI Tumour Board</div>
+  <div class="tb-sub">Case: <span class="tb-mut">__MUT__</span> · six specialists deliberate, then vote toward consensus</div>
+  <div class="tb-grid">__CARDS__</div>
+  <div class="tb-stream">__BUBBLES__</div>
+  <div class="tb-consensus" style="animation-delay:__CDELAY__ms">
+    <div class="tb-consensus-h">⚖️ Consensus recommendation</div>
+    <div class="tb-rec" style="color:__CCOL__">__REC__</div>
+    <div class="tb-meters">
+      <div><div class="tb-meter-v" style="color:__CCOL__">__CPCT__%</div>
+           <div class="tb-meter-l">confidence</div></div>
+      <div><div class="tb-meter-v">__APCT__%</div>
+           <div class="tb-meter-l">panel agreement</div></div>
+    </div>
+    <div class="tb-crationale">__RATIONALE__</div>
+    __DISSENT__
+  </div>
+  <div class="tb-foot">__DISCLAIMER__</div>
+</div>
+"""
+    return (template
+            .replace("__MUT__", mutation)
+            .replace("__CARDS__", cards_html)
+            .replace("__BUBBLES__", bubbles_html)
+            .replace("__CDELAY__", str(consensus_delay))
+            .replace("__CCOL__", cc_col)
+            .replace("__REC__", rec_text)
+            .replace("__CPCT__", str(cc_pct))
+            .replace("__APCT__", str(agree_pct))
+            .replace("__RATIONALE__", rationale)
+            .replace("__DISSENT__", dissent_html)
+            .replace("__DISCLAIMER__",
+                     html.escape(str(board.get("disclaimer", "")))))
