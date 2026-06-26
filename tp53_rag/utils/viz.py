@@ -1768,3 +1768,134 @@ def tumor_board_html(board: Optional[dict], height: int = 720) -> str:
             .replace("__DISSENT__", dissent_html)
             .replace("__DISCLAIMER__",
                      html.escape(str(board.get("disclaimer", "")))))
+
+
+# ── Explainability ("Why?") panel ─────────────────────────────────
+_STRENGTH_STYLE = {
+    "strong":     ("#2ecc71", "STRONG"),
+    "moderate":   ("#00d4ff", "MODERATE"),
+    "supporting": ("#f1c40f", "SUPPORTING"),
+    "uncertain":  ("#ff8c6b", "UNCERTAIN"),
+}
+
+
+def explainability_panel_html(exp: Optional[dict], height: int = 640) -> str:
+    """Self-contained HTML for the Explainability 'Why?' trace — headline
+    classification with confidence, evidence lines tagged by strength, the
+    perturbed pathways, citations and an explicit uncertainty list. Pure +
+    never-empty + injection-safe.
+    """
+    exp = exp or {}
+    evidence = exp.get("evidence") or []
+    if not exp.get("classification") and not evidence:
+        return ("<div style='padding:22px;color:#8b98a5;font-family:sans-serif;"
+                "background:#0d1117;border-radius:12px'>No explanation yet — "
+                "assess a variant to see why.</div>")
+
+    mutation = html.escape(str(exp.get("mutation") or "—"))
+    headline = html.escape(str(exp.get("headline") or "—"))
+    conf = float(exp.get("confidence", 0.0))
+    conf_pct = max(0, min(100, round(conf * 100)))
+    ccol = _conf_color(conf)
+
+    rows = []
+    for e in evidence:
+        col, lbl = _STRENGTH_STYLE.get(e.get("strength", "uncertain"),
+                                       ("#8b98a5", "?"))
+        rows.append(
+            "<div class='ex-row'>"
+            f"<span class='ex-badge' style='background:{col}1a;color:{col};"
+            f"border-color:{col}'>{lbl}</span>"
+            f"<div class='ex-body'><span class='ex-src'>"
+            f"{html.escape(str(e.get('source','')))}</span>"
+            f"<span class='ex-cat'>{html.escape(str(e.get('category','')))}</span>"
+            f"<div class='ex-stmt'>{html.escape(str(e.get('statement','')))}</div>"
+            "</div></div>"
+        )
+    rows_html = "\n".join(rows)
+
+    paths = "".join(
+        f"<li><b>{html.escape(str(p.get('pathway','')))}</b> "
+        f"({html.escape(str(p.get('effector','')))}) — "
+        f"{html.escape(str(p.get('consequence','')))}</li>"
+        for p in (exp.get("pathways") or [])
+    )
+    paths_block = f"<ul class='ex-list'>{paths}</ul>" if paths else \
+        "<div class='ex-empty'>No pathway mapping for this variant.</div>"
+
+    cites = "".join(
+        f"<li>{html.escape(str(c.get('ref','')))} — "
+        f"<i>{html.escape(str(c.get('topic','')))}</i></li>"
+        for c in (exp.get("citations") or [])
+    )
+    unc = "".join(f"<li>{html.escape(str(u))}</li>"
+                  for u in (exp.get("uncertainty") or []))
+
+    plain = html.escape(str(exp.get("plain_language") or ""))
+    disclaimer = html.escape(str(exp.get("disclaimer") or ""))
+
+    template = """
+<div class="ex-root">
+  <style>
+    .ex-root{font-family:'Inter',system-ui,sans-serif;background:radial-gradient(
+        circle at 80% 0%,#15233a 0%,#0d1117 60%);border:1px solid #1f2937;
+        border-radius:14px;padding:18px;color:#e6edf3;}
+    .ex-head{display:flex;justify-content:space-between;align-items:center;
+        flex-wrap:wrap;gap:10px;margin-bottom:6px;}
+    .ex-title{font-size:1.02rem;font-weight:700;}
+    .ex-mut{color:#00d4ff;font-family:'JetBrains Mono',monospace;}
+    .ex-conf{text-align:right;}
+    .ex-conf-v{font-size:1.5rem;font-weight:800;font-family:'JetBrains Mono',monospace;}
+    .ex-conf-l{font-size:.62rem;color:#8b98a5;text-transform:uppercase;letter-spacing:.6px;}
+    .ex-headline{font-size:.85rem;color:#cdd9e5;margin-bottom:12px;}
+    .ex-plain{background:rgba(0,212,255,.06);border-left:3px solid #00d4ff;
+        border-radius:7px;padding:10px 12px;font-size:.82rem;color:#cdd9e5;
+        line-height:1.5;margin-bottom:14px;}
+    .ex-sec{font-size:.66rem;text-transform:uppercase;letter-spacing:1px;
+        color:#8b98a5;margin:14px 0 7px;}
+    .ex-row{display:flex;gap:10px;align-items:flex-start;padding:8px 0;
+        border-bottom:1px solid #1a2230;}
+    .ex-badge{font-size:.58rem;font-weight:700;border:1px solid;border-radius:5px;
+        padding:2px 6px;flex-shrink:0;letter-spacing:.5px;min-width:78px;
+        text-align:center;}
+    .ex-body{flex:1;}
+    .ex-src{font-weight:650;font-size:.82rem;}
+    .ex-cat{font-size:.66rem;color:#6b7685;margin-left:8px;}
+    .ex-stmt{font-size:.78rem;color:#a9b6c2;line-height:1.45;margin-top:2px;}
+    .ex-list{margin:4px 0;padding-left:18px;font-size:.78rem;color:#b6c2cf;
+        line-height:1.6;}
+    .ex-unc{margin:4px 0;padding-left:18px;font-size:.76rem;color:#c9a24a;
+        line-height:1.55;}
+    .ex-empty{font-size:.76rem;color:#6b7685;}
+    .ex-foot{font-size:.65rem;color:#6b7685;margin-top:14px;border-top:1px solid
+        #1f2937;padding-top:9px;}
+  </style>
+  <div class="ex-head">
+    <div><div class="ex-title">🔎 Why this assessment?</div>
+         <div class="ex-headline">Case <span class="ex-mut">__MUT__</span> · __HEADLINE__</div></div>
+    <div class="ex-conf"><div class="ex-conf-v" style="color:__CCOL__">__CPCT__%</div>
+         <div class="ex-conf-l">confidence</div></div>
+  </div>
+  <div class="ex-plain">__PLAIN__</div>
+  <div class="ex-sec">📚 Evidence (strongest first)</div>
+  __ROWS__
+  <div class="ex-sec">🧭 Pathways perturbed</div>
+  __PATHS__
+  <div class="ex-sec">📖 Citations</div>
+  <ul class="ex-list">__CITES__</ul>
+  <div class="ex-sec">⚠️ What we don't know</div>
+  <ul class="ex-unc">__UNC__</ul>
+  <div class="ex-foot">__DISCLAIMER__</div>
+</div>
+"""
+    return (template
+            .replace("__MUT__", mutation)
+            .replace("__HEADLINE__", headline)
+            .replace("__CCOL__", ccol)
+            .replace("__CPCT__", str(conf_pct))
+            .replace("__PLAIN__", plain)
+            .replace("__ROWS__", rows_html)
+            .replace("__PATHS__", paths_block)
+            .replace("__CITES__", cites)
+            .replace("__UNC__", unc)
+            .replace("__DISCLAIMER__", disclaimer))

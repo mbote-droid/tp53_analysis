@@ -2232,3 +2232,83 @@ class TestTumorBoard:
         from config.settings import AGENT_REGISTRY
         assert "tumor_board" in AGENT_REGISTRY
         assert AGENT_REGISTRY["tumor_board"]["keywords"]
+
+
+class TestExplainability:
+    """Explainability 'Why?' engine (agents/explainability.py). Aggregates real
+    evidence, never fabricates, always lists honest uncertainty."""
+
+    def test_hotspot_explanation_is_confident_with_evidence(self):
+        from agents.explainability import explain_variant
+        out = explain_variant("R175H")
+        assert out["classification"] == "conformational"
+        assert out["confidence"] >= 0.8
+        assert out["evidence_count"] >= 2
+        assert out["pathways"]                      # pathway mapping present
+
+    def test_evidence_sorted_strongest_first(self):
+        from agents.explainability import explain_variant
+        from agents.explainability import _STRENGTH_RANK
+        out = explain_variant("R248Q")
+        ranks = [_STRENGTH_RANK.get(e["strength"], 9) for e in out["evidence"]]
+        assert ranks == sorted(ranks)               # non-decreasing strength rank
+
+    def test_vus_flags_uncertainty(self):
+        from agents.explainability import explain_variant
+        out = explain_variant("A159V")
+        assert out["classification"] == "non_hotspot_missense"
+        assert out["confidence"] <= 0.5
+        assert any("uncertain" in u.lower() or "not established" in u.lower()
+                   for u in out["uncertainty"])
+
+    def test_unknown_variant_graceful(self):
+        from agents.explainability import explain_variant
+        out = explain_variant("???")
+        assert out["classification"] == "unknown"
+        assert out["evidence"]                       # never empty
+        assert out["uncertainty"]
+
+    def test_never_fabricates_esm2_when_absent(self):
+        from agents.explainability import explain_variant
+        out = explain_variant("R273H")
+        # ESM-2 lines must either be a real score or an honest "not available"
+        esm = [e for e in out["evidence"] if "ESM-2" in e["source"]]
+        for e in esm:
+            assert ("LLR" in e["statement"]) or ("No ESM-2" in e["statement"]) \
+                or ("not" in e["statement"].lower())
+
+    def test_citations_present_and_real(self):
+        from agents.explainability import explain_variant
+        out = explain_variant("R175H")
+        refs = " ".join(c["ref"] for c in out["citations"])
+        assert "IARC" in refs or "Hum Mutat" in refs
+
+    def test_plain_language_non_empty(self):
+        from agents.explainability import explain_variant
+        out = explain_variant("R248Q")
+        assert len(out["plain_language"]) > 20
+
+    def test_disclaimer_is_ruo(self):
+        from agents.explainability import explain_variant
+        out = explain_variant("R175H")
+        assert "research" in out["disclaimer"].lower()
+
+    def test_panel_html_renders_and_safe(self):
+        from utils.viz import explainability_panel_html
+        from agents.explainability import explain_variant
+        out = explain_variant("R248Q")
+        html_str = explainability_panel_html(out)
+        assert "Why this assessment" in html_str
+        assert "Evidence" in html_str
+        evil = explain_variant("<img src=x onerror=alert(1)>")
+        safe = explainability_panel_html(evil)
+        assert "<img src=x" not in safe
+
+    def test_panel_html_never_empty(self):
+        from utils.viz import explainability_panel_html
+        out = explainability_panel_html(None)
+        assert len(out) > 50 and "explanation" in out.lower()
+
+    def test_registered_in_registry(self):
+        from config.settings import AGENT_REGISTRY
+        assert "explainability" in AGENT_REGISTRY

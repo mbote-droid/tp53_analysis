@@ -830,8 +830,20 @@ with tab13:
 
     board = st.session_state.get("tb_board")
     if board:
-        from utils.viz import tumor_board_html
+        from utils.viz import tumor_board_html, explainability_panel_html
         components.html(tumor_board_html(board), height=760, scrolling=True)
+
+        # ── Explainability "Why?" trace for the same case ──
+        st.markdown("### 🔎 Why? — evidence behind the assessment")
+        try:
+            from agents.explainability import explain_variant
+            exp = explain_variant(board.get("mutation", ""),
+                                  {"cancer": tb_cancer, "stage": tb_stage})
+            components.html(explainability_panel_html(exp), height=660,
+                            scrolling=True)
+        except Exception as e:
+            st.caption(f"Explainability unavailable: {str(e)[:120]}")
+
         with st.expander("⬇️ Export consensus (JSON, RUO-stamped)"):
             st.download_button(
                 "Download tumour-board consensus",

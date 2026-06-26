@@ -138,6 +138,13 @@ AGENT_REGISTRY = {
         "keywords": ["tumour board", "tumor board", "board", "consensus", "debate",
                      "multidisciplinary", "mdt", "panel", "specialists", "vote"],
     },
+    "explainability": {
+        "description": "Assemble a transparent evidence trace ('why?') for a "
+                       "variant — classification, ClinVar/SIFT/PolyPhen/CADD/"
+                       "gnomAD, ESM-2 effect, pathways, citations, uncertainty",
+        "keywords": ["why", "explain", "explainability", "evidence", "trace",
+                     "rationale", "transparency", "justify", "reasoning", "trust"],
+    },
     "sequence_fetch": {
         "description": "Fetch and validate TP53 sequences from NCBI",
         "keywords": ["fetch", "accession", "ncbi", "sequence", "download", "retrieve"],
