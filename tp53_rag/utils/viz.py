@@ -514,6 +514,146 @@ def domain_legend_chart() -> go.Figure:
     return fig
 
 
+# Significance → lollipop-head colour. Matches the platform's pathogenicity
+# palette elsewhere (red = pathogenic, green = benign, amber = uncertain).
+_NEEDLE_COLORS = {
+    "pathogenic": "#ff3b3b",
+    "likely_pathogenic": "#ff7b3b",
+    "uncertain": "#f1c40f",
+    "vus": "#f1c40f",
+    "likely_benign": "#5dade2",
+    "benign": "#2ecc71",
+}
+_NEEDLE_DEFAULT_COLOR = "#9b9b9b"
+TP53_LENGTH = 393
+
+
+def _domain_for_position(pos: int) -> Optional[dict]:
+    """Return the P53_DOMAINS entry containing *pos*, or None if outside all."""
+    for d in P53_DOMAINS:
+        if d["start"] <= pos <= d["end"]:
+            return d
+    return None
+
+
+def needle_plot(variants, title: str = "TP53 mutation needle plot") -> go.Figure:
+    """Lollipop / needle plot of mutations along the p53 protein (1–393).
+
+    *variants* is an iterable of dicts; each needs at least a residue position
+    under any of the keys ``position`` / ``pos`` / ``residue`` / ``codon``.
+    Optional per-variant keys:
+      * ``count`` (int)        — stem height (recurrence); defaults to 1.
+      * ``label`` (str)        — hover label, e.g. "R175H".
+      * ``significance`` (str) — colours the head via _NEEDLE_COLORS.
+
+    A domain track is drawn underneath (colours match the 3D viewer and the
+    domain legend). Recurrent positions are merged: counts sum, the highest
+    significance label wins. Pure + never-empty (graceful placeholder on no
+    valid input). Out-of-range / non-numeric positions are dropped, not raised.
+    """
+    # ── Parse + merge by position ────────────────────────────────
+    merged: dict = {}
+    for v in variants or []:
+        if not isinstance(v, dict):
+            continue
+        raw_pos = (v.get("position") if v.get("position") is not None
+                   else v.get("pos") if v.get("pos") is not None
+                   else v.get("residue") if v.get("residue") is not None
+                   else v.get("codon"))
+        try:
+            pos = int(raw_pos)
+        except (TypeError, ValueError):
+            continue
+        if not (1 <= pos <= TP53_LENGTH):
+            continue
+        try:
+            count = int(v.get("count", 1))
+        except (TypeError, ValueError):
+            count = 1
+        count = max(count, 1)
+
+        entry = merged.setdefault(
+            pos, {"count": 0, "labels": [], "significance": ""})
+        entry["count"] += count
+        label = str(v.get("label") or "").strip()
+        if label and label not in entry["labels"]:
+            entry["labels"].append(label)
+        sig = str(v.get("significance") or "").strip().lower().replace(" ", "_")
+        # Keep the most clinically severe significance seen at this position.
+        severity = ["benign", "likely_benign", "vus", "uncertain",
+                    "likely_pathogenic", "pathogenic"]
+        if sig in severity and (
+            entry["significance"] not in severity
+            or severity.index(sig) > severity.index(entry["significance"])
+        ):
+            entry["significance"] = sig
+
+    if not merged:
+        return _empty_fig("No mutations to plot — enter variants to see the needle map")
+
+    max_count = max(e["count"] for e in merged.values())
+    fig = go.Figure()
+
+    # ── Domain track (thin bars along the baseline at y=0) ───────
+    for d in P53_DOMAINS:
+        fig.add_trace(go.Bar(
+            x=[d["end"] - d["start"] + 1], base=d["start"], y=[-max_count * 0.12],
+            width=max_count * 0.10, orientation="h", marker_color=d["color"],
+            name=d["name"], hovertemplate=(
+                f"{d['name']} ({d['start']}–{d['end']})<br>{d['function']}"
+                "<extra></extra>"),
+            showlegend=True,
+        ))
+
+    # ── Stems + heads (one trace for stems, one for heads) ───────
+    for pos in sorted(merged):
+        e = merged[pos]
+        fig.add_trace(go.Scatter(
+            x=[pos, pos], y=[0, e["count"]], mode="lines",
+            line=dict(color="#5a6570", width=1.4),
+            hoverinfo="skip", showlegend=False,
+        ))
+
+    head_x, head_y, head_color, head_text = [], [], [], []
+    for pos in sorted(merged):
+        e = merged[pos]
+        dom = _domain_for_position(pos)
+        color = _NEEDLE_COLORS.get(e["significance"]) or (
+            "#ff3b3b" if pos in CANONICAL_HOTSPOTS else _NEEDLE_DEFAULT_COLOR)
+        head_x.append(pos)
+        head_y.append(e["count"])
+        head_color.append(color)
+        lab = ", ".join(e["labels"]) or f"residue {pos}"
+        sig_txt = e["significance"].replace("_", " ") or "unclassified"
+        dom_txt = dom["name"] if dom else "—"
+        head_text.append(
+            f"<b>{lab}</b><br>position {pos} · {dom_txt}"
+            f"<br>recurrence {e['count']}<br>{sig_txt}")
+
+    # Head size scales gently with recurrence (8–22 px).
+    sizes = [8 + 14 * (merged[p]["count"] / max_count) for p in sorted(merged)]
+    fig.add_trace(go.Scatter(
+        x=head_x, y=head_y, mode="markers",
+        marker=dict(size=sizes, color=head_color,
+                    line=dict(color="#0d1117", width=1)),
+        text=head_text, hovertemplate="%{text}<extra></extra>",
+        showlegend=False,
+    ))
+
+    fig.update_layout(
+        template="plotly_dark", height=380, barmode="overlay",
+        title=str(title),
+        xaxis=dict(title="Residue position", range=[0, TP53_LENGTH + 5],
+                   showgrid=False),
+        yaxis=dict(title="Recurrence (count)", rangemode="tozero",
+                   zeroline=True, zerolinecolor="#2a2f37"),
+        legend=dict(orientation="h", y=-0.22, font=dict(size=10)),
+        margin=dict(l=10, r=10, t=50, b=10),
+        bargap=0,
+    )
+    return fig
+
+
 def parse_residues(raw: str, extra=CANONICAL_HOTSPOTS) -> list:
     """Parse a residue string into a sorted list of unique ints (1–393).
 

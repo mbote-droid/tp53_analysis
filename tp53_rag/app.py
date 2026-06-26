@@ -603,6 +603,29 @@ with tab2:
                 if parsed["variants"]:
                     st.plotly_chart(vcf_variant_chart(parsed["variants"]),
                                     width="stretch")
+
+                    # Needle / lollipop map: variants positioned along the p53
+                    # protein over the domain track. Residue is taken from the
+                    # file's own HGVS protein change — no significance invented.
+                    from utils.viz import needle_plot
+                    needle_variants = []
+                    for v in parsed["variants"]:
+                        aac = (v.get("amino_acid_change") or "").strip()
+                        digits = ""
+                        for ch in aac:
+                            if ch.isdigit():
+                                digits += ch
+                            elif digits:
+                                break
+                        if digits:
+                            needle_variants.append(
+                                {"position": int(digits), "label": aac})
+                    if needle_variants:
+                        st.plotly_chart(
+                            needle_plot(needle_variants,
+                                        title="TP53 variants across the protein"),
+                            width="stretch",
+                        )
                     st.dataframe(
                         pd.DataFrame([
                             {"AA": v["amino_acid_change"] or "—",

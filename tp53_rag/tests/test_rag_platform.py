@@ -2008,3 +2008,102 @@ class TestExportDisclaimer:
         original = {"resourceType": "Observation"}
         stamp_fhir(original)
         assert "meta" not in original
+
+
+class TestNeedlePlot:
+    """Lollipop / needle mutation plot (utils.viz.needle_plot). Pure +
+    never-empty; merges recurrence, ranks significance, drops bad input."""
+
+    def test_basic_plot_has_traces(self):
+        from utils.viz import needle_plot, P53_DOMAINS
+        fig = needle_plot([{"position": 175, "label": "R175H",
+                            "significance": "pathogenic"}])
+        # domain bars + at least one stem + heads trace
+        assert len(fig.data) >= len(P53_DOMAINS) + 2
+
+    def test_empty_is_placeholder_not_crash(self):
+        from utils.viz import needle_plot
+        assert needle_plot([]).layout.annotations          # placeholder text
+        assert needle_plot(None).layout.annotations
+
+    def test_drops_non_dict_and_bad_positions(self):
+        from utils.viz import needle_plot
+        fig = needle_plot([
+            "garbage", 42, None,                            # non-dicts
+            {"position": "notanumber"},                     # non-numeric
+            {"position": 9999},                             # out of range
+            {"position": 0},                                # out of range
+            {"position": 248, "label": "R248Q"},            # the only valid one
+        ])
+        assert not fig.layout.annotations                   # something plotted
+
+    def test_recurrence_merges_and_sums(self):
+        from utils.viz import needle_plot
+        fig = needle_plot([
+            {"position": 273, "count": 3},
+            {"position": 273, "count": 2},
+        ])
+        # find the heads trace (markers) and confirm a single merged point at y=5
+        heads = [t for t in fig.data if getattr(t, "mode", None) == "markers"]
+        assert heads
+        ys = list(heads[-1].y)
+        assert 5 in ys and ys.count(5) == 1                 # merged, not duplicated
+
+    def test_significance_severity_wins(self):
+        from utils.viz import needle_plot, _NEEDLE_COLORS
+        # benign reported first, pathogenic second → head must be pathogenic colour
+        fig = needle_plot([
+            {"position": 175, "significance": "benign"},
+            {"position": 175, "significance": "pathogenic"},
+        ])
+        heads = [t for t in fig.data if getattr(t, "mode", None) == "markers"][-1]
+        assert _NEEDLE_COLORS["pathogenic"] in list(heads.marker.color)
+
+    def test_hotspot_defaults_red_without_significance(self):
+        from utils.viz import needle_plot
+        fig = needle_plot([{"position": 248}])              # canonical hotspot
+        heads = [t for t in fig.data if getattr(t, "mode", None) == "markers"][-1]
+        assert "#ff3b3b" in list(heads.marker.color)
+
+    def test_non_hotspot_defaults_grey(self):
+        from utils.viz import needle_plot, _NEEDLE_DEFAULT_COLOR
+        fig = needle_plot([{"position": 100}])              # not a hotspot
+        heads = [t for t in fig.data if getattr(t, "mode", None) == "markers"][-1]
+        assert _NEEDLE_DEFAULT_COLOR in list(heads.marker.color)
+
+    def test_accepts_key_aliases(self):
+        from utils.viz import needle_plot
+        for key in ("pos", "residue", "codon"):
+            fig = needle_plot([{key: 175}])
+            assert not fig.layout.annotations               # plotted, not empty
+
+    def test_labels_aggregate_in_hover(self):
+        from utils.viz import needle_plot
+        fig = needle_plot([
+            {"position": 273, "label": "R273H"},
+            {"position": 273, "label": "R273C"},
+        ])
+        heads = [t for t in fig.data if getattr(t, "mode", None) == "markers"][-1]
+        hover = " ".join(heads.text)
+        assert "R273H" in hover and "R273C" in hover
+
+    def test_domain_assignment_in_hover(self):
+        from utils.viz import needle_plot, _domain_for_position
+        assert _domain_for_position(175)["name"] == "DBD"
+        assert _domain_for_position(30)["name"] == "TAD"
+        assert _domain_for_position(500) is None
+        fig = needle_plot([{"position": 175}])
+        heads = [t for t in fig.data if getattr(t, "mode", None) == "markers"][-1]
+        assert "DBD" in " ".join(heads.text)
+
+    def test_count_below_one_clamped(self):
+        from utils.viz import needle_plot
+        fig = needle_plot([{"position": 175, "count": 0},
+                           {"position": 175, "count": -5}])
+        heads = [t for t in fig.data if getattr(t, "mode", None) == "markers"][-1]
+        assert min(heads.y) >= 1                             # never zero/negative
+
+    def test_title_is_honoured(self):
+        from utils.viz import needle_plot
+        fig = needle_plot([{"position": 175}], title="My Cohort")
+        assert "My Cohort" in fig.layout.title.text
