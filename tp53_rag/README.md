@@ -8,29 +8,21 @@
 [![FastAPI](https://img.shields.io/badge/API-FastAPI-009688)](https://fastapi.tiangolo.com)
 ![Status](https://img.shields.io/badge/Deploy-local%20%2F%20pending-orange?logo=streamlit&logoColor=white)
 
-Precision Onco Africa is an enterprise-grade, multi-agent AI system for genomic researchers, oncologists, and pharmaceutical companies. It combines local-first Gemma 4 inference, 23 specialized AI agents, multi-omics integration, and HIPAA-compliant FHIR R4 output — running entirely offline on commodity hardware (8GB RAM, no GPU).
+Precision Onco Africa is a multi-agent AI platform for interpreting TP53 mutations, built to work where it is needed most: clinics and labs with constrained hardware and unreliable connectivity. It runs on a commodity laptop (8 GB RAM, no GPU), keeps patient-adjacent data on the machine by default, and degrades gracefully to a fully offline mode.
 
-> **Differentiator:** Beyond a generic RAG system, this platform embeds an **African cancer-genomics layer** — regional variant prevalence, an equity/bias drift detector, Kenya/KEML drug-availability context, and Swahili output — making it a clinically-grounded copilot for under-represented populations, not just another TP53 wrapper.
+The platform is opinionated about honesty. It never fabricates clinical numbers, it labels illustrative content as such, and every recommendation can be traced back to its evidence. That principle shaped the three features it leads with:
 
-## 🎯 What's New (RAG Platform)
+- **Live AI Tumour Board.** Six specialist agents — pathologist, geneticist, oncologist, surgeon, pharmacologist, and an equity officer — each form an evidence-grounded opinion on a case, cross-examine one another, and vote toward a consensus. Confidence is *earned*: a well-characterised hotspot yields high agreement; a variant of uncertain significance yields a cautious, low-confidence result that says so.
+- **Explainability ("Why?").** Every assessment expands into a transparent trace: molecular classification, ClinVar, SIFT/PolyPhen, CADD, gnomAD rarity, ESM-2 effect, the perturbed p53 pathways, literature citations, and an explicit list of what is *not* known.
+- **An African equity layer.** Regional cancer-genomics epidemiology, a bias/drift detector, locally-aware treatment alternatives, and Kiswahili patient reports — a copilot built for under-served populations, not a generic TP53 wrapper.
 
-**This is a complete rewrite from the basic bioinformatics pipeline to an enterprise AI platform:**
+It also carries a real AMD story: a fourth inference mode served on AMD Instinct GPUs via Fireworks, a ROCm benchmark harness for the AMD Developer Cloud, and an honest current-vs-future deployment map. And because it is a genomics platform, its own source code is visualised as a DNA double helix.
 
-| Feature | Classic Pipeline | 🆕 RAG Platform |
-|---------|-----------------|-----------------|
-| **Inference** | NCBI API calls | Local Gemma 4 (no data leaks) |
-| **Agents** | Single sequential analysis | 23 specialized multi-agents |
-| **Voice Input** | ❌ | ✅ Whisper transcription (text + voice, multimodal) |
-| **Accuracy** | Unmeasured | ✅ Benchmarked vs ClinVar/IARC (see Benchmarking) |
-| **Drug Discovery** | Manual literature review | Automated APR-246 & KEML screening |
-| **Clinical Output** | CSV + PNG | FHIR R4 compliant dossiers |
-| **Speed** | 2-5 minutes | <30 seconds (with voice cache) |
-| **HIPAA** | ❌ | ✅ PII scrubbing + audit logging |
-| **GPU Ready** | ❌ | ✅ llama.cpp optimization |
+> **Why it matters:** much of sub-Saharan Africa faces a severe shortage of oncologists and clinical geneticists. A transparent, offline-capable second opinion — one that is honest about its own uncertainty — is more useful here than a faster black box.
 
 ## 🏗️ Architecture
 
-**23 AI Agents + 1 Orchestrator:**
+**26 AI Agents + 1 Orchestrator:**
 
 ```
 USER INPUT (Text / Voice / VCF upload)
@@ -58,9 +50,14 @@ DISPATCHER (parallel routing to agents)
     ├→ Agent 20: IND Generator (FDA Investigational New Drug draft sections)
     ├→ Agent 21: Synthetic-Lethality Modeler (WEE1/ATR/CHK1, DepMap-derived)
     ├→ Agent 22: Molecular Docking (AutoDock Vina if installed, else estimate)
-    └→ Agent 23: Structural Analyzer (ΔΔG, cavity druggability, contacts)
+    ├→ Agent 23: Structural Analyzer (ΔΔG, cavity druggability, contacts)
+    ├→ Agent 24: Tumour Board (six specialists debate → vote → consensus)
+    ├→ Agent 25: Explainability (transparent "why?" evidence trace)
+    └→ Agent 26: Command Center (continental decision-support aggregation)
     ↓
 + utility services: ChEMBL drug data · PubMed citations · VCF parser
++ AMD layer: Fireworks (AMD Instinct) inference mode · ROCm benchmark harness
++ visuals: DNA-helix codebase graph · needle/lollipop mutation map
     ↓
 GEMMA 4 (Inference — Ollama / llama.cpp local, or Google AI Studio API on cloud)
     ↓
@@ -94,6 +91,13 @@ service if a workload ever demands it.
 
 ## 🚀 Core Features
 
+✅ **Live AI Tumour Board**: six specialist agents debate a case and vote toward a consensus with earned confidence — deterministic and offline  
+✅ **Explainability "Why?"**: every assessment expands into a traceable evidence dossier with an explicit uncertainty list  
+✅ **AMD inference mode**: `INFERENCE_MODE=fireworks` runs hosted models on AMD Instinct GPUs; `tools/benchmark_amd.py` produces real ROCm numbers  
+✅ **DNA-helix codebase graph**: the platform's own modules and imports rendered as a WebGL double helix  
+✅ **Needle / lollipop map**: mutations positioned along the p53 protein over its domain track  
+✅ **Offline Cancer Copilot**: an honest readiness map of what runs with no network (most of it)  
+✅ **Agent evaluation harness**: deterministic per-agent latency, calibration, citation and uncertainty metrics  
 ✅ **Local Inference**: Gemma 4 via Ollama / llama.cpp (8GB RAM, no GPU, no API calls)  
 ✅ **Dual-Mode**: Offline (Ollama) or cloud (Google AI Studio) via `INFERENCE_MODE`  
 ✅ **Multimodal Input**: Type *or* speak — Whisper transcription wired into the query + structure tabs  
