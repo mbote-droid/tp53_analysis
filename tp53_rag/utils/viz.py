@@ -2279,3 +2279,32 @@ def agent_eval_table(report: Optional[dict]) -> go.Figure:
     fig.update_layout(template="plotly_dark", height=160,
                       margin=dict(l=4, r=4, t=4, b=4))
     return fig
+
+
+# ── Token-efficient router savings ────────────────────────────────
+def token_router_chart(report: Optional[dict]) -> go.Figure:
+    """Donut of how queries were routed (cache / deterministic / LLM), with the
+    avoided-call share. Never empty."""
+    report = report or {}
+    if not report.get("queries"):
+        return _empty_fig("No routed queries yet — the router logs savings live.")
+    labels = ["Cache (0 tokens)", "Deterministic (0 tokens)", "LLM (full cost)"]
+    values = [report.get("cache", 0), report.get("deterministic", 0),
+              report.get("llm", 0)]
+    fig = go.Figure(go.Pie(
+        labels=labels, values=values, hole=0.62,
+        marker=dict(colors=["#2ecc71", "#00d4ff", "#ff6b6b"]),
+        textinfo="value",
+    ))
+    saved = report.get("tokens_saved", 0)
+    usd = report.get("usd_saved_est", 0)
+    fig.update_layout(
+        template="plotly_dark", height=300,
+        title=f"{report.get('pct_avoided', 0)}% of queries avoided the LLM",
+        annotations=[dict(text=f"{saved:,}<br>tokens saved<br>≈ ${usd}",
+                          x=0.5, y=0.5, showarrow=False,
+                          font=dict(size=13, color="#e6edf3"))],
+        margin=dict(l=10, r=10, t=46, b=10),
+        legend=dict(orientation="h", y=-0.1, font=dict(size=10)),
+    )
+    return fig

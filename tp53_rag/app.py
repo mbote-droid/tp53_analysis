@@ -308,6 +308,13 @@ def safe_query(question: str, agent_type=None) -> dict:
         if mem:
             mem.remember(sid, question, result.get("answer", ""),
                          result.get("agent_used", ""))
+        # Token-efficient router: record how this query was (or could be) served
+        # so the platform can show measured token/cost savings over a session.
+        try:
+            from utils.token_router import get_router
+            get_router().route(question, cache_hit=bool(result.get("cache_hit")))
+        except Exception:
+            pass
         return result
     except Exception as e:
         return {
@@ -1371,6 +1378,26 @@ with tab8:
                     "then commit `data/amd_benchmark.json`.")
     except Exception as e:
         st.caption(f"AMD panel unavailable: {str(e)[:120]}")
+
+    # ── Token-efficient router savings ──
+    st.markdown("### ⚡ Token-efficient router")
+    st.caption("Every query is routed to the cheapest correct path — cache or "
+               "deterministic agent before the LLM. Savings are measured live.")
+    try:
+        from utils.token_router import get_router
+        from utils.viz import token_router_chart
+        rep = get_router().report()
+        if rep.get("queries"):
+            st.plotly_chart(token_router_chart(rep), width="stretch",
+                            config={"displayModeBar": False})
+            st.caption(f"{rep['llm_calls_avoided']}/{rep['queries']} queries "
+                       f"avoided the LLM · ~{rep['tokens_saved']:,} tokens "
+                       f"(≈ ${rep['usd_saved_est']}) saved this session.")
+        else:
+            st.info("Run a few queries to see routing savings accumulate.")
+    except Exception as e:
+        st.caption(f"Router panel unavailable: {str(e)[:120]}")
+    st.divider()
 
     # ── Agent evaluation harness ──
     st.markdown("### 📏 Agent evaluation harness")

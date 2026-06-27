@@ -2622,3 +2622,72 @@ class TestAgentEval:
         from utils.viz import agent_eval_table
         assert agent_eval_table({"agents": []}).layout.annotations
         assert agent_eval_table(None).layout.annotations
+
+
+class TestTokenRouter:
+    """Token-efficient router (utils/token_router.py). Routes to the cheapest
+    correct path and measures avoided LLM tokens."""
+
+    def test_cache_hit_routes_to_cache(self):
+        from utils.token_router import decide_route, ROUTE_CACHE
+        d = decide_route("anything", cache_hit=True)
+        assert d["route"] == ROUTE_CACHE and d["tokens_saved"] > 0
+
+    def test_deterministic_intent_avoids_llm(self):
+        from utils.token_router import decide_route, ROUTE_DETERMINISTIC
+        for q in ("Convene the tumour board for this case",
+                  "Why is this pathogenic?",
+                  "Show the African regional prevalence"):
+            d = decide_route(q)
+            assert d["route"] == ROUTE_DETERMINISTIC and d["tokens_saved"] > 0
+
+    def test_bare_variant_is_deterministic(self):
+        from utils.token_router import decide_route, ROUTE_DETERMINISTIC
+        assert decide_route("R175H")["route"] == ROUTE_DETERMINISTIC
+        assert decide_route("p.R248Q")["route"] == ROUTE_DETERMINISTIC
+
+    def test_open_ended_goes_to_llm(self):
+        from utils.token_router import decide_route, ROUTE_LLM
+        d = decide_route("Tell me a story about cancer research history")
+        assert d["route"] == ROUTE_LLM and d["tokens_saved"] == 0
+
+    def test_force_llm_overrides(self):
+        from utils.token_router import decide_route, ROUTE_LLM
+        assert decide_route("R175H", force_llm=True)["route"] == ROUTE_LLM
+
+    def test_empty_query_defers_to_llm(self):
+        from utils.token_router import decide_route, ROUTE_LLM
+        assert decide_route("")["route"] == ROUTE_LLM
+
+    def test_router_accumulates_savings(self):
+        from utils.token_router import TokenRouter
+        r = TokenRouter()
+        r.route("R175H")                       # deterministic
+        r.route("why is this pathogenic")      # deterministic
+        r.route("write an essay on p53")       # llm
+        r.route("x", cache_hit=True)           # cache
+        rep = r.report()
+        assert rep["queries"] == 4
+        assert rep["llm_calls_avoided"] == 3   # 2 deterministic + 1 cache
+        assert rep["tokens_saved"] > 0
+        assert rep["usd_saved_est"] >= 0
+        assert 0 <= rep["pct_avoided"] <= 100
+
+    def test_estimate_tokens_monotonic(self):
+        from utils.token_router import estimate_tokens
+        assert estimate_tokens("") == 0
+        assert estimate_tokens("a" * 400) == 100
+
+    def test_router_chart_renders_and_placeholder(self):
+        from utils.viz import token_router_chart
+        from utils.token_router import TokenRouter
+        r = TokenRouter(); r.route("R175H"); r.route("essay please")
+        assert token_router_chart(r.report()).data
+        assert token_router_chart(None).layout.annotations
+
+    def test_history_capped(self):
+        from utils.token_router import TokenRouter
+        r = TokenRouter()
+        for _ in range(150):
+            r.route("R175H")
+        assert len(r.report()["history"]) <= 100
