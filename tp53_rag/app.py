@@ -1309,6 +1309,26 @@ with tab8:
     c2.metric("RAG Available", str(RAG_AVAILABLE))
     c3.metric("Messages", len(st.session_state.messages))
 
+    # ── AMD deployment & hardware benchmarks ──
+    st.markdown("### ⚡ AMD deployment & benchmarks")
+    try:
+        from utils.amd_benchmark import load_benchmark, DEPLOYMENT_TIERS
+        from utils.viz import deployment_panel_html, amd_benchmark_chart
+        components.html(deployment_panel_html(DEPLOYMENT_TIERS), height=320,
+                        scrolling=True)
+        bench = load_benchmark()
+        if bench.get("available"):
+            st.plotly_chart(amd_benchmark_chart(bench), width="stretch")
+            st.caption(f"Measured {bench.get('generated_utc', '')} on "
+                       f"{bench.get('device', {}).get('device_name', 'AMD hardware')}.")
+        else:
+            st.info(f"⚙️ {bench.get('reason', 'Benchmark not yet run.')} "
+                    "Run `python tools/benchmark_amd.py` on an AMD GPU host, "
+                    "then commit `data/amd_benchmark.json`.")
+    except Exception as e:
+        st.caption(f"AMD panel unavailable: {str(e)[:120]}")
+    st.divider()
+
     if st.session_state.rag:
         try:
             stats = st.session_state.rag.cache_stats()

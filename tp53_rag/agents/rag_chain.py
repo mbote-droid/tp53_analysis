@@ -71,9 +71,17 @@ _CACHE_DB    = Path("data/semantic_cache.db")
 _MODEL_PATH  = Path(os.getenv("LLAMA_MODEL_PATH", "models/gemma-2b-Q4_K_M.gguf"))
 
 # ── Runtime mode ──────────────────────────────────────────────────
-INFERENCE_MODE   = os.getenv("INFERENCE_MODE", "ollama")   # ollama | llamacpp | api
+# ollama | llamacpp | api (Google) | fireworks (AMD-accelerated, hosted)
+INFERENCE_MODE   = os.getenv("INFERENCE_MODE", "ollama")
 GOOGLE_API_KEY   = os.getenv("GOOGLE_API_KEY", "")
 GOOGLE_MODEL     = os.getenv("GOOGLE_MODEL", "gemma-4-26b-a4b-it")
+
+# Fireworks AI — OpenAI-compatible inference served on AMD Instinct GPUs.
+FIREWORKS_API_KEY = os.getenv("FIREWORKS_API_KEY", "")
+FIREWORKS_MODEL   = os.getenv(
+    "FIREWORKS_MODEL", "accounts/fireworks/models/llama-v3p1-8b-instruct")
+FIREWORKS_BASE_URL = os.getenv(
+    "FIREWORKS_BASE_URL", "https://api.fireworks.ai/inference/v1")
 
 # ── Context window budget (tokens) ────────────────────────────────
 CTX_TOTAL        = 8192
@@ -685,6 +693,62 @@ class GoogleGenAIBackend:
         return bool(self._key)
 
 
+class FireworksBackend:
+    """Fireworks AI backend — OpenAI-compatible chat completions served on
+    AMD Instinct GPUs. Used for the AMD-accelerated hosted inference mode.
+
+    Requires FIREWORKS_API_KEY. The endpoint, model and base URL are all
+    env-configurable so the same code targets any Fireworks-hosted model.
+    """
+    def __init__(self, api_key: str = FIREWORKS_API_KEY,
+                 model: str = FIREWORKS_MODEL,
+                 base_url: str = FIREWORKS_BASE_URL):
+        self._key = api_key
+        self._model = model
+        self._base_url = base_url.rstrip("/")
+        self._session = None
+        self._lock = threading.Lock()
+
+    def _get_session(self):
+        if self._session is None:
+            import requests
+            self._session = requests.Session()
+        return self._session
+
+    def generate(self, system_prompt: str, user_prompt: str,
+                 max_tokens: int = CTX_RESPONSE, temperature: float = 0.1) -> str:
+        """Call the Fireworks OpenAI-compatible /chat/completions endpoint."""
+        session = self._get_session()
+        payload = {
+            "model": self._model,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+            "max_tokens": max_tokens,
+            "temperature": temperature,
+            "top_p": 0.95,
+        }
+        headers = {
+            "Authorization": f"Bearer {self._key}",
+            "Content-Type": "application/json",
+        }
+        try:
+            resp = session.post(
+                f"{self._base_url}/chat/completions",
+                json=payload, headers=headers, timeout=120,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            return (data["choices"][0]["message"]["content"] or "").strip()
+        except Exception as e:
+            log.error(f"Fireworks request failed: {e}")
+            raise
+
+    def health(self) -> bool:
+        return bool(self._key)
+
+
 class OllamaBackend:
     """Ollama fallback backend (legacy support)."""
     def __init__(self, base_url: str = OLLAMA_BASE_URL, model: str = OLLAMA_MODEL):
@@ -713,6 +777,9 @@ class OllamaBackend:
 
 def _build_backend() -> Any:
     """Build the best available LLM backend."""
+    if INFERENCE_MODE == "fireworks" and FIREWORKS_API_KEY:
+        log.info(f"LLM backend: Fireworks AI on AMD Instinct ({FIREWORKS_MODEL})")
+        return FireworksBackend()
     if INFERENCE_MODE == "api" and GOOGLE_API_KEY:
         log.info("LLM backend: Google GenAI API (Gemma 4 26B)")
         return GoogleGenAIBackend(api_key=GOOGLE_API_KEY)

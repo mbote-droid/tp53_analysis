@@ -1899,3 +1899,94 @@ def explainability_panel_html(exp: Optional[dict], height: int = 640) -> str:
             .replace("__CITES__", cites)
             .replace("__UNC__", unc)
             .replace("__DISCLAIMER__", disclaimer))
+
+
+# ── AMD deployment + benchmark visuals ────────────────────────────
+def amd_benchmark_chart(bench: Optional[dict]) -> go.Figure:
+    """Bar chart of real AMD-hardware benchmark runs (TFLOP/s and latency).
+    Honest placeholder when the benchmark has not been run. Never empty."""
+    bench = bench or {}
+    if not bench.get("available"):
+        return _empty_fig(bench.get("reason",
+                          "AMD benchmark not yet run — execute "
+                          "tools/benchmark_amd.py on an AMD GPU host."))
+    runs = [r for r in bench.get("runs", []) if r.get("ran")]
+    if not runs:
+        return _empty_fig("Benchmark file present but no completed runs.")
+
+    names, values, texts = [], [], []
+    for r in runs:
+        if r.get("tflops") is not None:
+            names.append(f"{r.get('name','run')} ({r.get('device','?')})")
+            values.append(r["tflops"])
+            texts.append(f"{r['tflops']} TFLOP/s")
+        elif r.get("seconds") is not None:
+            names.append(r.get("name", "run"))
+            values.append(r["seconds"])
+            texts.append(f"{r['seconds']} s")
+    if not names:
+        return _empty_fig("Benchmark runs contained no comparable metrics.")
+
+    fig = go.Figure(go.Bar(
+        x=values, y=names, orientation="h", text=texts, textposition="auto",
+        marker_color="#ed1c24",   # AMD red
+    ))
+    dev = bench.get("device", {})
+    subtitle = dev.get("device_name") or ("ROCm" if dev.get("is_rocm") else "host")
+    fig.update_layout(
+        template="plotly_dark", height=260,
+        title=f"Measured on AMD hardware · {subtitle}",
+        margin=dict(l=10, r=10, t=46, b=10), xaxis_title="value",
+    )
+    return fig
+
+
+def deployment_panel_html(tiers: Optional[dict] = None) -> str:
+    """Honest 'Current ✓ / Future •' deployment map. Current = runnable today;
+    future = roadmap targets, never claimed as functioning. Never-empty."""
+    tiers = tiers or {}
+    current = tiers.get("current") or []
+    future = tiers.get("future") or []
+
+    def _rows(items, marker, col):
+        if not items:
+            return "<div class='dp-empty'>—</div>"
+        out = []
+        for it in items:
+            out.append(
+                f"<div class='dp-row'><span class='dp-mark' style='color:{col}'>"
+                f"{marker}</span><div><div class='dp-t'>"
+                f"{html.escape(str(it.get('target','')))}</div>"
+                f"<div class='dp-v'>{html.escape(str(it.get('via','')))} · "
+                f"{html.escape(str(it.get('use','')))}</div></div></div>")
+        return "\n".join(out)
+
+    template = """
+<div class="dp-root">
+  <style>
+    .dp-root{font-family:'Inter',system-ui,sans-serif;background:#0d1117;
+        border:1px solid #1f2937;border-radius:14px;padding:16px;color:#e6edf3;}
+    .dp-cols{display:grid;grid-template-columns:1fr 1fr;gap:18px;}
+    @media(max-width:640px){.dp-cols{grid-template-columns:1fr;}}
+    .dp-h{font-size:.72rem;text-transform:uppercase;letter-spacing:1px;
+        margin-bottom:9px;font-weight:700;}
+    .dp-row{display:flex;gap:9px;align-items:flex-start;padding:7px 0;
+        border-bottom:1px solid #1a2230;}
+    .dp-mark{font-weight:800;flex-shrink:0;}
+    .dp-t{font-size:.84rem;font-weight:600;}
+    .dp-v{font-size:.72rem;color:#8b98a5;line-height:1.4;}
+    .dp-empty{color:#6b7685;font-size:.78rem;}
+    .dp-note{font-size:.66rem;color:#6b7685;margin-top:12px;}
+  </style>
+  <div class="dp-cols">
+    <div><div class="dp-h" style="color:#2ecc71">✓ Current deployment</div>__CURRENT__</div>
+    <div><div class="dp-h" style="color:#00d4ff">• Future deployment (roadmap)</div>__FUTURE__</div>
+  </div>
+  <div class="dp-note">Current targets run today. Future targets are credible
+    roadmap directions on AMD hardware — shown as aspiration, not as functioning
+    features.</div>
+</div>
+"""
+    return (template
+            .replace("__CURRENT__", _rows(current, "✓", "#2ecc71"))
+            .replace("__FUTURE__", _rows(future, "•", "#00d4ff")))

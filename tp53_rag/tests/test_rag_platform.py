@@ -2312,3 +2312,128 @@ class TestExplainability:
     def test_registered_in_registry(self):
         from config.settings import AGENT_REGISTRY
         assert "explainability" in AGENT_REGISTRY
+
+
+class TestFireworksBackend:
+    """Fireworks AI inference backend (AMD-accelerated, OpenAI-compatible).
+    Network fully mocked — no live calls."""
+
+    def test_health_reflects_key(self):
+        from agents.rag_chain import FireworksBackend
+        assert FireworksBackend(api_key="fw-key").health() is True
+        assert FireworksBackend(api_key="").health() is False
+
+    def test_generate_builds_openai_payload(self):
+        from agents.rag_chain import FireworksBackend
+        be = FireworksBackend(api_key="fw-key", model="accounts/test/m")
+        captured = {}
+
+        class _Resp:
+            def raise_for_status(self): pass
+            def json(self):
+                return {"choices": [{"message": {"content": "  hello  "}}]}
+
+        class _Sess:
+            def post(self, url, json=None, headers=None, timeout=None):
+                captured["url"] = url
+                captured["json"] = json
+                captured["headers"] = headers
+                return _Resp()
+
+        be._session = _Sess()
+        out = be.generate("SYS", "USER", max_tokens=42)
+        assert out == "hello"                                  # stripped
+        assert captured["json"]["model"] == "accounts/test/m"
+        assert captured["json"]["max_tokens"] == 42
+        assert captured["json"]["messages"][0]["role"] == "system"
+        assert captured["headers"]["Authorization"] == "Bearer fw-key"
+        assert captured["url"].endswith("/chat/completions")
+
+    def test_generate_raises_on_http_error(self):
+        from agents.rag_chain import FireworksBackend
+        be = FireworksBackend(api_key="fw-key")
+
+        class _Resp:
+            def raise_for_status(self): raise RuntimeError("500")
+            def json(self): return {}
+
+        class _Sess:
+            def post(self, *a, **k): return _Resp()
+
+        be._session = _Sess()
+        with pytest.raises(Exception):
+            be.generate("s", "u")
+
+    def test_build_backend_selects_fireworks(self, monkeypatch):
+        import agents.rag_chain as rc
+        monkeypatch.setattr(rc, "INFERENCE_MODE", "fireworks")
+        monkeypatch.setattr(rc, "FIREWORKS_API_KEY", "fw-key")
+        backend = rc._build_backend()
+        assert backend.__class__.__name__ == "FireworksBackend"
+
+
+class TestAMDBenchmark:
+    """AMD benchmark loader + deployment map (utils/amd_benchmark.py, viz).
+    Honest 'not run' state; numbers never fabricated."""
+
+    def test_load_missing_is_honest(self, tmp_path):
+        from utils.amd_benchmark import load_benchmark
+        out = load_benchmark(tmp_path / "nope.json")
+        assert out["available"] is False and "not yet run" in out["reason"].lower()
+
+    def test_load_valid(self, tmp_path):
+        from utils.amd_benchmark import load_benchmark
+        import json as _json
+        p = tmp_path / "amd.json"
+        p.write_text(_json.dumps({
+            "device": {"is_rocm": True, "device_name": "AMD Instinct MI210"},
+            "runs": [{"name": "fp16 matmul", "ran": True, "device": "cuda",
+                      "tflops": 142.5}],
+        }), encoding="utf-8")
+        out = load_benchmark(p)
+        assert out["available"] is True
+        assert out["runs"][0]["tflops"] == 142.5
+
+    def test_load_malformed_is_honest(self, tmp_path):
+        from utils.amd_benchmark import load_benchmark
+        p = tmp_path / "bad.json"
+        p.write_text("{ not json", encoding="utf-8")
+        assert load_benchmark(p)["available"] is False
+
+    def test_benchmark_chart_placeholder_when_unavailable(self):
+        from utils.viz import amd_benchmark_chart
+        fig = amd_benchmark_chart({"available": False, "reason": "not run"})
+        assert fig.layout.annotations            # placeholder annotation
+
+    def test_benchmark_chart_renders_runs(self):
+        from utils.viz import amd_benchmark_chart
+        fig = amd_benchmark_chart({
+            "available": True,
+            "device": {"device_name": "AMD Instinct MI210", "is_rocm": True},
+            "runs": [{"name": "fp16 matmul", "ran": True, "device": "cuda",
+                      "tflops": 142.5}],
+        })
+        assert fig.data and list(fig.data[0].x) == [142.5]
+
+    def test_deployment_panel_current_and_future(self):
+        from utils.viz import deployment_panel_html
+        from utils.amd_benchmark import DEPLOYMENT_TIERS
+        html_str = deployment_panel_html(DEPLOYMENT_TIERS)
+        assert "Current deployment" in html_str and "Future deployment" in html_str
+        assert "Fireworks" in html_str           # a real current target
+        assert "Kria" in html_str                # a roadmap target
+
+    def test_deployment_panel_never_empty(self):
+        from utils.viz import deployment_panel_html
+        assert len(deployment_panel_html({})) > 50
+
+    def test_harness_device_report_graceful(self):
+        # The harness must produce a device report without torch present.
+        import importlib.util
+        from pathlib import Path
+        path = Path(__file__).resolve().parent.parent / "tools" / "benchmark_amd.py"
+        spec = importlib.util.spec_from_file_location("benchmark_amd", path)
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        rep = mod.device_report()
+        assert "python" in rep                    # always present, torch optional
