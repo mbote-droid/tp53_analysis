@@ -981,6 +981,22 @@ with tab3:
 with tab4:
     st.markdown("## 📊 Visualization & Metrics")
 
+    # ── DNA double-helix codebase graph (signature visual) ──
+    st.markdown("### 🧬 Codebase as DNA")
+    st.caption(
+        "The platform's own modules (nodes) and their imports (edges), laid out "
+        "on a DNA double helix — join the dots and they trace the structure this "
+        "project is built to understand. Drag to rotate."
+    )
+    try:
+        from utils.codegraph import build_helix_codegraph
+        from utils.viz import codegraph_helix_html
+        components.html(codegraph_helix_html(build_helix_codegraph()),
+                        height=640, scrolling=False)
+    except Exception as e:
+        st.caption(f"Code graph unavailable: {str(e)[:120]}")
+    st.divider()
+
     col1, col2 = st.columns(2)
     with col1:
         st.markdown("### ctDNA VAF Timeline")

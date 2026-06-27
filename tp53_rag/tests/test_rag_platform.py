@@ -2528,3 +2528,61 @@ class TestOfflineStatus:
     def test_readiness_html_never_empty(self):
         from utils.viz import offline_readiness_html
         assert len(offline_readiness_html(None)) > 40
+
+
+class TestCodegraph:
+    """DNA-helix codebase knowledge graph (utils/codegraph.py + viz). Real
+    import graph parsed with ast; analytic double-helix layout."""
+
+    def test_build_finds_modules_and_edges(self):
+        from utils.codegraph import build_codegraph
+        g = build_codegraph()
+        ids = {n["id"] for n in g["nodes"]}
+        assert "utils.viz" in ids and "agents.tumor_board" in ids
+        assert g["module_count"] >= 10
+        # tumor_board imports from agents -> there should be internal edges
+        assert g["edge_count"] >= 1
+
+    def test_edges_are_internal_only(self):
+        from utils.codegraph import build_codegraph
+        g = build_codegraph()
+        ids = {n["id"] for n in g["nodes"]}
+        for e in g["links"]:
+            assert e["source"] in ids and e["target"] in ids
+            assert e["source"] != e["target"]      # no self-loops
+
+    def test_helix_layout_two_strands(self):
+        from utils.codegraph import build_helix_codegraph
+        g = build_helix_codegraph()
+        strands = {n["strand"] for n in g["nodes"]}
+        assert strands == {0, 1} or len(g["nodes"]) == 1
+        # every node has 3D coordinates
+        for n in g["nodes"]:
+            assert all(k in n for k in ("x", "y", "z"))
+        assert g["layout"] == "double_helix"
+        assert "rungs" in g
+
+    def test_helix_coords_are_finite(self):
+        from utils.codegraph import build_helix_codegraph
+        import math
+        g = build_helix_codegraph()
+        for n in g["nodes"]:
+            assert all(math.isfinite(n[k]) for k in ("x", "y", "z"))
+
+    def test_build_never_empty_on_empty_dir(self, tmp_path):
+        from utils.codegraph import build_codegraph
+        g = build_codegraph(tmp_path)
+        assert g["nodes"]                           # never empty
+
+    def test_helix_html_renders_and_safe(self):
+        from utils.viz import codegraph_helix_html
+        from utils.codegraph import build_helix_codegraph
+        html_str = codegraph_helix_html(build_helix_codegraph())
+        assert "codebase as DNA" in html_str
+        assert "THREE" in html_str                  # WebGL renderer present
+        assert "double" in html_str.lower() or "strand" in html_str.lower()
+
+    def test_helix_html_never_empty(self):
+        from utils.viz import codegraph_helix_html
+        assert len(codegraph_helix_html(None)) > 40
+        assert len(codegraph_helix_html({"nodes": []})) > 40

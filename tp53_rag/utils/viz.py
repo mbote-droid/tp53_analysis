@@ -2116,3 +2116,135 @@ def offline_readiness_html(status: Optional[dict]) -> str:
 </div>
 """
     return template.replace("__SUMMARY__", summary).replace("__ROWS__", "\n".join(rows))
+
+
+# ── DNA double-helix codebase knowledge graph (signature visual) ──
+def codegraph_helix_html(graph: Optional[dict], height: int = 620) -> str:
+    """Self-contained WebGL render of the codebase as a DNA double helix:
+    modules are glowing spheres on two spiralling strands, base-pair rungs
+    connect the strands, and internal imports arc between modules. Three.js
+    via CDN with a graceful offline fallback. Pure + never-empty.
+    """
+    graph = graph or {}
+    nodes = graph.get("nodes") or []
+    if not nodes:
+        return ("<div style='padding:22px;color:#8b98a5;font-family:sans-serif;"
+                "background:#05080f;border-radius:12px'>No code graph to render."
+                "</div>")
+    data_json = json.dumps({
+        "nodes": nodes,
+        "links": graph.get("links", []),
+        "rungs": graph.get("rungs", []),
+    })
+    inner_h = max(int(height) - 8, 240)
+    module_count = graph.get("module_count", len(nodes))
+    edge_count = graph.get("edge_count", len(graph.get("links", [])))
+
+    template = """
+<div style="width:100%;background:#05080f;border-radius:12px;overflow:hidden;
+     position:relative;">
+  <div style="position:absolute;top:10px;left:14px;z-index:5;font-family:
+       'JetBrains Mono',monospace;color:#8b98a5;font-size:.72rem;">
+    🧬 codebase as DNA · <span style="color:#00d4ff">__MC__ modules</span> ·
+    <span style="color:#2ecc71">__EC__ imports</span> · drag to rotate
+  </div>
+  <div id="dna-graph" style="width:100%;height:__H__px;"></div>
+  <div id="dna-fallback" style="display:none;padding:18px;color:#8b98a5;
+       font-family:sans-serif;font-size:.85rem;">
+    The DNA codebase graph needs internet once to load the WebGL library.
+  </div>
+</div>
+<script>
+(function(){
+  var DATA = __DATA__;
+  function boot(){
+    var THREE = window.THREE;
+    var el = document.getElementById('dna-graph');
+    var W = el.clientWidth || 700, H = __H__;
+    var scene = new THREE.Scene();
+    var camera = new THREE.PerspectiveCamera(60, W/H, 0.1, 4000);
+    camera.position.set(0, 0, 180);
+    var renderer = new THREE.WebGLRenderer({antialias:true, alpha:true});
+    renderer.setSize(W, H); renderer.setPixelRatio(window.devicePixelRatio||1);
+    el.appendChild(renderer.domElement);
+    var group = new THREE.Group(); scene.add(group);
+
+    var byId = {};
+    DATA.nodes.forEach(function(n){ byId[n.id] = n; });
+
+    // Nodes as glowing spheres.
+    DATA.nodes.forEach(function(n){
+      var r = 1.6 + Math.min((n.loc||0)/180, 3.2);
+      var geo = new THREE.SphereGeometry(r, 16, 16);
+      var col = new THREE.Color(n.color || '#9aa7b4');
+      var mat = new THREE.MeshBasicMaterial({color: col});
+      var m = new THREE.Mesh(geo, mat);
+      m.position.set(n.x||0, n.y||0, n.z||0);
+      group.add(m);
+      var halo = new THREE.Mesh(new THREE.SphereGeometry(r*1.7,16,16),
+        new THREE.MeshBasicMaterial({color:col, transparent:true, opacity:0.14}));
+      halo.position.copy(m.position); group.add(halo);
+    });
+
+    function strandCurve(parity, color){
+      var pts = DATA.nodes.filter(function(n){return (n.strand||0)===parity;})
+        .map(function(n){return new THREE.Vector3(n.x||0,n.y||0,n.z||0);});
+      if(pts.length<2) return;
+      var curve = new THREE.CatmullRomCurve3(pts);
+      var geo = new THREE.TubeGeometry(curve, pts.length*6, 0.5, 8, false);
+      group.add(new THREE.Mesh(geo, new THREE.MeshBasicMaterial(
+        {color:color, transparent:true, opacity:0.55})));
+    }
+    strandCurve(0, 0x00d4ff); strandCurve(1, 0x2ecc71);
+
+    // Base-pair rungs.
+    DATA.rungs.forEach(function(e){
+      var a=byId[e.source], b=byId[e.target]; if(!a||!b) return;
+      var g=new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(a.x,a.y,a.z), new THREE.Vector3(b.x,b.y,b.z)]);
+      group.add(new THREE.Line(g, new THREE.LineBasicMaterial(
+        {color:0x9aa7b4, transparent:true, opacity:0.35})));
+    });
+    // Import edges as faint arcs.
+    DATA.links.forEach(function(e){
+      var a=byId[e.source], b=byId[e.target]; if(!a||!b) return;
+      var g=new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(a.x,a.y,a.z), new THREE.Vector3(b.x,b.y,b.z)]);
+      group.add(new THREE.Line(g, new THREE.LineBasicMaterial(
+        {color:0x00d4ff, transparent:true, opacity:0.12})));
+    });
+
+    // Drag to rotate + gentle auto-spin.
+    var rx=0, ry=0, down=false, px=0, py=0, auto=true;
+    renderer.domElement.addEventListener('mousedown',function(e){down=true;auto=false;px=e.clientX;py=e.clientY;});
+    window.addEventListener('mouseup',function(){down=false;});
+    window.addEventListener('mousemove',function(e){
+      if(!down)return; ry+=(e.clientX-px)*0.01; rx+=(e.clientY-py)*0.01;
+      px=e.clientX; py=e.clientY;});
+    function animate(){
+      requestAnimationFrame(animate);
+      if(auto) ry+=0.0025;
+      group.rotation.y=ry; group.rotation.x=rx;
+      renderer.render(scene,camera);
+    }
+    animate();
+  }
+  function fail(){document.getElementById('dna-fallback').style.display='block';}
+  if(window.THREE){boot();return;}
+  var s=document.createElement('script');
+  s.src='https://unpkg.com/three@0.160.0/build/three.min.js';
+  s.onload=boot;
+  s.onerror=function(){
+    var s2=document.createElement('script');
+    s2.src='https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js';
+    s2.onload=boot; s2.onerror=fail; document.head.appendChild(s2);
+  };
+  document.head.appendChild(s);
+})();
+</script>
+"""
+    return (template
+            .replace("__DATA__", data_json)
+            .replace("__H__", str(inner_h))
+            .replace("__MC__", str(module_count))
+            .replace("__EC__", str(edge_count)))
