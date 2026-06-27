@@ -145,6 +145,13 @@ AGENT_REGISTRY = {
         "keywords": ["why", "explain", "explainability", "evidence", "trace",
                      "rationale", "transparency", "justify", "reasoning", "trust"],
     },
+    "command_center": {
+        "description": "Aggregate the African TP53 atlas into a decision-support "
+                       "command center — continental KPIs, per-region cancers/"
+                       "mutations/drivers, and resource/access context",
+        "keywords": ["command center", "dashboard", "continental", "regional",
+                     "kpi", "burden", "planning", "epidemiology", "overview"],
+    },
     "sequence_fetch": {
         "description": "Fetch and validate TP53 sequences from NCBI",
         "keywords": ["fetch", "accession", "ncbi", "sequence", "download", "retrieve"],

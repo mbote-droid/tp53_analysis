@@ -1071,6 +1071,34 @@ with tab5:
             file_name=f"report_{rep_mutation}_{datetime.now().strftime('%Y%m%d')}.md",
         )
 
+    # ── 🌍 Swahili / multilingual patient report ──
+    st.divider()
+    st.markdown("### 🌍 Patient report — English & Kiswahili")
+    st.caption("Patient-facing explanations in English and culturally-nuanced "
+               "Swahili, for clinicians serving Swahili-speaking communities.")
+    if st.button("🌍 Generate Swahili patient report", key="swahili_go"):
+        if st.session_state.get("rag"):
+            with st.spinner("Generating multilingual reports..."):
+                try:
+                    from agents.multilingual import MultilingualReportAgent
+                    agent = MultilingualReportAgent(st.session_state.rag)
+                    reports = agent.generate({"mutation": rep_mutation,
+                                              "cancer": rep_cancer})
+                    st.markdown("#### 🇰🇪 Ripoti ya Mgonjwa (Kiswahili)")
+                    st.markdown(reports.get("patient_report_sw", ""))
+                    with st.expander("🇬🇧 English patient report"):
+                        st.markdown(reports.get("patient_report_en", ""))
+                    st.download_button(
+                        "⬇️ Download Swahili report",
+                        stamp_markdown(reports.get("patient_report_sw", ""),
+                                       title=f"Ripoti ya TP53 — {rep_mutation}"),
+                        file_name=f"ripoti_{rep_mutation}.md", key="sw_dl",
+                    )
+                except Exception as e:
+                    st.error(f"Multilingual report unavailable: {str(e)[:160]}")
+        else:
+            st.warning("RAG system offline — needs an active inference backend.")
+
     # ── 📑 IND Draft Generator (regulatory) ──
     st.divider()
     st.markdown("### 📑 IND Draft Generator")
@@ -1327,6 +1355,16 @@ with tab8:
                     "then commit `data/amd_benchmark.json`.")
     except Exception as e:
         st.caption(f"AMD panel unavailable: {str(e)[:120]}")
+
+    # ── Offline Cancer Copilot readiness ──
+    st.markdown("### 📡 Offline readiness")
+    try:
+        from utils.offline_status import offline_capabilities
+        from utils.viz import offline_readiness_html
+        components.html(offline_readiness_html(offline_capabilities()),
+                        height=440, scrolling=True)
+    except Exception as e:
+        st.caption(f"Offline readiness unavailable: {str(e)[:120]}")
     st.divider()
 
     if st.session_state.rag:
@@ -1664,6 +1702,17 @@ with tab11:
         "dominate which regions, in which cancers, driven by which exposures. "
         "Complements the African Drift bias-detector."
     )
+
+    # ── Command Center: continental decision-support snapshot ──
+    with st.expander("🌍 Oncology Command Center (continental snapshot)",
+                     expanded=True):
+        try:
+            from agents.command_center import command_center_snapshot
+            from utils.viz import command_center_html
+            components.html(command_center_html(command_center_snapshot()),
+                            height=600, scrolling=True)
+        except Exception as e:
+            st.caption(f"Command center unavailable: {str(e)[:120]}")
 
     try:
         from agents.african_atlas import AfricanTP53Atlas

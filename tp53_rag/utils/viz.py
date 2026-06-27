@@ -1990,3 +1990,129 @@ def deployment_panel_html(tiers: Optional[dict] = None) -> str:
     return (template
             .replace("__CURRENT__", _rows(current, "✓", "#2ecc71"))
             .replace("__FUTURE__", _rows(future, "•", "#00d4ff")))
+
+
+# ── African Oncology Command Center ───────────────────────────────
+def command_center_html(snapshot: Optional[dict], height: int = 560) -> str:
+    """Decision-support dashboard: continental KPI tiles + per-region analytics
+    cards with dominant cancers, key mutations, drivers and access notes. Pure,
+    never-empty, injection-safe."""
+    snapshot = snapshot or {}
+    kpis = snapshot.get("kpis") or {}
+    regions = snapshot.get("regions") or []
+    if not kpis and not regions:
+        return ("<div style='padding:22px;color:#8b98a5;font-family:sans-serif;"
+                "background:#0d1117;border-radius:12px'>Command center has no "
+                "data loaded.</div>")
+
+    kpi_defs = [
+        ("regions", "Regions", "#00d4ff"),
+        ("countries", "Countries", "#2ecc71"),
+        ("cancers", "Cancer types", "#f1c40f"),
+        ("key_mutations", "Key mutations", "#ff6b9d"),
+        ("drivers", "Env. drivers", "#a29bfe"),
+    ]
+    tiles = "".join(
+        f"<div class='cc-tile'><div class='cc-num' style='color:{col}'>"
+        f"{html.escape(str(kpis.get(k, 0)))}</div>"
+        f"<div class='cc-lab'>{lab}</div></div>"
+        for k, lab, col in kpi_defs
+    )
+
+    cards = []
+    for r in regions:
+        muts = ", ".join(html.escape(str(m)) for m in (r.get("key_mutations") or [])[:6])
+        cancers = ", ".join(html.escape(str(c)) for c in (r.get("cancers") or [])[:4])
+        drivers = ", ".join(html.escape(str(d)) for d in (r.get("drivers") or [])[:4])
+        cards.append(
+            "<div class='cc-card'>"
+            f"<div class='cc-region'>📍 {html.escape(str(r.get('region','')))}</div>"
+            f"<div class='cc-line'><b>Cancers:</b> {cancers or '—'}</div>"
+            f"<div class='cc-line'><b>Key mutations:</b> "
+            f"<span class='cc-mono'>{muts or '—'}</span></div>"
+            f"<div class='cc-line'><b>Drivers:</b> {drivers or '—'}</div>"
+            f"<div class='cc-access'>🏥 {html.escape(str(r.get('access_note','')))}</div>"
+            "</div>"
+        )
+    cards_html = "\n".join(cards)
+    disclaimer = html.escape(str(snapshot.get("disclaimer", "")))
+
+    template = """
+<div class="cc-root">
+  <style>
+    .cc-root{font-family:'Inter',system-ui,sans-serif;background:radial-gradient(
+        circle at 50% -10%,#16243d 0%,#0d1117 55%);border:1px solid #1f2937;
+        border-radius:14px;padding:18px;color:#e6edf3;}
+    .cc-title{font-size:1.05rem;font-weight:700;margin-bottom:12px;}
+    .cc-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(90px,1fr));
+        gap:10px;margin-bottom:16px;}
+    .cc-tile{background:rgba(22,32,58,.55);border:1px solid #25304a;
+        border-radius:10px;padding:12px;text-align:center;}
+    .cc-num{font-size:1.7rem;font-weight:800;font-family:'JetBrains Mono',monospace;}
+    .cc-lab{font-size:.64rem;color:#8b98a5;text-transform:uppercase;
+        letter-spacing:.5px;margin-top:3px;}
+    .cc-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));
+        gap:12px;}
+    .cc-card{background:rgba(13,17,23,.6);border:1px solid #25304a;
+        border-radius:11px;padding:13px;}
+    .cc-region{font-weight:700;font-size:.92rem;margin-bottom:7px;color:#cdd9e5;}
+    .cc-line{font-size:.76rem;color:#a9b6c2;line-height:1.5;margin-bottom:3px;}
+    .cc-mono{font-family:'JetBrains Mono',monospace;color:#00d4ff;}
+    .cc-access{font-size:.72rem;color:#c9a24a;margin-top:7px;line-height:1.45;
+        border-top:1px solid #1a2230;padding-top:6px;}
+    .cc-foot{font-size:.65rem;color:#6b7685;margin-top:14px;border-top:1px solid
+        #1f2937;padding-top:9px;}
+  </style>
+  <div class="cc-title">🌍 African Oncology Command Center</div>
+  <div class="cc-kpis">__TILES__</div>
+  <div class="cc-grid">__CARDS__</div>
+  <div class="cc-foot">__DISCLAIMER__</div>
+</div>
+"""
+    return (template
+            .replace("__TILES__", tiles)
+            .replace("__CARDS__", cards_html)
+            .replace("__DISCLAIMER__", disclaimer))
+
+
+# ── Offline Cancer Copilot — readiness map ────────────────────────
+def offline_readiness_html(status: Optional[dict]) -> str:
+    """Render the offline-capability map: each capability tagged offline (green)
+    or needs-network (amber). Honest, never-empty, injection-safe."""
+    status = status or {}
+    caps = status.get("capabilities") or []
+    if not caps:
+        return ("<div style='padding:18px;color:#8b98a5;font-family:sans-serif;"
+                "background:#0d1117;border-radius:12px'>No capability data.</div>")
+    rows = []
+    for c in caps:
+        off = bool(c.get("offline"))
+        col = "#2ecc71" if off else "#f1c40f"
+        tag = "OFFLINE" if off else "NEEDS NET"
+        rows.append(
+            "<div class='of-row'>"
+            f"<span class='of-tag' style='color:{col};border-color:{col}'>{tag}</span>"
+            f"<div><div class='of-n'>{html.escape(str(c.get('name','')))}</div>"
+            f"<div class='of-d'>{html.escape(str(c.get('detail','')))}</div></div></div>"
+        )
+    summary = html.escape(str(status.get("summary", "")))
+    template = """
+<div class="of-root">
+  <style>
+    .of-root{font-family:'Inter',system-ui,sans-serif;background:#0d1117;
+        border:1px solid #1f2937;border-radius:14px;padding:16px;color:#e6edf3;}
+    .of-h{font-size:.98rem;font-weight:700;margin-bottom:4px;}
+    .of-sum{font-size:.76rem;color:#8b98a5;margin-bottom:12px;line-height:1.5;}
+    .of-row{display:flex;gap:9px;align-items:flex-start;padding:7px 0;
+        border-bottom:1px solid #1a2230;}
+    .of-tag{font-size:.58rem;font-weight:700;border:1px solid;border-radius:5px;
+        padding:2px 6px;flex-shrink:0;min-width:74px;text-align:center;}
+    .of-n{font-size:.82rem;font-weight:600;}
+    .of-d{font-size:.72rem;color:#8b98a5;line-height:1.4;}
+  </style>
+  <div class="of-h">📡 Offline Cancer Copilot — readiness</div>
+  <div class="of-sum">__SUMMARY__</div>
+  __ROWS__
+</div>
+"""
+    return template.replace("__SUMMARY__", summary).replace("__ROWS__", "\n".join(rows))

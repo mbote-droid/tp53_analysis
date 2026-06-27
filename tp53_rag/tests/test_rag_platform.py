@@ -2437,3 +2437,94 @@ class TestAMDBenchmark:
         spec.loader.exec_module(mod)
         rep = mod.device_report()
         assert "python" in rep                    # always present, torch optional
+
+
+class TestCommandCenter:
+    """African Oncology Command Center (agents/command_center.py). Aggregation
+    of the curated atlas — never empty, invents no epidemiology."""
+
+    def test_snapshot_has_kpis_and_regions(self):
+        from agents.command_center import command_center_snapshot
+        out = command_center_snapshot()
+        assert out["kpis"]["regions"] >= 1
+        assert out["kpis"]["countries"] >= 1
+        assert out["regions"]                       # at least one region card
+
+    def test_regions_carry_access_notes(self):
+        from agents.command_center import command_center_snapshot
+        out = command_center_snapshot()
+        for r in out["regions"]:
+            assert r.get("access_note")             # every region has guidance
+            assert "region" in r
+
+    def test_snapshot_sources_and_disclaimer(self):
+        from agents.command_center import command_center_snapshot
+        out = command_center_snapshot()
+        assert "research" in out["disclaimer"].lower()
+        assert isinstance(out["country_burden"], dict)
+
+    def test_command_center_html_renders(self):
+        from utils.viz import command_center_html
+        from agents.command_center import command_center_snapshot
+        html_str = command_center_html(command_center_snapshot())
+        assert "Command Center" in html_str
+        assert "Regions" in html_str
+
+    def test_command_center_html_never_empty_and_safe(self):
+        from utils.viz import command_center_html
+        assert len(command_center_html(None)) > 50
+        safe = command_center_html({
+            "kpis": {"regions": 1},
+            "regions": [{"region": "<b>x</b>", "key_mutations": [], "cancers": [],
+                         "drivers": [], "access_note": "<script>"}],
+        })
+        assert "<script>" not in safe and "&lt;script&gt;" in safe
+
+    def test_registered_in_registry(self):
+        from config.settings import AGENT_REGISTRY
+        assert "command_center" in AGENT_REGISTRY
+
+
+class TestOfflineStatus:
+    """Offline Cancer Copilot readiness map (utils/offline_status.py).
+    Honest: a capability is offline only if it truly needs no network."""
+
+    def test_capabilities_split(self):
+        from utils.offline_status import offline_capabilities
+        out = offline_capabilities()
+        assert out["offline_count"] >= 1 and out["online_count"] >= 1
+        assert out["offline_count"] + out["online_count"] == out["total"]
+
+    def test_local_mode_is_fully_offline(self, monkeypatch):
+        monkeypatch.setenv("INFERENCE_MODE", "ollama")
+        from utils.offline_status import offline_capabilities
+        out = offline_capabilities()
+        assert out["fully_offline_capable"] is True
+        assert "no internet" in out["summary"].lower()
+
+    def test_hosted_mode_flags_network(self, monkeypatch):
+        monkeypatch.setenv("INFERENCE_MODE", "fireworks")
+        from utils.offline_status import offline_capabilities
+        out = offline_capabilities()
+        assert out["fully_offline_capable"] is False
+
+    def test_live_apis_marked_online(self):
+        from utils.offline_status import offline_capabilities
+        out = offline_capabilities()
+        live = [c for c in out["capabilities"]
+                if "PubMed" in c["name"] or "VEP" in c["name"]]
+        assert live and all(c["offline"] is False for c in live)
+
+    def test_readiness_html_renders_and_safe(self):
+        from utils.viz import offline_readiness_html
+        from utils.offline_status import offline_capabilities
+        html_str = offline_readiness_html(offline_capabilities())
+        assert "Offline Cancer Copilot" in html_str
+        assert "OFFLINE" in html_str and "NEEDS NET" in html_str
+        safe = offline_readiness_html({"capabilities": [
+            {"name": "<x>", "detail": "<script>", "offline": True}]})
+        assert "<script>" not in safe
+
+    def test_readiness_html_never_empty(self):
+        from utils.viz import offline_readiness_html
+        assert len(offline_readiness_html(None)) > 40
