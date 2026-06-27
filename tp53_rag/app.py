@@ -1235,6 +1235,19 @@ with tab6:
                                    if v is not None)
                     if hp:
                         st.caption(f"Hotspot residue confidence (pLDDT): {hp}")
+
+                    # ── Mutation-aware view: highlight the patient's residue +
+                    #    druggable sites on the same real structure ──
+                    st.markdown("##### 🎯 Mutation-aware view")
+                    mut_in = st.text_input(
+                        "Highlight a specific mutation on the structure",
+                        value="R175H", key="struct_mut")
+                    from utils.viz import mutation_structure_html
+                    components.html(
+                        mutation_structure_html(struct.pdb_text, mut_in),
+                        height=500)
+                    st.caption("Gold = the patient's mutated residue · cyan = "
+                               "druggable/reactivation sites · purple = zinc cluster.")
                 else:
                     st.info(struct.notes or "AlphaFold model unavailable.")
 

@@ -806,6 +806,115 @@ def alphafold_viewer_html(pdb_text: Optional[str], residues=None,
             .replace("__H__", str(int(height))))
 
 
+# Functionally important TP53 residues (curated, for the mutation-aware viewer).
+_DRUGGABLE_RESIDUES = {
+    124: "Cys124 — APR-246/eprenetapopt reactivation site",
+    175: "Arg175 — structural hotspot",
+    220: "Tyr220 — PK11007/PhiKan cryptic pocket",
+}
+_ZINC_RESIDUES = {176: "Cys176", 179: "His179", 238: "Cys238", 242: "Cys242"}
+
+
+def mutation_structure_html(pdb_text: Optional[str], mutation: str,
+                            height: int = 480) -> str:
+    """Mutation-aware 3D structure viewer. Colours the p53 fold by domain,
+    highlights the *patient's* mutated residue in gold with a label, and marks
+    the druggable reactivation/zinc sites in cyan. Shows the mutation's
+    structural class in an overlay. Pure, never-empty, injection-safe.
+    """
+    from agents.tumor_board import parse_variant   # local import avoids cycle
+    if not pdb_text:
+        return ("<div style='padding:1rem;color:#8b98a5;font-family:monospace;"
+                "background:#0d1117;border-radius:8px;'>Structure not loaded "
+                "(offline or fetch failed).</div>")
+
+    vp = parse_variant(mutation)
+    mut_resi = vp.codon if vp.codon else 0
+    mut_label = html.escape(str(vp.raw or mutation or "—"))
+    klass = {"contact": "DNA-contact mutant", "conformational": "conformational mutant",
+             "truncating": "truncating", "other_hotspot": "recurrent hotspot",
+             "non_hotspot_missense": "non-hotspot missense",
+             "unknown": "unclassified"}.get(vp.klass, vp.klass)
+    dom = _domain_for_position(mut_resi) if mut_resi else None
+    dom_name = dom["name"] if dom else "—"
+
+    domains_js = ",".join(
+        "{s:%d,e:%d,c:'%s'}" % (d["start"], d["end"], d["color"])
+        for d in P53_DOMAINS)
+    drug_js = ",".join(str(r) for r in _DRUGGABLE_RESIDUES)
+    zinc_js = ",".join(str(r) for r in _ZINC_RESIDUES)
+    pdb_js = json.dumps(pdb_text)
+
+    template = """
+    <div style="position:relative;">
+      <div id="mutview" style="width:100%;height:__H__px;background:#0d1117;
+           border-radius:8px;"></div>
+      <div style="position:absolute;top:8px;left:10px;background:rgba(13,17,23,0.88);
+           padding:8px 11px;border-radius:6px;font-family:sans-serif;font-size:11px;
+           color:#c9d1d9;line-height:1.6;">
+        <b style="color:#ffd54a;">&#9679;</b> mutation <b>__MUT__</b><br>
+        class: __KLASS__ · domain __DOM__<br>
+        <b style="color:#22d3ee;">&#9679;</b> druggable / reactivation site<br>
+        <b style="color:#a78bfa;">&#9679;</b> zinc-binding cluster
+      </div>
+    </div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/3Dmol/2.1.0/3Dmol-min.js"></script>
+    <script>
+      (function() {
+        try {
+          var el = document.getElementById('mutview');
+          var viewer = $3Dmol.createViewer(el, {backgroundColor: '#0d1117'});
+          viewer.addModel(__PDB__, 'pdb');
+          viewer.setStyle({}, {cartoon: {color: '#3a4250'}});
+          // Colour each domain.
+          var domains = [__DOMAINS__];
+          domains.forEach(function(d){
+            viewer.setStyle({resi: d.s + '-' + d.e}, {cartoon: {color: d.c}});
+          });
+          // Druggable + zinc sites.
+          [__DRUG__].forEach(function(r){
+            viewer.setStyle({resi: r}, {cartoon: {color:'#22d3ee'},
+              stick: {color:'#22d3ee', radius:0.25}});
+          });
+          [__ZINC__].forEach(function(r){
+            viewer.setStyle({resi: r}, {stick: {color:'#a78bfa', radius:0.25}});
+          });
+          // The patient's mutated residue — gold, prominent, labelled.
+          var mut = __MUTRESI__;
+          if (mut > 0) {
+            viewer.setStyle({resi: mut}, {
+              cartoon: {color:'#ffd54a'},
+              stick: {color:'#ffd54a', radius:0.4},
+              sphere: {color:'#ffd54a', radius:1.1}});
+            viewer.addLabel('__MUT__', {inFront:true, fontSize:13,
+              fontColor:'#1a1a1a', backgroundColor:'#ffd54a',
+              backgroundOpacity:0.95, position:{resi: mut}});
+            viewer.zoomTo({resi: mut});
+          } else {
+            viewer.zoomTo();
+          }
+          viewer.render();
+          viewer.spin('y', 0.4);
+        } catch (e) {
+          document.getElementById('mutview').innerHTML =
+            '<p style=\"color:#8b98a5;font-family:monospace;padding:1rem\">'
+            + '3D viewer needs an internet connection to load the library.</p>';
+        }
+      })();
+    </script>
+    """
+    return (template
+            .replace("__PDB__", pdb_js)
+            .replace("__DOMAINS__", domains_js)
+            .replace("__DRUG__", drug_js)
+            .replace("__ZINC__", zinc_js)
+            .replace("__MUTRESI__", str(int(mut_resi)))
+            .replace("__MUT__", mut_label)
+            .replace("__KLASS__", html.escape(klass))
+            .replace("__DOM__", html.escape(dom_name))
+            .replace("__H__", str(int(height))))
+
+
 def plddt_profile_chart(per_residue: Optional[dict],
                         mean_plddt: Optional[float] = None) -> go.Figure:
     """Per-residue AlphaFold pLDDT confidence profile. Pure + never-empty."""

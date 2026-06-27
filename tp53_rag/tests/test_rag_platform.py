@@ -2753,3 +2753,40 @@ class TestGuardrails:
     def test_guardrails_html_never_empty(self):
         from utils.viz import guardrails_html
         assert len(guardrails_html(None)) > 40
+
+
+class TestMutationStructure:
+    """Mutation-aware 3D structure viewer (utils.viz.mutation_structure_html)."""
+
+    _PDB = ("ATOM      1  CA  MET A 175      11.104  13.207  10.567  1.00 95.00\n"
+            "ATOM      2  CA  ALA A 124      12.000  14.000  11.000  1.00 80.00\n")
+
+    def test_renders_with_mutation_highlight(self):
+        from utils.viz import mutation_structure_html
+        html_str = mutation_structure_html(self._PDB, "R175H")
+        assert "mutview" in html_str
+        assert "R175H" in html_str
+        assert "175" in html_str                  # residue targeted
+        assert "conformational" in html_str       # class shown
+
+    def test_marks_druggable_sites(self):
+        from utils.viz import mutation_structure_html
+        html_str = mutation_structure_html(self._PDB, "R248Q")
+        assert "124" in html_str                  # APR-246 cysteine marked
+        assert "reactivation" in html_str.lower()
+
+    def test_no_model_message(self):
+        from utils.viz import mutation_structure_html
+        assert "not loaded" in mutation_structure_html("", "R175H")
+        assert "not loaded" in mutation_structure_html(None, "R175H")
+
+    def test_injection_safe(self):
+        from utils.viz import mutation_structure_html
+        safe = mutation_structure_html(self._PDB, "<script>alert(1)</script>")
+        assert "<script>alert(1)</script>" not in safe
+
+    def test_unknown_mutation_graceful(self):
+        from utils.viz import mutation_structure_html
+        html_str = mutation_structure_html(self._PDB, "???")
+        assert "mutview" in html_str              # still renders structure
+        assert "unclassified" in html_str
