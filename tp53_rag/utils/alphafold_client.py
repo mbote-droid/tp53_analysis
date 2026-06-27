@@ -1,6 +1,6 @@
 """
 ============================================================
-TP53 RAG Platform - AlphaFold structure client (real structure)
+Precision Onco Africa - AlphaFold structure client (real structure)
 utils/alphafold_client.py
 ============================================================
 Fetches the real AlphaFold-predicted structure of human p53 (UniProt P04637)

@@ -1,6 +1,6 @@
 """
 ============================================================
-TP53 RAG Platform — RAG Chain (llama.cpp + Full Stack)
+Precision Onco Africa — RAG Chain (llama.cpp + Full Stack)
 agents/rag_chain.py | Production Grade | HIPAA Compliant
 ============================================================
 Features:
@@ -750,7 +750,7 @@ class FireworksBackend:
 
 
 class OllamaBackend:
-    """Ollama fallback backend (legacy support)."""
+    """Ollama backend — local on-device inference."""
     def __init__(self, base_url: str = OLLAMA_BASE_URL, model: str = OLLAMA_MODEL):
         self._base_url = base_url
         self._model    = model

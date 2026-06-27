@@ -1,6 +1,6 @@
 """
 ============================================================
-TP53 RAG Platform - Synthetic Lethality & Network Modeler
+Precision Onco Africa - Synthetic Lethality & Network Modeler
 agents/synthetic_lethality.py
 ============================================================
 Identifies synthetic-lethal (SL) targets for TP53-mutant tumours — genes

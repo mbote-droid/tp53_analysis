@@ -1,5 +1,5 @@
 """
-TP53 RAG Platform — Streamlit Web App
+Precision Onco Africa — Streamlit Web App
 Clean rebuild — no streamlit_option_menu dependency
 """
 import os
@@ -60,7 +60,7 @@ from utils.alphafold_client import get_tp53_structure
 from utils.export_disclaimer import stamp_markdown, stamp_json, stamp_fhir
 
 st.set_page_config(
-    page_title="TP53 RAG Platform",
+    page_title="Precision Onco Africa",
     page_icon="🧬",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -426,7 +426,7 @@ def whisper_available() -> bool:
 
 # ── Sidebar ───────────────────────────────────────────────────────
 with st.sidebar:
-    st.markdown("## 🧬 TP53 RAG Platform")
+    st.markdown("## 🧬 Precision Onco Africa")
     st.markdown("**Multi-agent oncology bioinformatics**")
     st.divider()
 
@@ -1864,7 +1864,7 @@ _finfo = ("Gemma 4 · Google AI Studio (cloud)" if _fmode == "api"
           else "Gemma 4 · llama.cpp (local)" if _fmode == "llamacpp"
           else "Gemma 4 · Ollama (local)")
 st.markdown(
-    f"**TP53 RAG Platform** | {_finfo} | "
+    f"**Precision Onco Africa** | {_finfo} | "
     "Kenya/KEML clinical context | "
     "[GitHub](https://github.com/mbote-droid/tp53_analysis)"
 )

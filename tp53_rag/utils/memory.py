@@ -1,5 +1,5 @@
 """
-TP53 RAG Platform — long-term conversation memory.
+Precision Onco Africa — long-term conversation memory.
 
 Persists past Q&A turns to a local SQLite database so a conversation can resume
 across app restarts ("doesn't start from zero") instead of living only in

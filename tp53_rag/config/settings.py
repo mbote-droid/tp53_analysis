@@ -1,6 +1,6 @@
 """
 ============================================================
-TP53 RAG Platform - Configuration (Optimized)
+Precision Onco Africa - Configuration (Optimized)
 ============================================================
 """
 import os
@@ -25,7 +25,6 @@ for d in [DATA_DIR, DOCUMENTS_DIR, CHROMA_DIR, LOGS_DIR]:
 # offline mode). Must match the default in agents/rag_chain.py.
 INFERENCE_MODE = os.getenv("INFERENCE_MODE", "ollama")
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY", "")
-# Corrected: Explicitly targeting the new Gemma 4 API endpoint string
 GOOGLE_MODEL = os.getenv("GOOGLE_MODEL", "gemma-4-26b-a4b-it")
 
 # ── Ollama / Gemma 4 ─────────────────────────────────────
@@ -43,7 +42,7 @@ NCBI_API_KEY = os.getenv("NCBI_API_KEY", "")
 # ── RAG hyperparameters ───────────────────────────────────
 CHUNK_SIZE = int(os.getenv("CHUNK_SIZE", 512))
 CHUNK_OVERLAP = int(os.getenv("CHUNK_OVERLAP", 64))
-# Corrected: Lowered from 5 to 3 chunks to prevent local RAM swapping and latency
+# 3 chunks keeps memory low and latency tight on constrained hardware.
 TOP_K_RESULTS = int(os.getenv("TOP_K_RESULTS", 3))
 SIMILARITY_THRESHOLD = float(os.getenv("SIMILARITY_THRESHOLD", 0.3))
 
@@ -158,8 +157,6 @@ AGENT_REGISTRY = {
     },
     "report_generation": {
         "description": "Generate comprehensive analysis report from all findings",
-        # BUG FIX: "key\nwords" had a newline splitting the key, making it "key\nwords"
-        # instead of "keywords" — would cause a KeyError at runtime.
         "keywords": ["report", "summary", "comprehensive", "all", "complete", "full"],
     },
 }

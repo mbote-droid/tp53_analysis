@@ -1,6 +1,6 @@
 """
 ============================================================
-TP53 RAG Platform - Multilingual Patient Report Agent
+Precision Onco Africa - Multilingual Patient Report Agent
 ============================================================
 Generates clinically accurate, culturally appropriate
 reports in English and Swahili.

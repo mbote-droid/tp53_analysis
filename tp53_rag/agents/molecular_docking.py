@@ -1,6 +1,6 @@
 """
 ============================================================
-TP53 RAG Platform - Molecular Docking Agent (AutoDock Vina)
+Precision Onco Africa - Molecular Docking Agent (AutoDock Vina)
 agents/molecular_docking.py
 ============================================================
 Estimates drug–protein binding for a TP53 mutation + candidate drug.

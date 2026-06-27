@@ -1,6 +1,6 @@
 """
 ============================================================
-TP53 RAG Platform - ClinVar Conflict Checker (hallucination guard)
+Precision Onco Africa - ClinVar Conflict Checker (hallucination guard)
 agents/clinvar_conflict_checker.py
 ============================================================
 Cross-checks AI-generated classifications against ClinVar before they

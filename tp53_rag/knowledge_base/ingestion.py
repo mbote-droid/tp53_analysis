@@ -1,6 +1,6 @@
 """
 ============================================================
-TP53 RAG Platform - Ingestion Pipeline (Optimized)
+Precision Onco Africa - Ingestion Pipeline (Optimized)
 ============================================================
 """
 import os

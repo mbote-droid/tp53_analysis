@@ -1,6 +1,6 @@
 """
 ============================================================
-TP53 RAG Platform - ESM-2 variant-effect prediction (runtime)
+Precision Onco Africa - ESM-2 variant-effect prediction (runtime)
 utils/variant_effect.py
 ============================================================
 Serves real ESM-2 protein-language-model variant-effect scores **offline, with

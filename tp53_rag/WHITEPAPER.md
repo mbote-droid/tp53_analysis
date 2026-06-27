@@ -1,4 +1,4 @@
-# TP53 RAG Platform — Technical Whitepaper
+# Precision Onco Africa — Technical Whitepaper
 
 **A local-first, privacy-preserving multi-agent AI system for TP53 cancer-genomics analysis on commodity hardware**
 
@@ -41,7 +41,7 @@ Version 1.0 · 2026-06-04
 
 ## 1. Executive Summary
 
-The *TP53 RAG Platform* is a multi-agent artificial-intelligence system that
+The *Precision Onco Africa* is a multi-agent artificial-intelligence system that
 analyses mutations in **TP53** — the single most frequently mutated gene in
 human cancer (somatic mutations in >50% of all tumours). It turns a typed
 question, a voice note, a mutation-and-cancer form, or an uploaded **VCF** file
@@ -101,7 +101,7 @@ confidently-stated but fabricated variant classification is worse than no
 answer. Any serious system must *constrain*, *ground*, *verify*, and *label*
 its outputs.
 
-The TP53 RAG Platform is built to address all three: **run locally, serve the
+The Precision Onco Africa is built to address all three: **run locally, serve the
 under-served, and never trust the model blindly.**
 
 ---
@@ -589,5 +589,5 @@ orchestration primitives; **Streamlit** UI; **FastAPI** + **n8n** service layer;
 
 ---
 
-*Daktari Genomed Labs · TP53 RAG Platform · Technical Whitepaper v1.0 ·
+*Daktari Genomed Labs · Precision Onco Africa · Technical Whitepaper v1.0 ·
 Research Use Only.*

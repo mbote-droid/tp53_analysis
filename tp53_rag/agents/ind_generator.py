@@ -1,6 +1,6 @@
 """
 ============================================================
-TP53 RAG Platform - IND Document Generator (Regulatory Agent)
+Precision Onco Africa - IND Document Generator (Regulatory Agent)
 agents/ind_generator.py
 ============================================================
 Generates a DRAFT FDA Investigational New Drug (IND) application skeleton

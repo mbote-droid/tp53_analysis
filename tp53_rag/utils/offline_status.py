@@ -1,6 +1,6 @@
 """
 ============================================================
-TP53 RAG Platform - Offline Cancer Copilot — Readiness Map
+Precision Onco Africa - Offline Cancer Copilot — Readiness Map
 utils/offline_status.py
 ============================================================
 Reports, honestly, which capabilities work with NO internet connection and

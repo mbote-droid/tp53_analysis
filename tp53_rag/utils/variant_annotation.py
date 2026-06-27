@@ -1,6 +1,6 @@
 """
 ============================================================
-TP53 RAG Platform - Variant Annotation (real bioinformatics)
+Precision Onco Africa - Variant Annotation (real bioinformatics)
 utils/variant_annotation.py
 ============================================================
 Turns a TP53 variant (protein change like R175H, an rsID, or HGVS) into a

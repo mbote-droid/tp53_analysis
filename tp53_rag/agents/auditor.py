@@ -1,6 +1,6 @@
 """
 ============================================================
-TP53 RAG Platform - Agent #9: The Medical Auditor
+Precision Onco Africa - Agent #9: The Medical Auditor
 ============================================================
 Verifies every clinical output before it reaches a clinician
 or patient. Implements the clinical verification protocol for

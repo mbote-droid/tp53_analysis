@@ -1,6 +1,6 @@
 """
 ============================================================
-TP53 RAG Platform - African TP53 Atlas (Agent #17)
+Precision Onco Africa - African TP53 Atlas (Agent #17)
 agents/african_atlas.py
 ============================================================
 Regional cancer-genomics atlas of TP53 in African populations.

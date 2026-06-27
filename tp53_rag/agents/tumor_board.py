@@ -1,6 +1,6 @@
 """
 ============================================================
-TP53 RAG Platform - Live AI Tumour Board
+Precision Onco Africa - Live AI Tumour Board
 agents/tumor_board.py
 ============================================================
 Convenes a virtual multidisciplinary tumour board for a TP53-mutant case.

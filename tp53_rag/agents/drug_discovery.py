@@ -1,6 +1,6 @@
 """
 ============================================================
-TP53 RAG Platform - Drug Discovery & Therapeutic Insights
+Precision Onco Africa - Drug Discovery & Therapeutic Insights
 Agent #8 — Production Grade | HIPAA/HL7 Compliant
 ============================================================
 Capabilities:

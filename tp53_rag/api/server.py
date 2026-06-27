@@ -1,6 +1,6 @@
 """
 ============================================================
-TP53 RAG Platform - FastAPI Server (n8n Integration Layer)
+Precision Onco Africa - FastAPI Server (n8n Integration Layer)
 ============================================================
 Exposes the RAG platform as REST endpoints that n8n can call.
 
@@ -44,7 +44,7 @@ async def lifespan(app: FastAPI):
     """Initialise platform on startup."""
     global vector_store, dispatcher
 
-    log.info("Initialising TP53 RAG Platform...")
+    log.info("Initialising Precision Onco Africa...")
 
     vector_store = TP53VectorStore()
 
@@ -58,15 +58,15 @@ async def lifespan(app: FastAPI):
         vector_store.build(documents)
 
     dispatcher = AgentDispatcher(vector_store=vector_store)
-    log.info("TP53 RAG Platform ready ✓")
+    log.info("Precision Onco Africa ready ✓")
 
     yield  # App runs here
 
-    log.info("TP53 RAG Platform shutting down")
+    log.info("Precision Onco Africa shutting down")
 
 
 app = FastAPI(
-    title="TP53 RAG Platform API",
+    title="Precision Onco Africa API",
     description=(
         "Multi-agent RAG platform for TP53 bioinformatics analysis, "
         "powered by Gemma 4 via Ollama. Built by Daktari Genomed Labs."
@@ -130,7 +130,7 @@ async def health_check():
     """Health check — used by n8n to verify platform is running."""
     return {
         "status": "healthy",
-        "platform": "TP53 RAG Platform",
+        "platform": "Precision Onco Africa",
         "model": "Gemma 4 (Ollama)",
         "vector_store": vector_store.get_stats() if vector_store else "not_initialised",
     }

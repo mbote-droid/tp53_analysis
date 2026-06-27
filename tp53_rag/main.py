@@ -1,6 +1,6 @@
 """
 ============================================================
-TP53 RAG Platform - Main Entry Point & CLI
+Precision Onco Africa - Main Entry Point & CLI
 ============================================================
 Architecture:
   KnowledgeBaseCommands  — build
@@ -133,7 +133,7 @@ class QueryCommands:
     @staticmethod
     def interactive(args):
         console.print(Panel(
-            "[bold cyan]TP53 RAG Platform — Interactive Query Mode[/bold cyan]\n"
+            "[bold cyan]Precision Onco Africa — Interactive Query Mode[/bold cyan]\n"
             "Powered by Gemma 4 via llama.cpp  |  Type 'exit' to quit",
             border_style="cyan",
         ))
@@ -161,7 +161,7 @@ class QueryCommands:
     @staticmethod
     def demo(args):
         console.print(Panel(
-            "[bold magenta]TP53 RAG Platform — Full Demo[/bold magenta]\n"
+            "[bold magenta]Precision Onco Africa — Full Demo[/bold magenta]\n"
             "9 specialised agents · Gemma 4 · llama.cpp · HIPAA · FHIR R4",
             border_style="magenta",
         ))
@@ -234,7 +234,7 @@ class ServerCommands:
     @staticmethod
     def serve(args):
         console.print(Panel(
-            "[bold blue]TP53 RAG Platform API Server[/bold blue]\n"
+            "[bold blue]Precision Onco Africa API Server[/bold blue]\n"
             "URL : http://localhost:8000\n"
             "Docs: http://localhost:8000/docs",
             border_style="blue",
@@ -391,7 +391,7 @@ class PlatformCLI:
 
     @staticmethod
     def list_agents(args):
-        table = Table(title="TP53 RAG Platform — Registered Agents", border_style="cyan")
+        table = Table(title="Precision Onco Africa — Registered Agents", border_style="cyan")
         table.add_column("Agent",       style="bold cyan", no_wrap=True)
         table.add_column("Class",       style="yellow")
         table.add_column("Description", style="white")
@@ -404,7 +404,7 @@ class PlatformCLI:
     @staticmethod
     def build_parser() -> argparse.ArgumentParser:
         parser = argparse.ArgumentParser(
-            description="TP53 RAG Platform — Daktari Genomed Labs",
+            description="Precision Onco Africa — Daktari Genomed Labs",
             formatter_class=argparse.RawDescriptionHelpFormatter,
         )
         sub = parser.add_subparsers(dest="command")
@@ -424,7 +424,7 @@ class PlatformCLI:
     @staticmethod
     def show_help(parser):
         console.print(Panel(
-            "[bold]TP53 RAG Platform[/bold]\n"
+            "[bold]Precision Onco Africa[/bold]\n"
             "Multi-agent bioinformatics AI · Gemma 4 · llama.cpp · HIPAA · FHIR R4\n\n"
             "[cyan]Commands:[/cyan]\n"
             "  python main.py build          — Build RAG knowledge base\n"
@@ -446,7 +446,7 @@ class PlatformCLI:
             " 6. streamlit run app.py\n",
 
             border_style="bold white",
-            title="[bold white]TP53 RAG Platform — Daktari Genomed Labs[/bold white]",
+            title="[bold white]Precision Onco Africa — Daktari Genomed Labs[/bold white]",
         ))
         parser.print_help()
 

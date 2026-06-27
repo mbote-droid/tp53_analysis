@@ -1,28 +1,12 @@
 """
-============================================================
-TP53 RAG Platform - Multi-Agent Dispatcher
-============================================================
-This is what transforms the single-tool TP53 pipeline into
-a PLATFORM AI — serving multiple specialised functions from
-one shared Gemma 4 inference layer.
+Precision Onco Africa - Multi-Agent Dispatcher
 
-Architecture:
-  TP53 pipeline output
-    → AgentDispatcher
-      → MutationAgent      (interprets mutations)
-      → ORFAgent           (interprets open reading frames)
-      → PhylogeneticsAgent (interprets cross-species data)
-      → DomainAgent        (interprets protein domains)
-      → ClinicalAgent      (clinical significance)
-      → ReportAgent        (synthesises all findings)
-      → PathologyAgent     (H&E slide analysis)
-      → TNMAgent           (AJCC/UICC staging + Kenya roadmap)
-    → Unified platform response
+Routes TP53 pipeline output to specialised agents (mutation, ORF,
+phylogenetics, domain, clinical, report, pathology, TNM staging) and
+aggregates their responses into a unified platform output.
 
-One local model serving multiple specialised clinical/research
-functions via intent routing, RAG grounding, and thread-safe
-shared state for inter-agent communication.
-============================================================
+A single inference layer serves every agent via intent routing, RAG
+grounding, and thread-safe shared state for inter-agent communication.
 """
 
 import os
@@ -165,11 +149,11 @@ class AgentDispatcher:
                 "Urgent protocol escalation to APR-246 or emerging zinc rescue compounds is recommended."
             ),
             "report_generation": (
-                "📋 UNIFIED CLINICAL ONCOLOGY DOSSIER:\n"
-                "This report synthesises multi-agent data tracking for sample NM_000546. The tumor profile contains a core cluster of "
-                "deleterious variants, driven primarily by the R248W DNA contact hotspot. Complete multi-agent pipeline profiling confirms "
-                "loss of tumor suppression functionality, structural context vulnerability within the core binding site, and an evolutionary "
-                "conservation index that screams high-risk pathogenesis. Recommendation: Flag for structural reactivation therapeutics."
+                "📋 UNIFIED CLINICAL ONCOLOGY REPORT:\n"
+                "This report synthesises multi-agent findings for sample NM_000546. The tumour profile is driven primarily by the "
+                "R248W DNA-contact hotspot. The pipeline indicates loss of tumour-suppressor function, structural vulnerability within "
+                "the core DNA-binding site, and high evolutionary conservation at the affected position — together consistent with a "
+                "high-risk variant. Recommendation: consider structural reactivation therapeutics and confirmatory testing."
             ),
         }
 

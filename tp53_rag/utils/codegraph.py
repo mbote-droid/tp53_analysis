@@ -1,6 +1,6 @@
 """
 ============================================================
-TP53 RAG Platform - Codebase Knowledge Graph (DNA helix)
+Precision Onco Africa - Codebase Knowledge Graph (DNA helix)
 utils/codegraph.py
 ============================================================
 Builds a real dependency graph of the platform's own source — nodes are

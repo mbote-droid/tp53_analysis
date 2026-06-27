@@ -1,6 +1,6 @@
 """
 ============================================================
-TP53 RAG Platform - Export Disclaimer Stamping
+Precision Onco Africa - Export Disclaimer Stamping
 ============================================================
 Stamps a Research-Use-Only (RUO) disclaimer onto every artifact
 that leaves the application (Markdown reports, JSON payloads,
@@ -35,7 +35,7 @@ RUO_DISCLAIMER = (
 _DISCLAIMER_KEY = "_disclaimer"
 _GENERATED_KEY = "_generated_utc"
 _SOURCE_KEY = "_source"
-_SOURCE_VALUE = "TP53 RAG Platform — Research Use Only"
+_SOURCE_VALUE = "Precision Onco Africa — Research Use Only"
 
 
 def _utc_stamp() -> str:

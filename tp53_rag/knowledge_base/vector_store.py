@@ -1,6 +1,6 @@
 """
 ============================================================
-TP53 RAG Platform - Vector Store (ChromaDB Optimized)
+Precision Onco Africa - Vector Store (ChromaDB Optimized)
 ============================================================
 """
 from pathlib import Path
@@ -186,8 +186,6 @@ class TP53VectorStore:
                 "total_embeddings": count,
                 "collection_name": CHROMA_COLLECTION_NAME,
                 "embedding_model": OLLAMA_EMBEDDING_MODEL,
-                # BUG FIX: Key had a stray newline inside the string:
-                # "persist_directory\n" → "persist_directory"
                 "persist_directory": str(CHROMA_DIR),
             }
         except Exception as e:

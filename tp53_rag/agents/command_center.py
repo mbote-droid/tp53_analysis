@@ -1,6 +1,6 @@
 """
 ============================================================
-TP53 RAG Platform - African Oncology Command Center
+Precision Onco Africa - African Oncology Command Center
 agents/command_center.py
 ============================================================
 Aggregates the regional African TP53 atlas into a single decision-support

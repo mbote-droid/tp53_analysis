@@ -1,6 +1,6 @@
 """
 ============================================================
-TP53 RAG Platform - VCF Parser
+Precision Onco Africa - VCF Parser
 utils/vcf_parser.py
 ============================================================
 Accept real patient VCF files (v4.1 / v4.2) as input instead of manual

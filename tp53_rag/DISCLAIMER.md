@@ -1,6 +1,6 @@
 # Disclaimer — Research Use Only (RUO)
 
-**TP53 RAG Platform · Daktari Genomed Labs**
+**Precision Onco Africa · Daktari Genomed Labs**
 
 ## Intended use
 

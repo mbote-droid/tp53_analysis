@@ -1,6 +1,6 @@
 """
 ============================================================
-TP53 RAG Platform - PubMed Inline Citations
+Precision Onco Africa - PubMed Inline Citations
 utils/pubmed_citations.py
 ============================================================
 Fetches real PubMed references for a TP53 mutation / claim via the NCBI

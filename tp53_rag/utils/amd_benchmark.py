@@ -1,6 +1,6 @@
 """
 ============================================================
-TP53 RAG Platform - AMD Benchmark Loader & Deployment Map
+Precision Onco Africa - AMD Benchmark Loader & Deployment Map
 utils/amd_benchmark.py
 ============================================================
 Serves the results of a real benchmark run on AMD hardware (produced once by

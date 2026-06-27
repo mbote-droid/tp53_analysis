@@ -1,6 +1,6 @@
 """
 ============================================================
-TP53 RAG Platform - African Genomic Baseline Drift Detector
+Precision Onco Africa - African Genomic Baseline Drift Detector
 ============================================================
 Corrects racial bias in variant interpretation by cross-
 referencing detected mutations against African population

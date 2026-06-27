@@ -1,6 +1,6 @@
 """
 ============================================================
-TP53 RAG Platform - ChEMBL client (TP53-pathway drug discovery)
+Precision Onco Africa - ChEMBL client (TP53-pathway drug discovery)
 utils/chembl_client.py
 ============================================================
 Provides real drug data for compounds targeting the TP53 pathway

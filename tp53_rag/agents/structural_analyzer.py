@@ -1,6 +1,6 @@
 """
 ============================================================
-TP53 RAG Platform - Structural Mechanics & Cavity Analyzer
+Precision Onco Africa - Structural Mechanics & Cavity Analyzer
 agents/structural_analyzer.py
 ============================================================
 Analyses the structural consequences of a TP53 mutation for drug design:

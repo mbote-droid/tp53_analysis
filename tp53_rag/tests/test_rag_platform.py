@@ -1,6 +1,6 @@
 """
 ============================================================
-TP53 RAG Platform - Test Suite
+Precision Onco Africa - Test Suite
 ============================================================
 Tests for the ingestion pipeline, vector store, RAG chain,
 and multi-agent dispatcher.

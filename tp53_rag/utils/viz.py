@@ -1,5 +1,5 @@
 """
-TP53 RAG Platform — Visualization helpers.
+Precision Onco Africa — Visualization helpers.
 
 Pure, Streamlit-free functions so they can be unit-tested without a running
 app. app.py imports these; tests import these. Everything returns a non-empty

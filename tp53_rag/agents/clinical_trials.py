@@ -1,6 +1,6 @@
 """
 ============================================================
-TP53 RAG Platform - ClinicalTrials.gov Matcher
+Precision Onco Africa - ClinicalTrials.gov Matcher
 agents/clinical_trials.py
 ============================================================
 Finds active clinical trials relevant to a TP53 mutation + cancer type,

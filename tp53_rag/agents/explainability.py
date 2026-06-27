@@ -1,6 +1,6 @@
 """
 ============================================================
-TP53 RAG Platform - Explainability ("Why?") Engine
+Precision Onco Africa - Explainability ("Why?") Engine
 agents/explainability.py
 ============================================================
 Turns a TP53 assessment from an opaque output into a transparent evidence
