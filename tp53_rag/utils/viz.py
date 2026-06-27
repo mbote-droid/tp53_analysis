@@ -2308,3 +2308,53 @@ def token_router_chart(report: Optional[dict]) -> go.Figure:
         legend=dict(orientation="h", y=-0.1, font=dict(size=10)),
     )
     return fig
+
+
+# ── Dual guardrails verdict strip ─────────────────────────────────
+def guardrails_html(verdict: Optional[dict]) -> str:
+    """Compact verdict strip: the two gates (form + fact) with pass/fail, plus
+    the overall gate and confidence. Pure, never-empty, injection-safe."""
+    verdict = verdict or {}
+    gates = verdict.get("gates") or []
+    if not gates:
+        return ("<div style='padding:14px;color:#8b98a5;font-family:sans-serif;"
+                "background:#0d1117;border-radius:10px'>No guardrail check run."
+                "</div>")
+    gate = str(verdict.get("gate", "pass"))
+    gate_col = {"pass": "#2ecc71", "flag": "#f1c40f", "block": "#ff6b6b"}.get(
+        gate, "#8b98a5")
+    conf = float(verdict.get("confidence", 0.0))
+    rows = []
+    for g in gates:
+        sev = g.get("severity", "ok")
+        col = {"ok": "#2ecc71", "warn": "#f1c40f", "fail": "#ff6b6b"}.get(sev, "#8b98a5")
+        icon = {"ok": "✓", "warn": "!", "fail": "✗"}.get(sev, "•")
+        name = "Form (syntactic)" if g.get("name") == "syntactic" else "Fact (ClinVar)"
+        rows.append(
+            f"<div class='gr-row'><span class='gr-ic' style='color:{col}'>{icon}</span>"
+            f"<b>{html.escape(name)}</b>"
+            f"<span class='gr-d'>{html.escape(str(g.get('detail','')))}</span></div>")
+    template = """
+<div class="gr-root">
+  <style>
+    .gr-root{font-family:'Inter',system-ui,sans-serif;background:#0d1117;
+        border:1px solid #1f2937;border-radius:10px;padding:13px;color:#e6edf3;}
+    .gr-head{display:flex;justify-content:space-between;align-items:center;
+        margin-bottom:9px;}
+    .gr-gate{font-weight:800;font-size:.9rem;letter-spacing:.5px;}
+    .gr-conf{font-family:'JetBrains Mono',monospace;font-size:.78rem;color:#8b98a5;}
+    .gr-row{display:flex;gap:8px;align-items:baseline;font-size:.78rem;
+        padding:4px 0;border-top:1px solid #1a2230;}
+    .gr-ic{font-weight:800;}
+    .gr-d{color:#9aa7b4;}
+  </style>
+  <div class="gr-head"><span class="gr-gate" style="color:__COL__">⛉ __GATE__</span>
+    <span class="gr-conf">confidence __CONF__%</span></div>
+  __ROWS__
+</div>
+"""
+    return (template
+            .replace("__COL__", gate_col)
+            .replace("__GATE__", gate.upper())
+            .replace("__CONF__", str(round(conf * 100)))
+            .replace("__ROWS__", "\n".join(rows)))

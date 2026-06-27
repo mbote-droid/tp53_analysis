@@ -2691,3 +2691,65 @@ class TestTokenRouter:
         for _ in range(150):
             r.route("R175H")
         assert len(r.report()["history"]) <= 100
+
+
+class TestGuardrails:
+    """Dual guardrails (utils/guardrails.py): form + fact gates → gate verdict."""
+
+    def test_clean_answer_passes(self):
+        from utils.guardrails import run_guardrails, GATE_PASS
+        out = run_guardrails("R175H is a conformational TP53 mutant in the DBD.")
+        assert out["gate"] == GATE_PASS and out["passed"] is True
+        assert out["confidence"] >= 0.8
+        assert len(out["gates"]) == 2
+
+    def test_empty_answer_blocked(self):
+        from utils.guardrails import run_guardrails, GATE_BLOCK
+        out = run_guardrails("")
+        assert out["gate"] == GATE_BLOCK and out["passed"] is False
+
+    def test_error_marker_blocked(self):
+        from utils.guardrails import run_guardrails, GATE_BLOCK
+        out = run_guardrails("Query error: something exploded")
+        assert out["gate"] == GATE_BLOCK
+        assert any("syntactic" in f for f in out["flags"])
+
+    def test_clinvar_conflict_flags_or_blocks(self):
+        from utils.guardrails import run_guardrails, GATE_PASS
+        # Claim that a known pathogenic hotspot is benign → scientific gate trips
+        out = run_guardrails("R175H is a benign polymorphism of no concern.",
+                             mutation="R175H")
+        assert out["gate"] != GATE_PASS          # flagged or blocked
+        assert any("scientific" in f.lower() for f in out["flags"])
+
+    def test_two_distinct_gates(self):
+        from utils.guardrails import run_guardrails
+        out = run_guardrails("R248Q is a DNA-contact mutant.", mutation="R248Q")
+        names = {g["name"] for g in out["gates"]}
+        assert names == {"syntactic", "scientific"}
+
+    def test_confidence_drops_with_issues(self):
+        from utils.guardrails import run_guardrails
+        clean = run_guardrails("R273H is a contact mutant in TP53.")
+        bad = run_guardrails("")
+        assert clean["confidence"] > bad["confidence"]
+
+    def test_never_raises_on_junk(self):
+        from utils.guardrails import run_guardrails
+        for junk in (None, 12345, "   "):
+            out = run_guardrails(junk)
+            assert "gate" in out
+
+    def test_guardrails_html_renders_and_safe(self):
+        from utils.viz import guardrails_html
+        from utils.guardrails import run_guardrails
+        html_str = guardrails_html(run_guardrails("R175H is conformational."))
+        assert "Form" in html_str and "Fact" in html_str
+        safe = guardrails_html({"gates": [{"name": "syntactic",
+                                "detail": "<script>", "severity": "ok"}],
+                                "gate": "pass", "confidence": 1.0})
+        assert "<script>" not in safe
+
+    def test_guardrails_html_never_empty(self):
+        from utils.viz import guardrails_html
+        assert len(guardrails_html(None)) > 40

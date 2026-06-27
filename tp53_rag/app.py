@@ -544,6 +544,15 @@ with tab1:
         st.markdown("### Answer")
         st.markdown(result["answer"])
 
+        # ⛉ dual guardrails — form (syntactic) + fact (ClinVar) gates
+        try:
+            from utils.guardrails import run_guardrails
+            from utils.viz import guardrails_html
+            verdict = run_guardrails(result.get("answer", ""))
+            components.html(guardrails_html(verdict), height=200, scrolling=False)
+        except Exception as e:
+            st.caption(f"Guardrails unavailable: {str(e)[:120]}")
+
         # 🛡 hallucination guard on the answer
         render_clinvar_safety(result.get("answer", ""), key_prefix="query")
 
