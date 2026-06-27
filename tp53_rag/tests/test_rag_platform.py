@@ -2586,3 +2586,39 @@ class TestCodegraph:
         from utils.viz import codegraph_helix_html
         assert len(codegraph_helix_html(None)) > 40
         assert len(codegraph_helix_html({"nodes": []})) > 40
+
+
+class TestAgentEval:
+    """Agent evaluation harness (benchmarks/agent_eval.py). Deterministic,
+    offline; metrics derived from real agent outputs."""
+
+    def test_tumor_board_eval_metrics(self):
+        from benchmarks.agent_eval import evaluate_tumor_board
+        r = evaluate_tumor_board()
+        assert r["success_rate"] == 1.0           # all cases produce a result
+        assert r["mean_latency_ms"] >= 0
+        assert r["calibrated"] is True            # hotspot conf > VUS conf
+
+    def test_explainability_eval_metrics(self):
+        from benchmarks.agent_eval import evaluate_explainability
+        r = evaluate_explainability()
+        assert r["success_rate"] == 1.0
+        assert r["citation_rate"] == 1.0          # every case carries citations
+        assert r["vus_uncertainty_flag_rate"] == 1.0   # all VUS flagged
+
+    def test_run_agent_eval_aggregate(self):
+        from benchmarks.agent_eval import run_agent_eval
+        out = run_agent_eval()
+        assert out["agent_count"] == 2
+        assert out["all_passing"] is True
+
+    def test_eval_table_renders(self):
+        from utils.viz import agent_eval_table
+        from benchmarks.agent_eval import run_agent_eval
+        fig = agent_eval_table(run_agent_eval())
+        assert fig.data                            # a Table trace
+
+    def test_eval_table_placeholder(self):
+        from utils.viz import agent_eval_table
+        assert agent_eval_table({"agents": []}).layout.annotations
+        assert agent_eval_table(None).layout.annotations

@@ -1372,6 +1372,23 @@ with tab8:
     except Exception as e:
         st.caption(f"AMD panel unavailable: {str(e)[:120]}")
 
+    # ── Agent evaluation harness ──
+    st.markdown("### 📏 Agent evaluation harness")
+    st.caption("Deterministic per-agent metrics — latency, success rate, "
+               "calibration, citation coverage, uncertainty flagging.")
+    if st.button("▶ Run agent evaluation", key="eval_go"):
+        try:
+            from benchmarks.agent_eval import run_agent_eval
+            from utils.viz import agent_eval_table
+            report = run_agent_eval()
+            st.plotly_chart(agent_eval_table(report), width="stretch",
+                            config={"displayModeBar": False})
+            st.caption("✅ All agents passing" if report["all_passing"]
+                       else "⚠️ Some agents below threshold")
+        except Exception as e:
+            st.caption(f"Agent eval unavailable: {str(e)[:120]}")
+    st.divider()
+
     # ── Offline Cancer Copilot readiness ──
     st.markdown("### 📡 Offline readiness")
     try:

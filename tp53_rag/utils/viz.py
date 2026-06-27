@@ -2248,3 +2248,34 @@ def codegraph_helix_html(graph: Optional[dict], height: int = 620) -> str:
             .replace("__H__", str(inner_h))
             .replace("__MC__", str(module_count))
             .replace("__EC__", str(edge_count)))
+
+
+# ── Agent evaluation harness table ────────────────────────────────
+def agent_eval_table(report: Optional[dict]) -> go.Figure:
+    """Render per-agent evaluation metrics as a table. Never empty."""
+    report = report or {}
+    agents = report.get("agents") or []
+    if not agents:
+        return _empty_fig("No agent-evaluation results — run the harness.")
+    headers = ["Agent", "Cases", "Latency (ms)", "Success", "Quality signal"]
+    rows = [[], [], [], [], []]
+    for a in agents:
+        rows[0].append(a.get("agent", "?"))
+        rows[1].append(a.get("cases", "—"))
+        rows[2].append(a.get("mean_latency_ms", "—"))
+        rows[3].append(f"{round(a.get('success_rate', 0) * 100)}%")
+        if "calibrated" in a:
+            rows[4].append("✓ calibrated" if a["calibrated"] else "✗ miscalibrated")
+        elif "citation_rate" in a:
+            rows[4].append(f"cite {round(a.get('citation_rate', 0) * 100)}%")
+        else:
+            rows[4].append("—")
+    fig = go.Figure(go.Table(
+        header=dict(values=headers, fill_color="#1b2435",
+                    font=dict(color="#e6edf3"), align="left"),
+        cells=dict(values=rows, fill_color="#0d1117",
+                   font=dict(color="#cdd9e5"), align="left", height=28),
+    ))
+    fig.update_layout(template="plotly_dark", height=160,
+                      margin=dict(l=4, r=4, t=4, b=4))
+    return fig
