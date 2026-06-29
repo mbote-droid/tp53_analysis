@@ -95,11 +95,43 @@ def llm_latency(prompt: str) -> dict:
         return {"ran": False, "reason": str(e)}
 
 
+def vllm_throughput(model: str, prompts: int = 16,
+                    max_tokens: int = 128) -> dict:
+    """Measure generation throughput (tokens/sec) with vLLM on ROCm.
+
+    vLLM serves models on AMD Instinct via ROCm; this batches several prompts
+    through the offline engine and reports sustained tokens/sec. Honest: if
+    vLLM is not installed it reports unavailable rather than inventing a number.
+    """
+    try:
+        from vllm import LLM, SamplingParams
+    except Exception as e:
+        return {"ran": False, "reason": f"vLLM not installed: {e}"}
+    try:
+        llm = LLM(model=model)
+        sp = SamplingParams(max_tokens=max_tokens, temperature=0.0)
+        batch = ["Summarise the clinical significance of TP53 R175H."] * prompts
+        t0 = time.perf_counter()
+        outs = llm.generate(batch, sp)
+        elapsed = time.perf_counter() - t0
+        total_tokens = sum(len(o.outputs[0].token_ids) for o in outs)
+        return {"ran": True, "model": model, "prompts": prompts,
+                "seconds": round(elapsed, 3),
+                "tokens_per_s": round(total_tokens / elapsed, 1),
+                "total_tokens": total_tokens}
+    except Exception as e:
+        return {"ran": False, "reason": str(e)}
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description="AMD hardware benchmark harness")
     ap.add_argument("--matmul", type=int, default=8192, help="matrix size")
     ap.add_argument("--iters", type=int, default=30, help="matmul iterations")
     ap.add_argument("--llm", type=str, default="", help="optional LLM prompt")
+    ap.add_argument("--vllm", type=str, default="",
+                    help="optional model id to benchmark with vLLM on ROCm")
+    ap.add_argument("--vllm-prompts", type=int, default=16,
+                    help="batch size for the vLLM throughput run")
     ap.add_argument("--out", type=str, default=str(OUT_PATH))
     args = ap.parse_args()
 
@@ -118,6 +150,12 @@ def main() -> None:
         ll = llm_latency(args.llm)
         print(json.dumps(ll, indent=2))
         runs.append({"name": "llm round-trip", **ll})
+
+    if args.vllm:
+        print(f"[bench] vLLM throughput ({args.vllm}) on ROCm...")
+        vl = vllm_throughput(args.vllm, prompts=args.vllm_prompts)
+        print(json.dumps(vl, indent=2))
+        runs.append({"name": "vLLM throughput", **vl})
 
     out = {
         "generated_utc": datetime.now(timezone.utc).replace(

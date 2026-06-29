@@ -2438,6 +2438,26 @@ class TestAMDBenchmark:
         rep = mod.device_report()
         assert "python" in rep                    # always present, torch optional
 
+    def test_vllm_harness_graceful_when_absent(self):
+        # vLLM is not installed locally — harness must report honestly, not crash.
+        import importlib.util
+        from pathlib import Path
+        path = Path(__file__).resolve().parent.parent / "tools" / "benchmark_amd.py"
+        spec = importlib.util.spec_from_file_location("benchmark_amd2", path)
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        out = mod.vllm_throughput("some/model")
+        assert out["ran"] is False and "vLLM" in out["reason"]
+
+    def test_benchmark_chart_tokens_per_s(self):
+        from utils.viz import amd_benchmark_chart
+        fig = amd_benchmark_chart({
+            "available": True, "device": {"device_name": "MI210"},
+            "runs": [{"name": "vLLM throughput", "ran": True,
+                      "tokens_per_s": 2450.0}],
+        })
+        assert fig.data and list(fig.data[0].x) == [2450.0]
+
 
 class TestCommandCenter:
     """African Oncology Command Center (agents/command_center.py). Aggregation

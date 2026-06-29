@@ -2029,6 +2029,10 @@ def amd_benchmark_chart(bench: Optional[dict]) -> go.Figure:
             names.append(f"{r.get('name','run')} ({r.get('device','?')})")
             values.append(r["tflops"])
             texts.append(f"{r['tflops']} TFLOP/s")
+        elif r.get("tokens_per_s") is not None:
+            names.append(f"{r.get('name','run')}")
+            values.append(r["tokens_per_s"])
+            texts.append(f"{r['tokens_per_s']} tok/s")
         elif r.get("seconds") is not None:
             names.append(r.get("name", "run"))
             values.append(r["seconds"])
