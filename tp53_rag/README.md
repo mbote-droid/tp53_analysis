@@ -8,7 +8,7 @@
 [![FastAPI](https://img.shields.io/badge/API-FastAPI-009688)](https://fastapi.tiangolo.com)
 ![Status](https://img.shields.io/badge/Deploy-local%20%2F%20pending-orange?logo=streamlit&logoColor=white)
 
-Precision Onco Africa is a multi-agent AI platform for interpreting TP53 mutations, built to work where it is needed most: clinics and labs with constrained hardware and unreliable connectivity. It runs on a commodity laptop (8 GB RAM, no GPU), keeps patient-adjacent data on the machine by default, and degrades gracefully to a fully offline mode.
+Precision Onco Africa is less a chatbot than an **AI operating environment for precision oncology**: a multi-agent platform for interpreting TP53 mutations, built to work where it is needed most — clinics and labs with constrained hardware and unreliable connectivity. It runs on a commodity laptop (8 GB RAM, no GPU), keeps patient-adjacent data on the machine by default, and degrades gracefully to a fully offline mode.
 
 The platform is opinionated about honesty. It never fabricates clinical numbers, it labels illustrative content as such, and every recommendation can be traced back to its evidence. That principle shaped the three features it leads with:
 
@@ -131,6 +131,40 @@ service if a workload ever demands it.
 | **Researcher** | Record voice query → Instant literature-grounded answer + sources |
 | **Pharma R&D** | Batch analyze mutations → Identify synthetic lethal targets → Generate IND dossiers |
 | **Academic Lab** | Local deployment → No cloud costs, full data privacy |
+
+## 🔒 Security
+
+Every untrusted boundary — file uploads, free text reaching the model, and
+values rendered into interactive components — is hardened and adversarially
+tested. Uploads are validated for size, type and content (executables, zip
+bombs, oversized files and non-VCF data are blocked with friendly messages);
+prompt-injection patterns are detected and neutralised; outputs are HTML-escaped
+and all database access is parameterised; PII is scrubbed before logging.
+
+**For the full threat model, the specific attacks simulated, and how each is
+handled, see [SECURITY.md](SECURITY.md).**
+
+## 📐 Methods
+
+The quantitative methods are documented with their formulas (ESM-2 effect
+scoring, hybrid retrieval, semantic caching, consensus confidence, ΔΔG, pLDDT,
+routing and QC savings) — see [METHODS.md](METHODS.md). A 60-second guided demo
+walkthrough is in [DEMO.md](DEMO.md).
+
+## 🗺️ Future Build Considerations
+
+Deliberately scoped *out* of the current build, documented here as a credible
+roadmap rather than overclaimed as done:
+
+- **Real on-chip computer vision** for the microfluidic QC step (currently a
+  decision policy on simulated telemetry).
+- **Physical edge hardware** — Ryzen AI NPU, AMD Kria FPGA, hospital edge
+  servers (currently a clean mock device API + an honest deployment map).
+- **Federated learning** across institutions without sharing patient data.
+- **Whole-genome expansion** beyond TP53 (BRCA1/2, KRAS, EGFR, …) on the
+  existing gene-agnostic seams.
+- **A distilled TP53-specialist model** for faster offline inference (requires
+  GPU training and rigorous evaluation first).
 
 ## 🛠️ Quick Start (5 minutes)
 
