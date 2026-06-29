@@ -1025,6 +1025,21 @@ with tab4:
         st.caption(f"Code graph unavailable: {str(e)[:120]}")
     st.divider()
 
+    # ── Edge device: mock portable sequencer (hardware abstraction) ──
+    with st.expander("🧪 Edge device — portable sequencer (simulated interface)"):
+        st.caption("A software mock of a portable sequencer's device API "
+                   "(develop-before-hardware pattern). No physical instrument "
+                   "is attached; a real driver drops in unchanged.")
+        if st.button("▶ Run a mock sequencing cycle", key="mockdev_go"):
+            try:
+                from utils.mock_hardware import run_mock_demo_sequence
+                from utils.viz import mock_device_html
+                components.html(mock_device_html(run_mock_demo_sequence()),
+                                height=320, scrolling=False)
+            except Exception as e:
+                st.caption(f"Mock device unavailable: {str(e)[:120]}")
+    st.divider()
+
     col1, col2 = st.columns(2)
     with col1:
         st.markdown("### ctDNA VAF Timeline")

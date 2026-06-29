@@ -2469,6 +2469,80 @@ def guardrails_html(verdict: Optional[dict]) -> str:
             .replace("__ROWS__", "\n".join(rows)))
 
 
+# ── Mock edge-device control panel ────────────────────────────────
+def mock_device_html(demo: Optional[dict]) -> str:
+    """Edge-sequencer control panel: lifecycle stages lighting up + telemetry.
+    Clearly labelled a simulated device interface. Never-empty, injection-safe."""
+    demo = demo or {}
+    pipeline = demo.get("pipeline") or []
+    final = demo.get("final") or {}
+    if not pipeline:
+        return ("<div style='padding:18px;color:#8b98a5;font-family:sans-serif;"
+                "background:#05080f;border-radius:12px'>Mock device idle.</div>")
+
+    steps = []
+    for p in pipeline:
+        reached = p.get("reached")
+        active = p.get("active")
+        col = "#00d4ff" if active else ("#2ecc71" if reached else "#2a3240")
+        glow = "box-shadow:0 0 12px #00d4ff;" if active else ""
+        steps.append(
+            f"<div class='md-step'><div class='md-dot' style='background:{col};"
+            f"{glow}'></div><div class='md-lab' style='color:"
+            f"{'#e6edf3' if reached else '#6b7685'}'>"
+            f"{html.escape(str(p.get('label','')))}</div></div>")
+    steps_html = "\n".join(steps)
+
+    focus = final.get("focus_score", 0)
+    temp = final.get("temperature_c", 0)
+    prog = round(float(final.get("run_progress", 0)) * 100)
+    barcode = html.escape(str(final.get("barcode", "—") or "—"))
+
+    template = """
+<div class="md-root">
+  <style>
+    .md-root{font-family:'Inter',system-ui,sans-serif;background:radial-gradient(
+        circle at 50% 0%,#0b1320 0%,#05080f 60%);border:1px solid #1f2937;
+        border-radius:14px;padding:16px;color:#e6edf3;}
+    .md-head{display:flex;justify-content:space-between;align-items:center;
+        margin-bottom:14px;}
+    .md-title{font-weight:700;font-size:.98rem;}
+    .md-badge{font-size:.6rem;color:#f1c40f;border:1px solid #f1c40f;
+        border-radius:5px;padding:2px 7px;letter-spacing:.5px;}
+    .md-rail{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px;}
+    .md-step{display:flex;flex-direction:column;align-items:center;width:84px;
+        text-align:center;}
+    .md-dot{width:14px;height:14px;border-radius:50%;margin-bottom:5px;
+        transition:all .4s;}
+    .md-lab{font-size:.6rem;line-height:1.25;}
+    .md-tele{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;}
+    .md-cell{background:rgba(13,17,23,.6);border:1px solid #25304a;
+        border-radius:9px;padding:9px;text-align:center;}
+    .md-v{font-size:1.05rem;font-weight:800;font-family:'JetBrains Mono',monospace;}
+    .md-k{font-size:.58rem;color:#8b98a5;text-transform:uppercase;}
+    .md-foot{font-size:.64rem;color:#6b7685;margin-top:12px;}
+  </style>
+  <div class="md-head"><span class="md-title">🧪 Portable Sequencer — control panel</span>
+    <span class="md-badge">SIMULATED DEVICE</span></div>
+  <div class="md-rail">__STEPS__</div>
+  <div class="md-tele">
+    <div class="md-cell"><div class="md-v" style="color:#00d4ff">__BC__</div><div class="md-k">barcode</div></div>
+    <div class="md-cell"><div class="md-v" style="color:#2ecc71">__FOCUS__</div><div class="md-k">focus</div></div>
+    <div class="md-cell"><div class="md-v">__TEMP__°C</div><div class="md-k">flowcell temp</div></div>
+    <div class="md-cell"><div class="md-v" style="color:#f1c40f">__PROG__%</div><div class="md-k">run progress</div></div>
+  </div>
+  <div class="md-foot">Software mock of a device API — develop-before-hardware
+    pattern. No physical instrument is attached; drop in a real driver to go live.</div>
+</div>
+"""
+    return (template
+            .replace("__STEPS__", steps_html)
+            .replace("__BC__", barcode)
+            .replace("__FOCUS__", str(focus))
+            .replace("__TEMP__", str(temp))
+            .replace("__PROG__", str(prog)))
+
+
 # ── Evidence scenario explorer ("digital twin") ───────────────────
 _CONF_BADGE = {
     "high": "#2ecc71", "moderate": "#00d4ff", "low": "#f1c40f",

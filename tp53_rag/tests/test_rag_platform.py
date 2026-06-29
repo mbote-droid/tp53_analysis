@@ -2755,6 +2755,79 @@ class TestGuardrails:
         assert len(guardrails_html(None)) > 40
 
 
+class TestMockHardware:
+    """Mock sequencer device API (utils/mock_hardware.py). Deterministic state
+    machine; every response flagged mock."""
+
+    def test_full_lifecycle_completes(self):
+        from utils.mock_hardware import run_mock_demo_sequence
+        out = run_mock_demo_sequence()
+        assert out["mock"] is True
+        assert out["final"]["stage"] == "complete"
+        assert out["final"]["run_progress"] == 1.0
+
+    def test_every_response_flagged_mock(self):
+        from utils.mock_hardware import MockSequencer
+        dev = MockSequencer()
+        for resp in (dev.open_door(), dev.insert_sample("BC1"), dev.scan_barcode()):
+            assert resp["mock"] is True and "Simulated" in resp["note"]
+
+    def test_cannot_insert_with_locked_door(self):
+        from utils.mock_hardware import MockSequencer
+        dev = MockSequencer()
+        r = dev.insert_sample("BC1")            # door still locked
+        assert r["ok"] is False and "door is locked" in r["message"]
+
+    def test_unreadable_barcode_errors(self):
+        from utils.mock_hardware import MockSequencer
+        dev = MockSequencer()
+        dev.open_door(); dev.insert_sample("")  # no barcode
+        r = dev.scan_barcode()
+        assert r["ok"] is False
+        assert "Unreadable barcode" in dev.snapshot()["errors"]
+
+    def test_cannot_arm_without_focus(self):
+        from utils.mock_hardware import MockSequencer
+        dev = MockSequencer()
+        assert dev.arm()["ok"] is False         # nothing done yet
+
+    def test_advance_run_clamps_at_one(self):
+        from utils.mock_hardware import MockSequencer
+        dev = MockSequencer()
+        dev.open_door(); dev.insert_sample("BC"); dev.scan_barcode()
+        dev.lock_and_focus(); dev.arm()
+        for _ in range(10):
+            dev.advance_run(0.5)
+        assert dev.snapshot()["run_progress"] == 1.0
+
+    def test_pipeline_marks_active_and_reached(self):
+        from utils.mock_hardware import MockSequencer
+        dev = MockSequencer()
+        dev.open_door()
+        stages = dev.pipeline()
+        assert any(s["active"] for s in stages)
+        assert stages[0]["reached"]             # idle reached
+
+    def test_reset_returns_to_idle(self):
+        from utils.mock_hardware import MockSequencer
+        dev = MockSequencer()
+        dev.open_door(); dev.reset()
+        assert dev.snapshot()["stage"] == "idle"
+
+    def test_device_html_renders_and_safe(self):
+        from utils.viz import mock_device_html
+        from utils.mock_hardware import run_mock_demo_sequence
+        html_str = mock_device_html(run_mock_demo_sequence())
+        assert "SIMULATED DEVICE" in html_str and "control panel" in html_str
+        safe = mock_device_html({"pipeline": [{"label": "<script>",
+                                "reached": True, "active": True}], "final": {}})
+        assert "<script>" not in safe
+
+    def test_device_html_never_empty(self):
+        from utils.viz import mock_device_html
+        assert len(mock_device_html(None)) > 40
+
+
 class TestMutationStructure:
     """Mutation-aware 3D structure viewer (utils.viz.mutation_structure_html)."""
 
