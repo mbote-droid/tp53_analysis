@@ -43,6 +43,20 @@ requires_network = pytest.mark.skipif(
 )
 
 
+def _has_langchain_ollama() -> bool:
+    """True if the local-only Ollama embedding backend is importable. It is
+    intentionally absent from the cloud-safe requirements, so tests that patch
+    it must skip (not fail) where it is not installed — e.g. CI / cloud."""
+    import importlib.util
+    return importlib.util.find_spec("langchain_ollama") is not None
+
+
+requires_ollama = pytest.mark.skipif(
+    not _has_langchain_ollama(),
+    reason="requires langchain_ollama (local-only embedding backend)",
+)
+
+
 class TestCuratedKnowledge:
     """Validate the curated TP53 knowledge base content."""
 
@@ -157,6 +171,7 @@ class TestIntentRouter:
 class TestVectorStoreIntegration:
     """Integration tests for the vector store (require Ollama)."""
 
+    @requires_ollama
     @pytest.mark.integration
     @patch('langchain_ollama.embeddings.OllamaEmbeddings.embed_documents')
     @patch('langchain_ollama.embeddings.OllamaEmbeddings.embed_query')
@@ -190,6 +205,7 @@ class TestVectorStoreIntegration:
         assert len(results) > 0
         assert all(isinstance(doc, Document) for doc, _ in results)
 
+    @requires_ollama
     @pytest.mark.integration
     def test_rebuilds_on_embedder_dimension_change(self, tmp_path, monkeypatch):
         """If a persisted collection was built at a different embedding dimension
