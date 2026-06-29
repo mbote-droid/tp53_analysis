@@ -2790,3 +2790,63 @@ class TestMutationStructure:
         html_str = mutation_structure_html(self._PDB, "???")
         assert "mutview" in html_str              # still renders structure
         assert "unclassified" in html_str
+
+
+class TestDigitalTwin:
+    """Evidence scenario explorer (agents/digital_twin.py). Honest: illustrative
+    scenarios, never an individual prediction, no fabricated survival figures."""
+
+    def test_hotspot_generates_multiple_scenarios(self):
+        from agents.digital_twin import explore_twin
+        out = explore_twin("R175H", {"cancer": "Breast", "stage": "II"})
+        assert out["scenario_count"] >= 3
+        names = {s["name"] for s in out["scenarios"]}
+        assert any("reactivation" in n.lower() for n in names)   # reactivatable
+
+    def test_reactivatable_only_for_eligible(self):
+        from agents.digital_twin import explore_twin
+        trunc = explore_twin("R213*", {"cancer": "Lung", "stage": "III"})
+        names = " ".join(s["name"].lower() for s in trunc["scenarios"])
+        assert "reactivation" not in names         # truncating not reactivatable
+
+    def test_no_fabricated_individual_survival(self):
+        from agents.digital_twin import explore_twin
+        import json as _json
+        out = explore_twin("R248Q", {"cancer": "Colorectal", "stage": "IV"})
+        blob = _json.dumps(out).lower()
+        # must not invent a specific individual survival percentage/months claim
+        import re as _re
+        assert not _re.search(r"\b\d{1,3}\s*%\s*(5-?year|survival|cure)", blob)
+        assert "not a prediction" in out["disclaimer"].lower() or \
+               "not individual" in out["disclaimer"].lower()
+
+    def test_every_scenario_has_basis_and_caveat(self):
+        from agents.digital_twin import explore_twin
+        out = explore_twin("R175H", {"cancer": "Breast", "stage": "I"})
+        for s in out["scenarios"]:
+            assert s["evidence_basis"] and s["caveat"]
+            assert s["confidence"] in ("high", "moderate", "low", "investigational")
+
+    def test_never_empty_on_junk(self):
+        from agents.digital_twin import explore_twin
+        out = explore_twin("???")
+        assert out["scenarios"]                    # always at least stage-directed
+
+    def test_explorer_html_renders_and_safe(self):
+        from utils.viz import scenario_explorer_html
+        from agents.digital_twin import explore_twin
+        html_str = scenario_explorer_html(explore_twin("R175H", {"cancer": "Breast"}))
+        assert "Scenario Explorer" in html_str
+        assert "not a prediction" in html_str.lower()
+        safe = scenario_explorer_html({"scenarios": [
+            {"name": "<x>", "intervention": "<script>", "illustrative_outcome": "",
+             "evidence_basis": "", "confidence": "low", "caveat": ""}]})
+        assert "<script>" not in safe
+
+    def test_explorer_html_never_empty(self):
+        from utils.viz import scenario_explorer_html
+        assert len(scenario_explorer_html(None)) > 40
+
+    def test_registered_in_registry(self):
+        from config.settings import AGENT_REGISTRY
+        assert "digital_twin" in AGENT_REGISTRY

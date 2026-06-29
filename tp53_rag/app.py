@@ -860,6 +860,18 @@ with tab13:
         except Exception as e:
             st.caption(f"Explainability unavailable: {str(e)[:120]}")
 
+        # ── Evidence scenario explorer ("digital twin") ──
+        st.markdown("### 🧪 Explore scenarios (evidence digital twin)")
+        try:
+            from agents.digital_twin import explore_twin
+            from utils.viz import scenario_explorer_html
+            twin = explore_twin(board.get("mutation", ""),
+                                {"cancer": tb_cancer, "stage": tb_stage})
+            components.html(scenario_explorer_html(twin), height=520,
+                            scrolling=True)
+        except Exception as e:
+            st.caption(f"Scenario explorer unavailable: {str(e)[:120]}")
+
         with st.expander("⬇️ Export consensus (JSON, RUO-stamped)"):
             st.download_button(
                 "Download tumour-board consensus",

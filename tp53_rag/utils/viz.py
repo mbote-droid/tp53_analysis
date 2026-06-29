@@ -2467,3 +2467,72 @@ def guardrails_html(verdict: Optional[dict]) -> str:
             .replace("__GATE__", gate.upper())
             .replace("__CONF__", str(round(conf * 100)))
             .replace("__ROWS__", "\n".join(rows)))
+
+
+# ── Evidence scenario explorer ("digital twin") ───────────────────
+_CONF_BADGE = {
+    "high": "#2ecc71", "moderate": "#00d4ff", "low": "#f1c40f",
+    "investigational": "#a78bfa",
+}
+
+
+def scenario_explorer_html(exploration: Optional[dict]) -> str:
+    """Render illustrative management scenarios as cards. Each carries its
+    evidence basis, confidence and caveat — and the whole panel is clearly
+    marked illustrative (not an individual prediction). Never-empty, safe."""
+    exploration = exploration or {}
+    scenarios = exploration.get("scenarios") or []
+    if not scenarios:
+        return ("<div style='padding:20px;color:#8b98a5;font-family:sans-serif;"
+                "background:#0d1117;border-radius:12px'>No scenarios to explore.</div>")
+    mut = html.escape(str(exploration.get("mutation", "—")))
+    cancer = html.escape(str(exploration.get("cancer", "")))
+    stage = html.escape(str(exploration.get("stage", "")))
+    cards = []
+    for s in scenarios:
+        col = _CONF_BADGE.get(s.get("confidence", "moderate"), "#8b98a5")
+        cards.append(
+            "<div class='sc-card'>"
+            f"<div class='sc-name'>{html.escape(str(s.get('name','')))}</div>"
+            f"<div class='sc-int'>{html.escape(str(s.get('intervention','')))}</div>"
+            f"<div class='sc-out'>{html.escape(str(s.get('illustrative_outcome','')))}</div>"
+            f"<div class='sc-meta'><span class='sc-badge' style='color:{col};"
+            f"border-color:{col}'>{html.escape(str(s.get('confidence','')))}</span>"
+            f"<span class='sc-ev'>{html.escape(str(s.get('evidence_basis','')))}</span></div>"
+            f"<div class='sc-cav'>⚠ {html.escape(str(s.get('caveat','')))}</div>"
+            "</div>")
+    template = """
+<div class="sc-root">
+  <style>
+    .sc-root{font-family:'Inter',system-ui,sans-serif;background:radial-gradient(
+        circle at 30% -10%,#1a1830 0%,#0d1117 55%);border:1px solid #1f2937;
+        border-radius:14px;padding:18px;color:#e6edf3;}
+    .sc-title{font-size:1.02rem;font-weight:700;}
+    .sc-sub{font-size:.76rem;color:#8b98a5;margin-bottom:6px;}
+    .sc-warn{font-size:.72rem;color:#f1c40f;background:rgba(241,196,15,.08);
+        border:1px solid #4a3f1a;border-radius:7px;padding:7px 10px;margin-bottom:13px;}
+    .sc-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(255px,1fr));
+        gap:12px;}
+    .sc-card{background:rgba(13,17,23,.6);border:1px solid #2a2546;
+        border-radius:11px;padding:13px;}
+    .sc-name{font-weight:700;font-size:.9rem;color:#cdd9e5;margin-bottom:3px;}
+    .sc-int{font-size:.74rem;color:#a78bfa;margin-bottom:7px;}
+    .sc-out{font-size:.78rem;color:#a9b6c2;line-height:1.45;margin-bottom:9px;}
+    .sc-meta{display:flex;gap:8px;align-items:center;margin-bottom:6px;flex-wrap:wrap;}
+    .sc-badge{font-size:.62rem;border:1px solid;border-radius:20px;padding:2px 8px;
+        text-transform:uppercase;letter-spacing:.4px;}
+    .sc-ev{font-size:.68rem;color:#6b7685;}
+    .sc-cav{font-size:.7rem;color:#c9a24a;line-height:1.4;}
+  </style>
+  <div class="sc-title">🧪 Evidence Scenario Explorer</div>
+  <div class="sc-sub">Case <span style="color:#00d4ff;font-family:monospace">__MUT__</span> · __CANCER__ · stage __STAGE__</div>
+  <div class="sc-warn">⚠ Illustrative scenarios from published cohort patterns —
+    <b>not a prediction or prognosis for this patient.</b> Explore options; do not act on these alone.</div>
+  <div class="sc-grid">__CARDS__</div>
+</div>
+"""
+    return (template
+            .replace("__MUT__", mut)
+            .replace("__CANCER__", cancer)
+            .replace("__STAGE__", stage)
+            .replace("__CARDS__", "\n".join(cards)))

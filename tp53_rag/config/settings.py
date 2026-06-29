@@ -151,6 +151,13 @@ AGENT_REGISTRY = {
         "keywords": ["command center", "dashboard", "continental", "regional",
                      "kpi", "burden", "planning", "epidemiology", "overview"],
     },
+    "digital_twin": {
+        "description": "Evidence scenario explorer — illustrative management "
+                       "scenarios from published TP53 cohort patterns (not an "
+                       "individual prediction)",
+        "keywords": ["twin", "scenario", "explore", "what if", "outcome",
+                     "prognosis", "options", "simulate", "trajectory"],
+    },
     "sequence_fetch": {
         "description": "Fetch and validate TP53 sequences from NCBI",
         "keywords": ["fetch", "accession", "ncbi", "sequence", "download", "retrieve"],
