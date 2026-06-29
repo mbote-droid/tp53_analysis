@@ -1038,6 +1038,24 @@ with tab4:
                                 height=320, scrolling=False)
             except Exception as e:
                 st.caption(f"Mock device unavailable: {str(e)[:120]}")
+
+    # ── Microfluidic QC: the lab that knows when to stop ──
+    with st.expander("💧 Microfluidic QC — abort-to-save-compute (simulated)"):
+        st.caption("An intelligent fluidics QC policy: it aborts a run the moment "
+                   "it detects an unrecoverable fault (bubble/occlusion), saving "
+                   "sequencing compute. Simulated telemetry — not real imaging.")
+        try:
+            from utils.microfluidic import demo_scenarios
+            from utils.viz import microfluidic_html
+            scen = demo_scenarios()
+            pick = st.radio("Scenario", ["fluidics_fault", "clean_run"],
+                            horizontal=True, key="mf_pick",
+                            format_func=lambda k: "Fluidics fault (bubble)"
+                            if k == "fluidics_fault" else "Clean run")
+            components.html(microfluidic_html(scen[pick]), height=300,
+                            scrolling=False)
+        except Exception as e:
+            st.caption(f"Microfluidic QC unavailable: {str(e)[:120]}")
     st.divider()
 
     col1, col2 = st.columns(2)

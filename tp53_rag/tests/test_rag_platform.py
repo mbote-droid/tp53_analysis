@@ -2828,6 +2828,73 @@ class TestMockHardware:
         assert len(mock_device_html(None)) > 40
 
 
+class TestMicrofluidic:
+    """Microfluidic QC decision engine (utils/microfluidic.py). Deterministic
+    abort/continue policy; honest simulated telemetry."""
+
+    def test_clean_run_completes(self):
+        from utils.microfluidic import analyze_run
+        frames = [{"flow_rate": 0.9, "droplet_uniformity": 0.9} for _ in range(6)]
+        out = analyze_run(frames, total_planned=6)
+        assert out["decision"] == "completed"
+        assert out["frames_saved"] == 0 and out["mock"] is True
+
+    def test_bubble_aborts_early_and_saves_compute(self):
+        from utils.microfluidic import analyze_run
+        frames = ([{"flow_rate": 0.9, "droplet_uniformity": 0.9}] * 2
+                  + [{"bubble": True}]
+                  + [{"flow_rate": 0.9}] * 5)
+        out = analyze_run(frames, total_planned=8)
+        assert out["decision"] == "aborted"
+        assert out["abort_at"] == 2
+        assert out["frames_saved"] == 5           # 8 planned - 3 processed (incl. fault frame)
+        assert out["compute_saved_s"] > 0
+
+    def test_occlusion_aborts(self):
+        from utils.microfluidic import analyze_run
+        out = analyze_run([{"occlusion": True}], total_planned=10)
+        assert out["decision"] == "aborted"
+        assert "occlusion" in out["verdicts"][-1]["fault"]
+
+    def test_low_flow_aborts(self):
+        from utils.microfluidic import analyze_run
+        out = analyze_run([{"flow_rate": 0.1}], total_planned=5)
+        assert out["decision"] == "aborted"
+        assert "flow" in out["verdicts"][-1]["fault"]
+
+    def test_droplet_collapse_aborts(self):
+        from utils.microfluidic import analyze_run
+        out = analyze_run([{"flow_rate": 0.9, "droplet_uniformity": 0.2}],
+                          total_planned=5)
+        assert out["decision"] == "aborted"
+
+    def test_handles_bad_input_gracefully(self):
+        from utils.microfluidic import analyze_run
+        out = analyze_run([], total_planned=0)
+        assert out["decision"] == "completed"
+        out2 = analyze_run([{"flow_rate": "bad"}], total_planned=1)
+        assert "decision" in out2                  # no crash on junk
+
+    def test_demo_scenarios(self):
+        from utils.microfluidic import demo_scenarios
+        d = demo_scenarios()
+        assert d["clean_run"]["decision"] == "completed"
+        assert d["fluidics_fault"]["decision"] == "aborted"
+
+    def test_microfluidic_html_renders_and_safe(self):
+        from utils.viz import microfluidic_html
+        from utils.microfluidic import demo_scenarios
+        html_str = microfluidic_html(demo_scenarios()["fluidics_fault"])
+        assert "SIMULATED QC" in html_str and "ABORTED" in html_str
+        safe = microfluidic_html({"verdicts": [{"index": 0, "quality": 1,
+                                  "fault": "<script>"}], "decision": "aborted"})
+        assert "<script>" not in safe
+
+    def test_microfluidic_html_never_empty(self):
+        from utils.viz import microfluidic_html
+        assert len(microfluidic_html(None)) > 40
+
+
 class TestMutationStructure:
     """Mutation-aware 3D structure viewer (utils.viz.mutation_structure_html)."""
 

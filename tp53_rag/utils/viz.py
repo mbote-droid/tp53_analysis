@@ -2543,6 +2543,67 @@ def mock_device_html(demo: Optional[dict]) -> str:
             .replace("__PROG__", str(prog)))
 
 
+# ── Microfluidic QC decision viz ──────────────────────────────────
+def microfluidic_html(run: Optional[dict]) -> str:
+    """Per-frame channel quality strip with the abort/continue decision and the
+    sequencing compute saved. Labelled a simulated QC workflow. Never-empty."""
+    run = run or {}
+    verdicts = run.get("verdicts") or []
+    if not verdicts:
+        return ("<div style='padding:18px;color:#8b98a5;font-family:sans-serif;"
+                "background:#05080f;border-radius:12px'>No QC run to show.</div>")
+    cells = []
+    for v in verdicts:
+        fault = v.get("fault")
+        col = "#ff6b6b" if fault else "#2ecc71"
+        title = html.escape(str(fault)) if fault else f"q={v.get('quality')}"
+        cells.append(
+            f"<div class='mf-cell' style='background:{col}'>"
+            f"<span class='mf-i'>{html.escape(str(v.get('index')))}</span>"
+            f"<span class='mf-t'>{title}</span></div>")
+    cells_html = "\n".join(cells)
+    decision = str(run.get("decision", "completed"))
+    dcol = "#ff6b6b" if decision == "aborted" else "#2ecc71"
+    saved = run.get("compute_saved_s", 0)
+    msg = html.escape(str(run.get("message", "")))
+
+    template = """
+<div class="mf-root">
+  <style>
+    .mf-root{font-family:'Inter',system-ui,sans-serif;background:#05080f;
+        border:1px solid #1f2937;border-radius:12px;padding:14px;color:#e6edf3;}
+    .mf-head{display:flex;justify-content:space-between;align-items:center;
+        margin-bottom:10px;}
+    .mf-title{font-weight:700;font-size:.9rem;}
+    .mf-badge{font-size:.58rem;color:#f1c40f;border:1px solid #f1c40f;
+        border-radius:5px;padding:2px 7px;}
+    .mf-strip{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:10px;}
+    .mf-cell{width:54px;height:46px;border-radius:7px;display:flex;
+        flex-direction:column;align-items:center;justify-content:center;
+        color:#05080f;font-weight:700;}
+    .mf-i{font-size:.66rem;}
+    .mf-t{font-size:.5rem;text-align:center;line-height:1.1;padding:0 2px;}
+    .mf-dec{font-size:.95rem;font-weight:800;}
+    .mf-msg{font-size:.74rem;color:#a9b6c2;margin-top:5px;line-height:1.4;}
+    .mf-foot{font-size:.62rem;color:#6b7685;margin-top:9px;}
+  </style>
+  <div class="mf-head"><span class="mf-title">💧 Microfluidic channel QC</span>
+    <span class="mf-badge">SIMULATED QC</span></div>
+  <div class="mf-strip">__CELLS__</div>
+  <div class="mf-dec" style="color:__DCOL__">Decision: __DECISION__</div>
+  <div class="mf-msg">__MSG__ · ≈ __SAVED__s of sequencing compute saved.</div>
+  <div class="mf-foot">Illustrates the abort/recollect policy on simulated
+    fluidics telemetry — not real imaging or diagnosis.</div>
+</div>
+"""
+    return (template
+            .replace("__CELLS__", cells_html)
+            .replace("__DCOL__", dcol)
+            .replace("__DECISION__", decision.upper())
+            .replace("__MSG__", msg)
+            .replace("__SAVED__", str(saved)))
+
+
 # ── Evidence scenario explorer ("digital twin") ───────────────────
 _CONF_BADGE = {
     "high": "#2ecc71", "moderate": "#00d4ff", "low": "#f1c40f",
