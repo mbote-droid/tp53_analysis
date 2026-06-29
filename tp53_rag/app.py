@@ -544,6 +544,14 @@ with tab1:
         st.markdown("### Answer")
         st.markdown(result["answer"])
 
+        # 🔊 Jarvis voice — speak the answer in-browser (Web Speech API)
+        if st.checkbox("🔊 Read answer aloud", key="tts_query"):
+            try:
+                from utils.voice_output import speak_html
+                components.html(speak_html(result.get("answer", "")), height=70)
+            except Exception as e:
+                st.caption(f"Voice output unavailable: {str(e)[:120]}")
+
         # ⛉ dual guardrails — form (syntactic) + fact (ClinVar) gates
         try:
             from utils.guardrails import run_guardrails

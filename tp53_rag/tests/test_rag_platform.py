@@ -2915,6 +2915,47 @@ class TestMicrofluidic:
         assert len(microfluidic_html(None)) > 40
 
 
+class TestVoiceOutput:
+    """Browser TTS voice output (utils/voice_output.py). Pure HTML/JS;
+    injection-safe; never empty."""
+
+    def test_is_speakable(self):
+        from utils.voice_output import is_speakable
+        assert is_speakable("hello") and not is_speakable("   ")
+        assert not is_speakable(None)
+
+    def test_speak_html_contains_synthesis(self):
+        from utils.voice_output import speak_html
+        out = speak_html("R175H is a conformational TP53 mutant.")
+        assert "speechSynthesis" in out and "SpeechSynthesisUtterance" in out
+
+    def test_markdown_stripped_for_speech(self):
+        from utils.voice_output import _clean_for_speech
+        out = _clean_for_speech("**Bold** and [link](http://x) and `code`")
+        assert "*" not in out and "http://x" not in out and "link" in out
+
+    def test_long_text_truncated(self):
+        from utils.voice_output import _clean_for_speech
+        out = _clean_for_speech("word " * 400)
+        assert len(out) <= 620                     # capped + ellipsis
+
+    def test_injection_safe(self):
+        from utils.voice_output import speak_html
+        out = speak_html("</script><script>alert(1)</script>")
+        # raw closing-script must not appear unescaped in a way that breaks out
+        assert "</script><script>alert(1)" not in out
+
+    def test_empty_text_disabled_control(self):
+        from utils.voice_output import speak_html
+        out = speak_html("")
+        assert "disabled" in out and len(out) > 40
+
+    def test_rate_clamped(self):
+        from utils.voice_output import speak_html
+        assert "u.rate = 2.0" in speak_html("hi", rate=9.0)
+        assert "u.rate = 0.5" in speak_html("hi", rate=0.1)
+
+
 class TestMutationStructure:
     """Mutation-aware 3D structure viewer (utils.viz.mutation_structure_html)."""
 
