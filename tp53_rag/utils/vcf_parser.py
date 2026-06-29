@@ -102,11 +102,22 @@ def parse_vcf_text(text: str, tp53_only: bool = True) -> Dict:
     """
     variants: List[Dict] = []
     total = skipped = 0
+    # Cap the number of data lines processed to bound CPU/memory on a hostile
+    # or accidentally huge upload (DoS guard). Configurable via MAX_VCF_LINES.
+    try:
+        from utils.security import MAX_VCF_LINES
+        _line_cap = MAX_VCF_LINES
+    except Exception:
+        _line_cap = 200_000
+    truncated = False
     for raw in str(text or "").splitlines():
         line = raw.strip()
         if not line or line.startswith("#"):
             continue
         total += 1
+        if total > _line_cap:
+            truncated = True
+            break
         cols = line.split("\t")
         if len(cols) < 5:
             cols = re.split(r"\s+", line)  # tolerate space-delimited
@@ -146,17 +157,36 @@ def parse_vcf_text(text: str, tp53_only: bool = True) -> Dict:
         "tp53_count": len(variants),
         "skipped": skipped,
         "columns_ok": True,
+        "truncated": truncated,
     }
 
 
 def parse_vcf_bytes(data: bytes, tp53_only: bool = True) -> Dict:
-    """Parse VCF from raw bytes (e.g. an uploaded file). Decodes UTF-8 leniently."""
+    """Parse VCF from raw bytes (e.g. an uploaded file). Decodes UTF-8 leniently.
+
+    Enforces an upper size bound before decoding so a huge or hostile upload
+    cannot exhaust memory. Oversized input is truncated to the cap, not loaded
+    whole.
+    """
+    _empty = {"variants": [], "total_lines": 0, "tp53_count": 0,
+              "skipped": 0, "columns_ok": False, "truncated": False}
+    if not isinstance(data, (bytes, bytearray)):
+        try:
+            data = str(data).encode("utf-8", errors="replace")
+        except Exception:  # pragma: no cover
+            return dict(_empty)
     try:
-        text = data.decode("utf-8", errors="replace") if isinstance(data, (bytes, bytearray)) else str(data)
+        from utils.security import MAX_UPLOAD_BYTES
+        cap = MAX_UPLOAD_BYTES
+    except Exception:
+        cap = 5 * 1024 * 1024
+    if len(data) > cap:
+        data = data[:cap]   # bound memory; parse only the head
+    try:
+        text = bytes(data).decode("utf-8", errors="replace")
     except Exception as e:  # pragma: no cover
         log.warning(f"VCF decode failed: {e}")
-        return {"variants": [], "total_lines": 0, "tp53_count": 0,
-                "skipped": 0, "columns_ok": False}
+        return dict(_empty)
     return parse_vcf_text(text, tp53_only=tp53_only)
 
 

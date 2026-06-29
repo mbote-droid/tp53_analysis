@@ -624,8 +624,9 @@ def needle_plot(variants, title: str = "TP53 mutation needle plot") -> go.Figure
         head_x.append(pos)
         head_y.append(e["count"])
         head_color.append(color)
-        lab = ", ".join(e["labels"]) or f"residue {pos}"
-        sig_txt = e["significance"].replace("_", " ") or "unclassified"
+        # Escape user-derived labels — they flow into the hover label markup.
+        lab = html.escape(", ".join(e["labels"]) or f"residue {pos}")
+        sig_txt = html.escape(e["significance"].replace("_", " ") or "unclassified")
         dom_txt = dom["name"] if dom else "—"
         head_text.append(
             f"<b>{lab}</b><br>position {pos} · {dom_txt}"

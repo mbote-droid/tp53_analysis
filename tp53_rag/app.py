@@ -284,12 +284,19 @@ _inference_lock = threading.Semaphore(2)
 def safe_query(question: str, agent_type=None) -> dict:
     if not st.session_state.rag:
         return {
-            "answer": "RAG system offline. Run: python main.py build",
+            "answer": "The analysis engine is starting up or offline. Please try "
+                      "again in a moment.",
             "agent_used": "offline",
             "sources": [],
             "cache_hit": False,
             "retries": 0,
         }
+    # Security: neutralise role-tag injection and cap length before the LLM.
+    try:
+        from utils.security import sanitize_for_prompt
+        question = sanitize_for_prompt(question)
+    except Exception:
+        pass
     mem = st.session_state.get("memory")
     sid = st.session_state.get("session_id", "default")
     # Pull recent (PII-scrubbed) turns so the model has continuity across reruns
@@ -615,14 +622,33 @@ with tab2:
         up = st.file_uploader("VCF file (.vcf / .txt)", type=["vcf", "txt"], key="vcf_up")
         use_sample = st.checkbox("Use a sample VCF instead", key="vcf_sample")
         vcf_bytes = up.getvalue() if up is not None else None
+        is_sample = False
         if vcf_bytes is None and use_sample:
             from utils.vcf_parser import sample_vcf
             vcf_bytes = sample_vcf().encode()
-        if vcf_bytes:
+            is_sample = True
+        # Security gate: validate uploaded files (size, type, binary/exe sniff,
+        # actual VCF structure) before parsing. Sample data bypasses the gate.
+        gate_ok = True
+        if vcf_bytes and not is_sample:
+            from utils.security import validate_upload, looks_like_vcf
+            v = validate_upload(vcf_bytes, getattr(up, "name", ""),
+                                allowed_ext=(".vcf", ".txt"))
+            if not v["ok"]:
+                st.warning(f"⚠️ {v['friendly']}")
+                gate_ok = False
+            elif not looks_like_vcf(vcf_bytes.decode("utf-8", errors="replace")):
+                st.warning("⚠️ This file doesn't look like a VCF. Expected a "
+                           "`##fileformat=VCF` header or tab-delimited variant "
+                           "rows (CHROM POS ID REF ALT…).")
+                gate_ok = False
+        if vcf_bytes and gate_ok:
             try:
                 from utils.vcf_parser import parse_vcf_bytes
                 from utils.viz import vcf_variant_chart
                 parsed = parse_vcf_bytes(vcf_bytes)
+                if parsed.get("truncated"):
+                    st.info("Large file — only the first portion was parsed.")
                 st.caption(f"**{parsed['tp53_count']}** TP53 variant(s) found "
                            f"· {parsed['skipped']} malformed line(s) skipped")
                 if parsed["variants"]:
