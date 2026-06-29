@@ -324,13 +324,32 @@ def safe_query(question: str, agent_type=None) -> dict:
             pass
         return result
     except Exception as e:
+        log.warning(f"safe_query failed: {e}")
         return {
-            "answer": f"Query error: {str(e)[:300]}",
+            "answer": "Something went wrong while analysing that. Please "
+                      "rephrase your question or try again in a moment.",
             "agent_used": agent_type or "error",
             "sources": [],
             "cache_hit": False,
             "retries": 0,
         }
+
+
+# Cached builders for expensive, deterministic visuals. Streamlit reruns the
+# whole script on every interaction; without caching the DNA code-graph would
+# re-walk the filesystem and AST-parse every module on each rerender. Cached
+# per-session keeps the demo snappy without changing outputs.
+@st.cache_data(show_spinner=False)
+def _cached_codegraph():
+    from utils.codegraph import build_helix_codegraph
+    return build_helix_codegraph()
+
+
+@st.cache_data(show_spinner=False)
+def _cached_command_center():
+    from agents.command_center import command_center_snapshot
+    return command_center_snapshot()
+
 
 def format_sources(sources: list) -> str:
     if not sources:
@@ -1053,7 +1072,7 @@ with tab4:
     try:
         from utils.codegraph import build_helix_codegraph
         from utils.viz import codegraph_helix_html
-        components.html(codegraph_helix_html(build_helix_codegraph()),
+        components.html(codegraph_helix_html(_cached_codegraph()),
                         height=640, scrolling=False)
     except Exception as e:
         st.caption(f"Code graph unavailable: {str(e)[:120]}")
@@ -1870,7 +1889,7 @@ with tab11:
         try:
             from agents.command_center import command_center_snapshot
             from utils.viz import command_center_html
-            components.html(command_center_html(command_center_snapshot()),
+            components.html(command_center_html(_cached_command_center()),
                             height=600, scrolling=True)
         except Exception as e:
             st.caption(f"Command center unavailable: {str(e)[:120]}")
