@@ -2972,6 +2972,56 @@ class TestVoiceOutput:
         assert "u.rate = 0.5" in speak_html("hi", rate=0.1)
 
 
+class TestHardwareProbe:
+    """Honest compute-backend probe (utils/hardware_probe.py). Reports only what
+    is actually present; never fabricates acceleration."""
+
+    def test_detect_returns_shape(self):
+        from utils.hardware_probe import detect_compute
+        info = detect_compute()
+        for k in ("accelerator", "rocm", "cuda", "cpu_only", "summary",
+                  "inference_mode"):
+            assert k in info
+        assert info["accelerator"] in ("amd_rocm", "nvidia_cuda", "cpu")
+
+    def test_never_claims_npu(self):
+        from utils.hardware_probe import detect_compute
+        info = detect_compute()
+        # The Ryzen AI NPU is a roadmap target — never reported as present.
+        assert "npu" not in str(info).lower()
+
+    def test_cpu_only_summary_honest(self, monkeypatch):
+        # With no ROCm env hints and torch GPU unavailable → honest CPU summary.
+        import utils.hardware_probe as hp
+        monkeypatch.delenv("ROCM_PATH", raising=False)
+        monkeypatch.delenv("HIP_VISIBLE_DEVICES", raising=False)
+        monkeypatch.delenv("HSA_OVERRIDE_GFX_VERSION", raising=False)
+        info = hp.detect_compute()
+        if info["accelerator"] == "cpu":
+            assert "CPU-only" in info["summary"]
+
+    def test_rocm_env_detected_without_torch(self, monkeypatch):
+        import utils.hardware_probe as hp
+        monkeypatch.setenv("HSA_OVERRIDE_GFX_VERSION", "11.0.0")
+        # Force the torch path to fail so we exercise the env-hint branch.
+        import builtins
+        real_import = builtins.__import__
+
+        def _no_torch(name, *a, **k):
+            if name == "torch":
+                raise ImportError("no torch")
+            return real_import(name, *a, **k)
+        monkeypatch.setattr(builtins, "__import__", _no_torch)
+        info = hp.detect_compute()
+        assert info["rocm"] is True
+
+    def test_log_banner_returns_info(self):
+        from utils.hardware_probe import log_compute_banner
+        import logging as _logging
+        info = log_compute_banner(_logging.getLogger("test"))
+        assert "summary" in info
+
+
 class TestSecurity:
     """Adversarial security tests (utils/security.py + wired defences).
     Simulates malicious uploads, injection, traversal, DoS."""

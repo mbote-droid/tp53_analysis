@@ -192,6 +192,13 @@ inject_theme()
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
 
+# ── Honest compute-backend probe (logs ROCm/CUDA/CPU as actually present) ──
+try:
+    from utils.hardware_probe import log_compute_banner
+    log_compute_banner(log)
+except Exception:
+    pass
+
 # ── Import RAG modules ────────────────────────────────────────────
 RAG_AVAILABLE = False
 try:
@@ -1479,6 +1486,17 @@ with tab8:
     c1.metric("RAG System", "✅ Online" if st.session_state.rag else "❌ Offline")
     c2.metric("RAG Available", str(RAG_AVAILABLE))
     c3.metric("Messages", len(st.session_state.messages))
+
+    # ── Live compute backend (honest probe) ──
+    try:
+        from utils.hardware_probe import detect_compute
+        hw = detect_compute()
+        acc = hw.get("accelerator", "cpu")
+        icon = {"amd_rocm": "🟢 AMD ROCm", "nvidia_cuda": "🟢 CUDA",
+                "cpu": "⚪ CPU-only"}.get(acc, acc)
+        st.markdown(f"**Compute backend:** {icon} — {hw.get('summary','')}")
+    except Exception as e:
+        st.caption(f"Compute probe unavailable: {str(e)[:120]}")
 
     # ── AMD deployment & hardware benchmarks ──
     st.markdown("### ⚡ AMD deployment & benchmarks")
