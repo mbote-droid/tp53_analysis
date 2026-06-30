@@ -148,8 +148,9 @@ handled, see [SECURITY.md](SECURITY.md).**
 
 The quantitative methods are documented with their formulas (ESM-2 effect
 scoring, hybrid retrieval, semantic caching, consensus confidence, ΔΔG, pLDDT,
-routing and QC savings) — see [METHODS.md](METHODS.md). A 60-second guided demo
-walkthrough is in [DEMO.md](DEMO.md).
+routing and QC savings) — see [METHODS.md](METHODS.md). The system design and
+the heterogeneous AMD compute roadmap are in [ARCHITECTURE.md](ARCHITECTURE.md),
+and a 60-second guided demo walkthrough is in [DEMO.md](DEMO.md).
 
 ## 🗺️ Future Build Considerations
 
