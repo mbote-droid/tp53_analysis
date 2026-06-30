@@ -604,6 +604,31 @@ class ResponseValidator:
 
 
 # ═══════════════════════════════════════════════════════════════════
+# Streaming helpers
+# ═══════════════════════════════════════════════════════════════════
+
+def _iter_sse_deltas(resp):
+    """Yield incremental content from an OpenAI-compatible SSE stream response.
+    Shared by the Fireworks and llama.cpp backends."""
+    for line in resp.iter_lines():
+        if not line:
+            continue
+        text = line.decode("utf-8") if isinstance(line, (bytes, bytearray)) else line
+        if not text.startswith("data:"):
+            continue
+        data = text[len("data:"):].strip()
+        if data == "[DONE]":
+            break
+        try:
+            obj = json.loads(data)
+            delta = (obj.get("choices", [{}])[0].get("delta", {}) or {}).get("content")
+            if delta:
+                yield delta
+        except Exception:
+            continue
+
+
+# ═══════════════════════════════════════════════════════════════════
 # LLM Backend: llama.cpp
 # ═══════════════════════════════════════════════════════════════════
 
@@ -660,6 +685,30 @@ class LlamaCppBackend:
             log.error(f"llama.cpp request failed: {e}")
             raise
 
+    def stream(self, system_prompt: str, user_prompt: str,
+               max_tokens: int = CTX_RESPONSE, temperature: float = 0.1):
+        """Yield text chunks from the llama.cpp SSE stream. Falls back to whole."""
+        session = self._get_session()
+        payload = {
+            "model": "local",
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+            "max_tokens": max_tokens, "temperature": temperature,
+            "top_p": 0.95, "repeat_penalty": 1.15,
+            "stop": ["<end_of_turn>", "<eos>"], "stream": True,
+        }
+        try:
+            with session.post(f"{self._base_url}/v1/chat/completions",
+                              json=payload, timeout=300, stream=True) as resp:
+                resp.raise_for_status()
+                for chunk in _iter_sse_deltas(resp):
+                    yield chunk
+        except Exception as e:
+            log.error(f"llama.cpp stream failed: {e}")
+            yield self.generate(system_prompt, user_prompt, max_tokens, temperature)
+
     def health(self) -> bool:
         try:
             session = self._get_session()
@@ -688,6 +737,25 @@ class GoogleGenAIBackend:
             model=self._model, contents=user_prompt, config=config,
         )
         return (resp.text or "").strip()
+
+    def stream(self, system_prompt: str, user_prompt: str,
+               max_tokens: int = 1024, **_):
+        """Yield text chunks via the native Google streaming API. Falls back to
+        the whole answer if streaming is unavailable."""
+        try:
+            from google import genai
+            from google.genai import types
+            client = genai.Client(api_key=self._key)
+            config = types.GenerateContentConfig(
+                temperature=0.0, top_p=0.95, max_output_tokens=max_tokens,
+                system_instruction=system_prompt)
+            for chunk in client.models.generate_content_stream(
+                    model=self._model, contents=user_prompt, config=config):
+                if getattr(chunk, "text", None):
+                    yield chunk.text
+        except Exception as e:
+            log.error(f"Google stream failed: {e}")
+            yield self.generate(system_prompt, user_prompt, max_tokens)
 
     def health(self) -> bool:
         return bool(self._key)
@@ -745,6 +813,32 @@ class FireworksBackend:
             log.error(f"Fireworks request failed: {e}")
             raise
 
+    def stream(self, system_prompt: str, user_prompt: str,
+               max_tokens: int = CTX_RESPONSE, temperature: float = 0.1):
+        """Yield text chunks from the streaming chat-completions endpoint (SSE).
+        Falls back to yielding the whole answer if streaming fails."""
+        session = self._get_session()
+        payload = {
+            "model": self._model,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+            "max_tokens": max_tokens, "temperature": temperature,
+            "top_p": 0.95, "stream": True,
+        }
+        headers = {"Authorization": f"Bearer {self._key}",
+                   "Content-Type": "application/json"}
+        try:
+            with session.post(f"{self._base_url}/chat/completions", json=payload,
+                              headers=headers, timeout=120, stream=True) as resp:
+                resp.raise_for_status()
+                for chunk in _iter_sse_deltas(resp):
+                    yield chunk
+        except Exception as e:
+            log.error(f"Fireworks stream failed: {e}")
+            yield self.generate(system_prompt, user_prompt, max_tokens, temperature)
+
     def health(self) -> bool:
         return bool(self._key)
 
@@ -765,6 +859,25 @@ class OllamaBackend:
         )
         msgs = [SystemMessage(content=system_prompt), HumanMessage(content=user_prompt)]
         return llm.invoke(msgs).content.strip()
+
+    def stream(self, system_prompt: str, user_prompt: str,
+               max_tokens: int = 1024, **_):
+        """Yield text chunks via ChatOllama streaming. Falls back to whole."""
+        try:
+            from langchain_ollama import ChatOllama
+            from langchain_core.messages import HumanMessage, SystemMessage
+            llm = ChatOllama(model=self._model, base_url=self._base_url,
+                             temperature=0.1, num_predict=max_tokens,
+                             num_ctx=2048, repeat_penalty=1.15)
+            msgs = [SystemMessage(content=system_prompt),
+                    HumanMessage(content=user_prompt)]
+            for chunk in llm.stream(msgs):
+                piece = getattr(chunk, "content", None)
+                if piece:
+                    yield piece
+        except Exception as e:
+            log.error(f"Ollama stream failed: {e}")
+            yield self.generate(system_prompt, user_prompt, max_tokens)
 
     def health(self) -> bool:
         try:
@@ -1167,6 +1280,98 @@ class TP53RAGChain:
             "pipeline_data_used": bool(pipeline_data),
             "broadened_search":   broadened,
         }
+
+    def query_stream(
+        self,
+        question: str,
+        pipeline_data: Optional[Dict[str, Any]] = None,
+        agent_type: Optional[str] = None,
+        conversation_history: Optional[List[str]] = None,
+    ):
+        """Streaming variant of query(): yields answer text chunks as the model
+        generates them, for a responsive UI. Deliberately single-pass (no
+        self-correction retry, which is incompatible with streaming); the
+        non-streaming query() remains the default for correctness-critical use.
+
+        Reuses the same retrieval + context build. The full answer is
+        PII-scrubbed and cached after streaming completes. Never raises into the
+        UI — falls back to a curated message if generation yields nothing.
+        """
+        self.rate_limiter.wait_if_needed()
+        if agent_type is None:
+            agent_type = self.router.route(question)
+        clean_question = self.pii.scrub(question)
+
+        # Cache hit → emit whole (already complete, fast).
+        cached = self.cache.get(agent_type, clean_question)
+        if cached:
+            yield cached
+            return
+
+        # Retrieval (same as query()).
+        candidates = self.search_engine.search(clean_question, k=RERANK_POOL)
+        broadened = False
+        if not candidates:
+            try:
+                broad_q = re.sub(r'\s+', ' ', re.sub(r'[^\w\s]', '', clean_question))
+                candidates = self.search_engine.search(broad_q[:50], k=RERANK_POOL)
+                broadened = bool(candidates)
+            except Exception:
+                pass
+        reranked = (self.reranker.rerank(clean_question, candidates,
+                                         top_k=RERANK_TOP_K) if candidates else [])
+        context = self.ctx_manager.fit_context(
+            HybridSearchEngine.format_context(reranked))
+
+        pipeline_str = ""
+        if pipeline_data:
+            safe_data = {k: self.pii.scrub(str(v)) if isinstance(v, str) else v
+                         for k, v in pipeline_data.items() if k != "patient_id"}
+            pipeline_str = self.ctx_manager.build_pipeline_str(safe_data)
+        history_str = (self.ctx_manager.fit_history(conversation_history)
+                       if conversation_history else "")
+
+        system_prompt = SYSTEM_PROMPTS.get(agent_type, SYSTEM_PROMPTS["default"])
+        parts = []
+        if context:
+            parts.append(f"KNOWLEDGE CONTEXT:\n{context}")
+        if pipeline_str:
+            parts.append(f"ANALYSIS DATA:\n{pipeline_str}")
+        if history_str:
+            parts.append(f"CONVERSATION HISTORY:\n{history_str}")
+        parts.append(f"QUESTION:\n{clean_question}")
+        parts.append("Provide a concise, accurate, clinically meaningful "
+                     "response grounded in the context above.")
+        user_prompt = "\n\n".join(parts)
+
+        backend = self._get_backend()
+        collected = []
+        try:
+            if hasattr(backend, "stream"):
+                for chunk in backend.stream(system_prompt, user_prompt,
+                                            max_tokens=CTX_RESPONSE):
+                    if chunk:
+                        collected.append(chunk)
+                        yield chunk
+            else:
+                whole = backend.generate(system_prompt, user_prompt,
+                                         max_tokens=CTX_RESPONSE)
+                collected.append(whole or "")
+                yield whole or ""
+        except Exception as e:
+            log.error(f"Streaming generation failed: {e}")
+
+        full = "".join(collected).strip()
+        if not full:
+            fallback = self.zero_handler.handle(agent_type, clean_question, broadened)
+            yield fallback
+            full = fallback
+        # Persist the PII-scrubbed full answer (display streamed raw model text;
+        # what we store/cache is scrubbed).
+        scrubbed = self.pii.scrub(full)
+        self.cache.set(agent_type, clean_question, scrubbed)
+        AuditLogger.log({"event": "query_stream_complete", "agent": agent_type,
+                         "broadened": broadened})
 
     def batch_query(
         self,

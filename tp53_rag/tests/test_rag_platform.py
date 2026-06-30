@@ -3022,6 +3022,61 @@ class TestHardwareProbe:
         assert "summary" in info
 
 
+class TestStreaming:
+    """Token streaming on the LLM backends (rag_chain). Network mocked."""
+
+    def test_sse_delta_parser(self):
+        from agents.rag_chain import _iter_sse_deltas
+
+        class _Resp:
+            def iter_lines(self):
+                return [
+                    b'data: {"choices":[{"delta":{"content":"Hello"}}]}',
+                    b'data: {"choices":[{"delta":{"content":" world"}}]}',
+                    b'data: {"choices":[{"delta":{}}]}',      # no content
+                    b'data: [DONE]',
+                    b'data: {"choices":[{"delta":{"content":"ignored"}}]}',
+                ]
+        chunks = list(_iter_sse_deltas(_Resp()))
+        assert chunks == ["Hello", " world"]            # stops at [DONE]
+
+    def test_fireworks_stream_yields_deltas(self):
+        from agents.rag_chain import FireworksBackend
+        be = FireworksBackend(api_key="k")
+
+        class _Resp:
+            def __enter__(self): return self
+            def __exit__(self, *a): return False
+            def raise_for_status(self): pass
+            def iter_lines(self):
+                return [b'data: {"choices":[{"delta":{"content":"R175H"}}]}',
+                        b'data: [DONE]']
+
+        class _Sess:
+            def post(self, *a, **k): return _Resp()
+        be._session = _Sess()
+        assert "".join(be.stream("s", "u")) == "R175H"
+
+    def test_stream_falls_back_to_whole_on_error(self):
+        from agents.rag_chain import FireworksBackend
+        be = FireworksBackend(api_key="k")
+
+        class _Sess:
+            def post(self, *a, **k): raise RuntimeError("boom")
+        be._session = _Sess()
+        # generate() also uses the session → also fails → stream yields nothing
+        # but must not raise. Patch generate to a known fallback value.
+        be.generate = lambda *a, **k: "FALLBACK ANSWER"
+        assert "".join(be.stream("s", "u")) == "FALLBACK ANSWER"
+
+    def test_all_backends_have_stream(self):
+        from agents.rag_chain import (FireworksBackend, GoogleGenAIBackend,
+                                      OllamaBackend, LlamaCppBackend)
+        for cls in (FireworksBackend, GoogleGenAIBackend, OllamaBackend,
+                    LlamaCppBackend):
+            assert hasattr(cls, "stream")
+
+
 class TestSecurity:
     """Adversarial security tests (utils/security.py + wired defences).
     Simulates malicious uploads, injection, traversal, DoS."""

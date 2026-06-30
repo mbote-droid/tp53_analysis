@@ -566,8 +566,51 @@ with tab1:
         if st.button("🗑 Clear", width="stretch"):
             st.session_state.messages = []
             st.success("Cleared")
+    stream_mode = st.checkbox(
+        "⚡ Stream the answer (lower perceived latency)", value=True,
+        help="Shows tokens as they are generated. Uncheck for the full "
+             "self-correcting pipeline (slightly slower, validated).")
 
-    if submit and question:
+    if submit and question and stream_mode and st.session_state.get("rag"):
+        # Streaming path: tokens appear live via st.write_stream. Single-pass
+        # (no self-correction); the non-stream path below is the validated one.
+        st.session_state.messages.append({"role": "user", "content": question})
+        st.markdown("### Answer")
+        try:
+            from utils.security import sanitize_for_prompt
+            safe_q = sanitize_for_prompt(question)
+            mem = st.session_state.get("memory")
+            sid = st.session_state.get("session_id", "default")
+            history = mem.history_strings(sid, limit=6) if mem else None
+            with _inference_lock:
+                streamed = st.write_stream(
+                    st.session_state.rag.query_stream(
+                        safe_q, pipeline_data=st.session_state.pipeline_data or None,
+                        agent_type=forced_agent, conversation_history=history))
+            answer_text = streamed if isinstance(streamed, str) else "".join(streamed)
+            st.session_state.messages.append(
+                {"role": "assistant", "content": answer_text})
+            if mem:
+                mem.remember(sid, question, answer_text, forced_agent or "")
+            try:
+                from utils.token_router import get_router
+                get_router().route(question, cache_hit=False)
+            except Exception:
+                pass
+            # Guardrails on the streamed answer
+            try:
+                from utils.guardrails import run_guardrails
+                from utils.viz import guardrails_html
+                components.html(guardrails_html(run_guardrails(answer_text)),
+                                height=200, scrolling=False)
+            except Exception:
+                pass
+            render_clinvar_safety(answer_text, key_prefix="query_stream")
+        except Exception as e:
+            st.error("Streaming hit a snag — try unchecking stream mode. "
+                     f"({str(e)[:100]})")
+
+    elif submit and question:
         with st.spinner("Querying Gemma 4 via RAG..."):
             result = safe_query(question, agent_type=forced_agent)
 
