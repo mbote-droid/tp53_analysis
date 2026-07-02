@@ -8,6 +8,28 @@
 [![FastAPI](https://img.shields.io/badge/API-FastAPI-009688)](https://fastapi.tiangolo.com)
 ![Status](https://img.shields.io/badge/Deploy-local%20%2F%20pending-orange?logo=streamlit&logoColor=white)
 
+> ## 🏁 Quick Start for Judges (AMD Hackathon ACT II · Track 3)
+>
+> **What it is:** six AI specialists debate a TP53 cancer case and vote toward a
+> consensus you can trust — running on AMD infrastructure, working even offline.
+>
+> **Run it in one command:**
+> ```bash
+> git clone https://github.com/mbote-droid/precision-onco-africa
+> cd precision-onco-africa
+> docker compose up --build
+> # App → http://localhost:8501     API docs → http://localhost:8000/docs
+> ```
+> **See the wow in 60 seconds:** open the **⭐ Tumour Board** tab, enter `R175H`,
+> click **Convene the board** — watch the debate → consensus → the "Why?"
+> evidence trace. Guided walkthrough: **[DEMO.md](DEMO.md)**.
+>
+> **AMD-specific submission details:** **[AMD_SUBMISSION.md](AMD_SUBMISSION.md)**
+> (integration, benchmarks, product/market). Pitch kit: **[PITCH.md](PITCH.md)**.
+>
+> **Live demo:** `__DEMO_URL__` · **AMD inference mode:** set
+> `INFERENCE_MODE=fireworks` in `.env`.
+
 Precision Onco Africa is less a chatbot than an **AI operating environment for precision oncology**: a multi-agent platform for interpreting TP53 mutations, built to work where it is needed most — clinics and labs with constrained hardware and unreliable connectivity. It runs on a commodity laptop (8 GB RAM, no GPU), keeps patient-adjacent data on the machine by default, and degrades gracefully to a fully offline mode.
 
 The platform is opinionated about honesty. It never fabricates clinical numbers, it labels illustrative content as such, and every recommendation can be traced back to its evidence. That principle shaped the three features it leads with:
@@ -150,7 +172,9 @@ The quantitative methods are documented with their formulas (ESM-2 effect
 scoring, hybrid retrieval, semantic caching, consensus confidence, ΔΔG, pLDDT,
 routing and QC savings) — see [METHODS.md](METHODS.md). The system design and
 the heterogeneous AMD compute roadmap are in [ARCHITECTURE.md](ARCHITECTURE.md),
-and a 60-second guided demo walkthrough is in [DEMO.md](DEMO.md).
+and a 60-second guided demo walkthrough is in [DEMO.md](DEMO.md). For the AMD
+hackathon: [AMD_SUBMISSION.md](AMD_SUBMISSION.md) (integration, benchmarks,
+product/market) and [PITCH.md](PITCH.md) (slides + video script).
 
 ## 🗺️ Future Build Considerations
 
