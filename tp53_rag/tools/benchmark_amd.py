@@ -25,9 +25,14 @@ from __future__ import annotations
 import argparse
 import json
 import platform
+import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
+
+# Make the project root importable when run as `python tools/benchmark_amd.py`
+# (Python otherwise only puts tools/ on the path, so `import agents` fails).
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 OUT_PATH = Path("data/amd_benchmark.json")
 
