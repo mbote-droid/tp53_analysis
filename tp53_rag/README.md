@@ -8,6 +8,8 @@
 [![FastAPI](https://img.shields.io/badge/API-FastAPI-009688)](https://fastapi.tiangolo.com)
 ![Status](https://img.shields.io/badge/Deploy-local%20%2F%20pending-orange?logo=streamlit&logoColor=white)
 
+![Precision Onco Africa trailer](assets/trailer.gif)
+
 > ## 🏁 Quick Start for Judges (AMD Hackathon ACT II · Track 3)
 >
 > **What it is:** six AI specialists debate a TP53 cancer case and vote toward a
