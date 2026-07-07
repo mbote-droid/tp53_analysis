@@ -149,12 +149,43 @@ def inject_theme() -> None:
             100% { box-shadow: 0 0 0 0 rgba(0,212,255,0); }
         }
 
-        /* ── Tabs: never let 12 tabs overflow — scroll horizontally ── */
+        /* ── Tabs: never let a tab row overflow — scroll horizontally ── */
         .stTabs [data-baseweb="tab-list"] {
             overflow-x: auto;
             scrollbar-width: thin;
         }
         .stTabs [data-baseweb="tab"] { white-space: nowrap; }
+
+        /* ── Two-level tab hierarchy: 13 flat tabs are grouped into 6
+           top-level sections, each with its own inner tab row. Give the
+           outer (group) row a bolder, pill-styled look so it reads as
+           "section" while nested tab rows stay compact — otherwise two
+           identical-looking tab rows stacked on top of each other are
+           genuinely hard to parse. Selector verified against the live
+           rendered DOM (Streamlit 1.55): the outer tabs' stTabs container
+           is the sole direct grandchild of stMainBlockContainer via
+           stVerticalBlock; every nested/inner stTabs sits several levels
+           deeper inside a tab panel, so this selector matches only the
+           outer row. ── */
+        div[data-testid="stMainBlockContainer"] > div[data-testid="stVerticalBlock"]
+            > div[data-testid="stTabs"] > div > div > div[data-baseweb="tab-list"] {
+            gap: 4px;
+            background: var(--tp53-panel);
+            padding: 6px;
+            border-radius: 12px;
+            border: 1px solid #232b36;
+        }
+        div[data-testid="stMainBlockContainer"] > div[data-testid="stVerticalBlock"]
+            > div[data-testid="stTabs"] > div > div > div[data-baseweb="tab-list"] button[data-baseweb="tab"] {
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 0.95rem;
+            padding: 8px 16px;
+        }
+        div[data-testid="stMainBlockContainer"] > div[data-testid="stVerticalBlock"]
+            > div[data-testid="stTabs"] > div > div > div[data-baseweb="tab-list"] button[aria-selected="true"] {
+            background: rgba(0, 212, 255, 0.12);
+        }
 
         /* Charts and tables stay inside the viewport on any width */
         [data-testid="stPlotlyChart"], [data-testid="stDataFrame"] {
@@ -502,6 +533,10 @@ with st.sidebar:
         _backend = "llama.cpp CPU (local)"
         _model = "Gemma 4 (GGUF, Q4_K_M)"
         _privacy = "100% local — no cloud"
+    elif _mode == "fireworks":
+        _backend = "Fireworks AI on AMD Instinct (cloud)"
+        _model = os.getenv("FIREWORKS_MODEL", "accounts/fireworks/models/minimax-m3")
+        _privacy = "Cloud inference — AMD-hosted"
     else:
         _backend = "Ollama (local)"
         _model = os.getenv("OLLAMA_MODEL", "gemma4-lowmem")
@@ -531,22 +566,39 @@ st.markdown(
 )
 
 # ── Tabs ──────────────────────────────────────────────────────────
-(tab1, tab2, tab13, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10, tab11,
- tab12) = st.tabs([
-    "🔍 Query",
-    "🧬 Analysis",
-    "⭐ Tumour Board",
-    "💊 Drug Discovery",
-    "📊 Visualization",
-    "📋 Report",
-    "🔬 Structure",
-    "🎤 Voice",
-    "🛠 Debug",
-    "🔬 Pathology",
-    "📍 TNM Staging",
-    "🌍 African Atlas",
-    "🧪 Clinical Trials",
-])
+# 13 flat tabs used to overflow the tab bar (forcing horizontal scroll to
+# find anything past ~7). Grouped into 6 logical top-level tabs instead;
+# each group holds an inner st.tabs() for its members. Streamlit tab/
+# container objects are position-independent once created, so every
+# `with tabN:` block below is completely unchanged — only this definition
+# block changed.
+group_analyze, group_board, group_molecular, group_reports, group_global, \
+    group_tools = st.tabs([
+        "🔍 Analyze",
+        "⭐ Tumour Board",
+        "🧬 Molecular",
+        "📊 Reports & Staging",
+        "🌍 Global & Trials",
+        "🎤 Voice & Tools",
+    ])
+
+with group_analyze:
+    tab1, tab2 = st.tabs(["🔍 Query", "🧬 Analysis"])
+
+with group_board:
+    tab13 = st.container()
+
+with group_molecular:
+    tab3, tab6, tab9 = st.tabs(["💊 Drug Discovery", "🔬 Structure", "🔬 Pathology"])
+
+with group_reports:
+    tab4, tab5, tab10 = st.tabs(["📊 Visualization", "📋 Report", "📍 TNM Staging"])
+
+with group_global:
+    tab11, tab12 = st.tabs(["🌍 African Atlas", "🧪 Clinical Trials"])
+
+with group_tools:
+    tab7, tab8 = st.tabs(["🎤 Voice", "🛠 Debug"])
 
 # ── TAB 1: Query ──────────────────────────────────────────────────
 with tab1:

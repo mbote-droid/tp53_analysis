@@ -154,6 +154,20 @@ service if a workload ever demands it.
 | **Pharma R&D** | Batch analyze mutations → Identify synthetic lethal targets → Generate IND dossiers |
 | **Academic Lab** | Local deployment → No cloud costs, full data privacy |
 
+## 📱 Responsive design (honest scope)
+
+The 13 feature tabs are grouped into **6 top-level sections** (Analyze, Tumour
+Board, Molecular, Reports & Staging, Global & Trials, Voice & Tools), each
+holding an inner tab row for its members — this replaced a flat 13-tab bar
+that overflowed on anything narrower than a wide desktop window. A dedicated
+`@media (max-width: 768px)` pass tightens padding, heading sizes, tab-label
+size, and metric-value size for phone/narrow-window use, and any tab row that
+still doesn't fit scrolls horizontally rather than clipping. This is a
+**usable, tested layout down to a 375px mobile viewport** — not a
+mobile-native redesign; dense views (the multi-agent architecture diagram, 3D
+structure viewers, Plotly tables) are still most legible on a laptop screen or
+larger.
+
 ## 🔒 Security
 
 Every untrusted boundary — file uploads, free text reaching the model, and
