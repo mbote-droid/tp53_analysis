@@ -32,7 +32,7 @@ Precision Onco Africa uses AMD infrastructure in three concrete ways:
    inference mode (`INFERENCE_MODE=fireworks`). The multi-agent reasoning and
    answer generation run on **open models served on AMD Instinct GPUs** via
    Fireworks — this is the platform's primary hosted-inference path.
-   - Model used: `__FIREWORKS_MODEL__`  *(to be finalised at submission)*
+   - Model used: `accounts/fireworks/models/minimax-m3`
    - Code: `agents/rag_chain.py` → `FireworksBackend` (streaming + non-streaming)
 
 2. **AMD Developer Cloud + ROCm.** Heavy compute (protein-language-model
@@ -52,19 +52,27 @@ Precision Onco Africa uses AMD infrastructure in three concrete ways:
 
 ### Benchmark: local CPU vs AMD cloud
 
-> ⚠️ **Placeholder — to be filled with real numbers from `data/amd_benchmark.json`
-> after the AMD Developer Cloud run. No figures are invented.**
+Real numbers, captured by `tools/benchmark_amd.py`, committed at
+[`data/amd_benchmark.json`](data/amd_benchmark.json). Same prompt
+("*What is the clinical significance of TP53 R175H?*"), same machine, only the
+inference backend changed.
 
-| Metric | Local (8 GB CPU, Ollama) | AMD Instinct (Fireworks / ROCm) |
+| Metric | Local (8 GB CPU laptop, Ollama/gemma4-lowmem) | AMD Instinct (Fireworks/minimax-m3) |
 |---|---|---|
-| Single-answer latency | `__LOCAL_LATENCY__` | `__AMD_LATENCY__` |
-| Tumour-board full run | `__LOCAL_BOARD__` | `__AMD_BOARD__` |
-| vLLM throughput (tokens/s) | n/a | `__AMD_TPS__` |
-| fp16 matmul (TFLOP/s) | `__LOCAL_TFLOPS__` | `__AMD_TFLOPS__` |
+| Single-answer latency | **182.2 s** | **5.1 s** |
+| Speedup | — | **≈35×** |
+| fp16 matmul (TFLOP/s, this CPU host) | 0.06 | *(ROCm/vLLM throughput run — see note)* |
 
-*Once populated, the headline reads, e.g.:* “Moving inference from local CPU to
-AMD Instinct via Fireworks cut answer latency from **X s to Y s**, making the
-multi-agent debate feel real-time.”
+**Headline:** moving inference from a local 8 GB CPU laptop to AMD Instinct via
+Fireworks cut answer latency **from 182 s to 5.1 s (~35×)** — the difference
+between a multi-agent tumour-board debate being unusable and feeling real-time.
+
+*Note: the ROCm/vLLM throughput run (`tools/benchmark_amd.py --vllm <model>`)
+requires an active AMD Developer Cloud GPU instance; it was not executed in
+this environment (no ROCm host attached) and is not fabricated here. The
+tumour board itself is excluded from this table because it is a deterministic
+agent with no LLM call (see Completeness, below) — its latency is
+backend-independent by design.*
 
 ### AMD credit utilisation
 

@@ -2380,6 +2380,26 @@ class TestFireworksBackend:
         with pytest.raises(Exception):
             be.generate("s", "u")
 
+    def test_generate_handles_reasoning_only_response(self):
+        """Reasoning models (e.g. minimax-m3) can spend the whole max_tokens
+        budget on reasoning_content and return a message with NO 'content'
+        key at all. This must degrade to '' (caught by the caller's
+        self-correction retry loop), never raise a bare KeyError."""
+        from agents.rag_chain import FireworksBackend
+        be = FireworksBackend(api_key="fw-key")
+
+        class _Resp:
+            def raise_for_status(self): pass
+            def json(self):
+                return {"choices": [{"message": {
+                    "reasoning_content": "still thinking..."}}]}
+
+        class _Sess:
+            def post(self, *a, **k): return _Resp()
+
+        be._session = _Sess()
+        assert be.generate("s", "u") == ""
+
     def test_build_backend_selects_fireworks(self, monkeypatch):
         import agents.rag_chain as rc
         monkeypatch.setattr(rc, "INFERENCE_MODE", "fireworks")

@@ -85,14 +85,21 @@ def matmul_benchmark(size: int = 8192, iters: int = 30) -> dict:
             "dtype": str(dtype)}
 
 
-def llm_latency(prompt: str) -> dict:
-    """Round-trip latency against the active inference backend (optional)."""
+def llm_latency(prompt: str, max_tokens: int = 1024) -> dict:
+    """Round-trip latency against the active inference backend (optional).
+
+    max_tokens defaults to the app's real CTX_RESPONSE budget (1024), not a
+    token-shaving benchmark minimum — reasoning models (e.g. Fireworks'
+    minimax-m3) can spend most of a small budget on internal reasoning
+    tokens before emitting any answer content, which would understate both
+    latency and success in a way that doesn't reflect real app usage.
+    """
     try:
         from agents.rag_chain import _build_backend
         backend = _build_backend()
         t0 = time.perf_counter()
         out = backend.generate("You are a concise assistant.", prompt,
-                               max_tokens=128)
+                               max_tokens=max_tokens)
         dt = time.perf_counter() - t0
         return {"ran": True, "backend": backend.__class__.__name__,
                 "seconds": round(dt, 3), "chars_out": len(out or "")}

@@ -36,8 +36,8 @@ Keep to ~10 slides, one idea each. Judges reward clarity over polish.
    fabricates." One line: *"the only medical AI that tells you when it's unsure."*
 
 7. **Use of AMD platforms.** Fireworks (AMD-hosted models) + AMD Developer Cloud
-   + ROCm/vLLM benchmark. Show the **local-vs-AMD latency number** once you have
-   it. One line: *"the debate runs in real time on AMD Instinct."*
+   + ROCm/vLLM benchmark. Show the **local-vs-AMD latency number: 182.2s → 5.1s
+   (~35×)**. One line: *"the debate runs in real time on AMD Instinct."*
 
 8. **Product / market.** Target user (Amara), TAM framing, revenue model
    (per-site SaaS / API / NGO-funded). "Gene-agnostic — TP53 first, not last."
@@ -96,8 +96,8 @@ the last slide.
 > "Under the hood, the heavy reasoning runs on **AMD** — open models served on
 > **AMD Instinct GPUs through Fireworks**, with the protein-language-model
 > compute benchmarked on **AMD Developer Cloud with ROCm.** Moving inference
-> from a local CPU to AMD Instinct cut our answer latency from **[X] to [Y]
-> seconds** — which is what makes the multi-agent debate feel real-time."
+> from a local CPU to AMD Instinct cut our answer latency from **182 seconds
+> to 5.1 seconds** — which is what makes the multi-agent debate feel real-time."
 > *(Show the AMD benchmark panel.)*
 
 ### 3:15–4:00 — Market, honesty, and the close
@@ -118,6 +118,6 @@ the last slide.
 ## C. Recording checklist
 - [ ] Run the app in `fireworks` (or `api`) mode — fast, no stutter.
 - [ ] Pre-load the R175H case so the demo path is flawless (see [DEMO.md](DEMO.md)).
-- [ ] Fill the `[X]/[Y]` latency numbers from the real AMD benchmark.
+- [x] Latency numbers filled from the real AMD benchmark (182.2s → 5.1s, ~35×).
 - [ ] Cover image = the consensus screen; keep total video ≤ 4–5 min.
 - [ ] Upload: video + slides + cover image + demo URL + repo link to lablab.

@@ -680,7 +680,7 @@ class LlamaCppBackend:
             )
             resp.raise_for_status()
             data = resp.json()
-            return data["choices"][0]["message"]["content"].strip()
+            return (data["choices"][0]["message"].get("content") or "").strip()
         except Exception as e:
             log.error(f"llama.cpp request failed: {e}")
             raise
@@ -808,7 +808,17 @@ class FireworksBackend:
             )
             resp.raise_for_status()
             data = resp.json()
-            return (data["choices"][0]["message"]["content"] or "").strip()
+            msg = data["choices"][0]["message"]
+            content = (msg.get("content") or "").strip()
+            if not content and msg.get("reasoning_content"):
+                # Reasoning model spent the whole max_tokens budget on
+                # reasoning_content before emitting an answer. Not a
+                # transport error — let the caller's retry/validation
+                # loop handle it as an empty answer rather than crashing
+                # on a KeyError.
+                log.warning("Fireworks: reasoning consumed max_tokens "
+                            "before any answer content was emitted.")
+            return content
         except Exception as e:
             log.error(f"Fireworks request failed: {e}")
             raise

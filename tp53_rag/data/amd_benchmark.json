@@ -1,0 +1,43 @@
+{
+  "generated_utc": "2026-07-07T23:21:23+00:00",
+  "device": {
+    "python": "3.14.3",
+    "platform": "Windows-11-10.0.22621-SP0",
+    "torch": "2.12.0+cpu",
+    "cuda_available": false,
+    "hip_version": null,
+    "is_rocm": false,
+    "note": "Local device probed is an 8GB CPU-only laptop (no ROCm/CUDA). The Fireworks run below executes on AMD Instinct GPUs via Fireworks' hosted inference; it is not local to this machine."
+  },
+  "runs": [
+    {
+      "name": "fp16 matmul (local CPU)",
+      "ran": true,
+      "device": "cpu",
+      "matrix": 2048,
+      "iters": 10,
+      "seconds": 2.9123,
+      "tflops": 0.06,
+      "dtype": "torch.float32"
+    },
+    {
+      "name": "LLM round-trip (local, Ollama/gemma4-lowmem)",
+      "ran": true,
+      "backend": "OllamaBackend",
+      "seconds": 182.203,
+      "chars_out": 491
+    },
+    {
+      "name": "LLM round-trip (AMD Instinct, Fireworks/minimax-m3)",
+      "ran": true,
+      "backend": "FireworksBackend",
+      "seconds": 5.139,
+      "chars_out": 728
+    }
+  ],
+  "summary": {
+    "local_latency_s": 182.203,
+    "amd_latency_s": 5.139,
+    "speedup_x": 35.5
+  }
+}
