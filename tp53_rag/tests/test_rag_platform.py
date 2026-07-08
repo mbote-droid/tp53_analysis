@@ -3872,3 +3872,57 @@ class TestKiswahiliHPO:
         from agents.kiswahili_hpo import to_clinical_terms
         s = to_clinical_terms("ana manjano")
         assert "jaundice" in s and "HP:0000952" in s
+
+
+class TestCacheWarming:
+    """Semantic-cache warming for related hotspots (A5)."""
+
+    def test_related_hotspots_known(self):
+        from agents.rag_chain import related_hotspots
+        rel = related_hotspots("R175H")
+        assert rel and "R175H" not in rel
+        assert related_hotspots("r175h") == rel  # case-insensitive
+
+    def test_related_hotspots_unknown_empty(self):
+        from agents.rag_chain import related_hotspots
+        assert related_hotspots("Z999Z") == []
+        assert related_hotspots("") == []
+
+    def test_warm_populates_only_missing(self, monkeypatch):
+        from agents.rag_chain import SemanticCache
+        cache = SemanticCache.__new__(SemanticCache)  # bypass disk load
+        cache._threshold = 0.92
+        cache._ttl = 9999
+        cache._lock = __import__("threading").Lock()
+        cache._entries = []
+        cache._embedder = object()  # truthy so get/set proceed
+        cache._hits = cache._misses = 0
+        # deterministic distinct unit embedding per text (hash one-hot), so
+        # different queries miss and identical queries hit. No disk.
+        import hashlib as _hl
+
+        def _fake_embed(text):
+            idx = int(_hl.md5(text.encode()).hexdigest(), 16) % 997
+            v = [0.0] * 997
+            v[idx] = 1.0
+            return v
+
+        monkeypatch.setattr(cache, "_embed", _fake_embed)
+        monkeypatch.setattr(cache, "_save_to_disk",
+                            lambda *a, **k: None)
+
+        calls = []
+
+        def gen(q):
+            calls.append(q)
+            return f"Answer for {q}"
+
+        out = cache.warm("R175H", "clinical_interpretation", gen, max_related=3)
+        assert len(out["warmed"]) == 3
+        assert out["skipped"] == []
+        assert len(calls) == 3
+        # second warm should skip all (now cached) — no new generate calls
+        calls.clear()
+        out2 = cache.warm("R175H", "clinical_interpretation", gen, max_related=3)
+        assert out2["warmed"] == [] and len(out2["skipped"]) == 3
+        assert calls == []

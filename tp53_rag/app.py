@@ -1921,6 +1921,31 @@ with tab8:
         except Exception:
             pass
 
+        # ── ⚡ Cache warming: pre-compute related hotspots ──
+        st.markdown("### ⚡ Cache warming")
+        from agents.rag_chain import related_hotspots
+        warm_mut = st.text_input("Warm related hotspots for:", value="R175H",
+                                 key="warm_mut")
+        st.caption("Related hotspots: "
+                   + (", ".join(related_hotspots(warm_mut)) or "none known"))
+        if st.button("⚡ Warm cache", key="warm_go"):
+            cache = getattr(st.session_state.rag, "cache", None)
+            if cache is None or not related_hotspots(warm_mut):
+                st.info("Nothing to warm for that mutation.")
+            else:
+                from agents.rag_chain import _build_backend
+                _bk = _build_backend()
+
+                def _wgen(q):
+                    return _bk.generate(
+                        "You are a concise TP53 clinical-genomics assistant.",
+                        q, max_tokens=384)
+
+                with st.spinner("Pre-computing related-hotspot answers…"):
+                    wres = cache.warm(warm_mut, "clinical_interpretation", _wgen)
+                st.success(f"Warmed: {', '.join(wres['warmed']) or 'none'} · "
+                           f"already cached: {', '.join(wres['skipped']) or 'none'}")
+
     # ── Conversation memory (persistent, PII-scrubbed) ──
     _mem = st.session_state.get("memory")
     if _mem is not None:

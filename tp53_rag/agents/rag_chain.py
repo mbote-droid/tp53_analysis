@@ -337,6 +337,28 @@ class CrossEncoderReranker:
 # Semantic Cache
 # ═══════════════════════════════════════════════════════════════════
 
+# Curated TP53-hotspot adjacency for cache warming: asking about one hotspot
+# makes a follow-up about a related one statistically likely, so we can
+# pre-compute those while the user reads the first answer. Grouped by mutational
+# class (conformational vs DNA-contact) + overall frequency.
+_HOTSPOT_NEIGHBOURS = {
+    "R175H": ["G245S", "R249S", "R282W"],   # conformational
+    "R248Q": ["R273H", "R282W", "R175H"],   # contact
+    "R248W": ["R273H", "R282W", "R175H"],
+    "R273H": ["R248Q", "R175H", "R282W"],   # contact
+    "R273C": ["R248Q", "R175H", "R282W"],
+    "R249S": ["R175H", "G245S", "R282W"],
+    "G245S": ["R175H", "R249S", "R248Q"],
+    "R282W": ["R175H", "R248Q", "R273H"],
+    "Y220C": ["R175H", "G245S", "R249S"],
+}
+
+
+def related_hotspots(mutation: str) -> List[str]:
+    """Return curated related TP53 hotspots for cache warming. Pure."""
+    return _HOTSPOT_NEIGHBOURS.get((mutation or "").upper().strip(), [])
+
+
 class SemanticCache:
     """
     Caches LLM responses by query embedding similarity.
@@ -466,6 +488,28 @@ class SemanticCache:
                 "agent": agent, "ts": time.time(),
             })
         self._save_to_disk(agent, query, emb, answer)
+
+    def warm(self, mutation: str, agent: str,
+             generate_fn, max_related: int = 3) -> Dict:
+        """Pre-compute + cache answers for hotspots related to `mutation`, so a
+        likely follow-up is an instant cache hit. Skips ones already cached.
+        `generate_fn(query)->str` is injected. Never raises."""
+        related = related_hotspots(mutation)[:max(0, int(max_related))]
+        warmed, skipped = [], []
+        for mut in related:
+            q = f"What is the clinical significance of TP53 {mut}?"
+            try:
+                if self.get(agent, q) is not None:
+                    skipped.append(mut)
+                    continue
+                ans = (generate_fn(q) or "").strip()
+            except Exception as e:  # pragma: no cover
+                log.warning(f"Cache warm failed for {mut}: {e}")
+                continue
+            if ans:
+                self.set(agent, q, ans)
+                warmed.append(mut)
+        return {"warmed": warmed, "skipped": skipped, "related": related}
 
     def stats(self) -> Dict:
         return {
