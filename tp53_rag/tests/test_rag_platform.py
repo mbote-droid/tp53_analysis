@@ -3822,3 +3822,53 @@ class TestEpistemicUncertainty:
 
         out = sample_and_measure("s", "u", boom, embed_fn=self._embed, n=2)
         assert out["success"] is False
+
+
+class TestKiswahiliHPO:
+    """Kiswahili → HPO/ICD-10 alignment with confidence gate
+    (agents/kiswahili_hpo.py)."""
+
+    def test_exact_single_term(self):
+        from agents.kiswahili_hpo import map_text
+        out = map_text("mgonjwa ana homa")
+        assert out["matched"] is True
+        codes = [m["hpo"] for m in out["mappings"]]
+        assert "HP:0001945" in codes  # fever
+
+    def test_longest_phrase_wins(self):
+        from agents.kiswahili_hpo import map_text
+        out = map_text("ana maumivu ya tumbo sana")
+        kis = [m["kiswahili"] for m in out["mappings"]]
+        assert "maumivu ya tumbo" in kis
+        assert "maumivu" not in kis  # not double-counted
+
+    def test_multiple_terms(self):
+        from agents.kiswahili_hpo import map_text
+        out = map_text("ana homa na kukohoa na kupungua uzito")
+        ens = {m["english"] for m in out["mappings"]}
+        assert {"fever", "cough", "weight loss"}.issubset(ens)
+
+    def test_no_match_passes_through(self):
+        from agents.kiswahili_hpo import map_text, to_clinical_terms
+        out = map_text("habari za asubuhi")  # greeting, no symptom
+        assert out["matched"] is False
+        assert to_clinical_terms("habari za asubuhi") == "habari za asubuhi"
+
+    def test_confidence_gate_rejects_low_similarity(self):
+        from agents.kiswahili_hpo import map_text
+        # graded bag-of-chars embedding → distinct strings score < 1.0
+        alpha = "abcdefghijklmnopqrstuvwxyz "
+
+        def embed(t):
+            tl = t.lower()
+            return [float(tl.count(c)) for c in alpha]
+
+        out = map_text("qwxz vbnm", embed_fn=embed, threshold=0.99)
+        # no exact match; fuzzy similarity must fall below the high threshold
+        assert out["matched"] is False
+        assert out["unconfident"] and out["unconfident"][0]["match"] == "below_threshold"
+
+    def test_to_clinical_terms_enriches(self):
+        from agents.kiswahili_hpo import to_clinical_terms
+        s = to_clinical_terms("ana manjano")
+        assert "jaundice" in s and "HP:0000952" in s

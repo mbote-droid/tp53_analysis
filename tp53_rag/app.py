@@ -632,6 +632,28 @@ with tab1:
         height=100,
     )
 
+    # ── 🌍 Kiswahili → clinical codes (equity: map meaning to the ontology) ──
+    with st.expander("🌍 Kiswahili symptom → HPO / ICD-10 codes"):
+        st.caption("Enter a clinical observation in Kiswahili; it is mapped to "
+                   "standard HPO / ICD-10 codes (with a confidence gate) before "
+                   "querying — so the equity layer anchors *meaning*, not just "
+                   "words.")
+        sw_text = st.text_input("Observation (Kiswahili):",
+                                placeholder="e.g., mgonjwa ana homa na maumivu ya tumbo",
+                                key="sw_input")
+        if sw_text:
+            from agents.kiswahili_hpo import map_text
+            _swres = map_text(sw_text)
+            if _swres["mappings"]:
+                st.dataframe(pd.DataFrame([
+                    {"Kiswahili": m["kiswahili"], "Clinical term": m["english"],
+                     "HPO": m["hpo"], "ICD-10": m["icd10"]}
+                    for m in _swres["mappings"]]),
+                    width="stretch", hide_index=True)
+                st.caption(f"⚠️ {_swres['disclaimer']}")
+            else:
+                st.info(_swres["note"])
+
     col1, col2 = st.columns([3, 1])
     with col1:
         submit = st.button("🚀 Ask Gemma 4", width="stretch")
