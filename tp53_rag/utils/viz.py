@@ -847,6 +847,21 @@ def mutation_structure_html(pdb_text: Optional[str], mutation: str,
     pdb_js = json.dumps(pdb_text)
 
     template = """
+    <style>
+      .mv-ctrls{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 6px 0;}
+      .mv-ctrls button{background:#161b22;color:#c9d1d9;border:1px solid #30363d;
+        border-radius:6px;padding:4px 10px;font-family:sans-serif;font-size:11px;
+        cursor:pointer;}
+      .mv-ctrls button:hover{border-color:#22d3ee;color:#22d3ee;}
+      .mv-ctrls button.on{background:#22d3ee;color:#03121a;border-color:#22d3ee;}
+    </style>
+    <div class="mv-ctrls">
+      <button id="mv-cartoon" class="on" onclick="window.__mv&&window.__mv.rep('cartoon',this)">Cartoon</button>
+      <button id="mv-surface" onclick="window.__mv&&window.__mv.rep('surface',this)">Surface</button>
+      <button id="mv-stick" onclick="window.__mv&&window.__mv.rep('stick',this)">Sticks</button>
+      <button onclick="window.__mv&&window.__mv.spin(this)">Spin ⏯</button>
+      <button onclick="window.__mv&&window.__mv.reset()">Reset view</button>
+    </div>
     <div style="position:relative;">
       <div id="mutview" style="width:100%;height:__H__px;background:#0d1117;
            border-radius:8px;"></div>
@@ -866,34 +881,63 @@ def mutation_structure_html(pdb_text: Optional[str], mutation: str,
           var el = document.getElementById('mutview');
           var viewer = $3Dmol.createViewer(el, {backgroundColor: '#0d1117'});
           viewer.addModel(__PDB__, 'pdb');
-          viewer.setStyle({}, {cartoon: {color: '#3a4250'}});
-          // Colour each domain.
           var domains = [__DOMAINS__];
-          domains.forEach(function(d){
-            viewer.setStyle({resi: d.s + '-' + d.e}, {cartoon: {color: d.c}});
-          });
-          // Druggable + zinc sites.
-          [__DRUG__].forEach(function(r){
-            viewer.setStyle({resi: r}, {cartoon: {color:'#22d3ee'},
-              stick: {color:'#22d3ee', radius:0.25}});
-          });
-          [__ZINC__].forEach(function(r){
-            viewer.setStyle({resi: r}, {stick: {color:'#a78bfa', radius:0.25}});
-          });
-          // The patient's mutated residue — gold, prominent, labelled.
+          var drug = [__DRUG__];
+          var zinc = [__ZINC__];
           var mut = __MUTRESI__;
-          if (mut > 0) {
-            viewer.setStyle({resi: mut}, {
-              cartoon: {color:'#ffd54a'},
-              stick: {color:'#ffd54a', radius:0.4},
-              sphere: {color:'#ffd54a', radius:1.1}});
-            viewer.addLabel('__MUT__', {inFront:true, fontSize:13,
-              fontColor:'#1a1a1a', backgroundColor:'#ffd54a',
-              backgroundOpacity:0.95, position:{resi: mut}});
-            viewer.zoomTo({resi: mut});
-          } else {
-            viewer.zoomTo();
+          var spinning = true;
+
+          function base(cartoonColor){
+            return cartoonColor ? {cartoon:{color:cartoonColor}} : {};
           }
+          function apply(rep){
+            viewer.removeAllSurfaces();
+            viewer.removeAllLabels();
+            // base representation
+            if(rep === 'stick'){
+              viewer.setStyle({}, {stick:{colorscheme:'default', radius:0.15}});
+            } else {
+              viewer.setStyle({}, {cartoon:{color:'#3a4250'}});
+              domains.forEach(function(d){
+                viewer.setStyle({resi:d.s+'-'+d.e}, {cartoon:{color:d.c}}); });
+            }
+            // druggable + zinc always shown as sticks for orientation
+            drug.forEach(function(r){ viewer.addStyle({resi:r},
+              {stick:{color:'#22d3ee', radius:0.25}}); });
+            zinc.forEach(function(r){ viewer.addStyle({resi:r},
+              {stick:{color:'#a78bfa', radius:0.25}}); });
+            // patient mutation — gold + sphere + label
+            if(mut > 0){
+              viewer.addStyle({resi:mut}, {stick:{color:'#ffd54a', radius:0.4},
+                sphere:{color:'#ffd54a', radius:1.0}});
+              if(rep !== 'stick'){
+                viewer.setStyle({resi:mut}, {cartoon:{color:'#ffd54a'},
+                  stick:{color:'#ffd54a', radius:0.4},
+                  sphere:{color:'#ffd54a', radius:1.0}}); }
+              viewer.addLabel('__MUT__', {inFront:true, fontSize:13,
+                fontColor:'#1a1a1a', backgroundColor:'#ffd54a',
+                backgroundOpacity:0.95, position:{resi:mut}});
+            }
+            if(rep === 'surface'){
+              viewer.addSurface($3Dmol.SurfaceType.VDW,
+                {opacity:0.72, colorscheme:'whiteCarbon'});
+            }
+            viewer.render();
+          }
+          window.__mv = {
+            rep: function(rep, btn){
+              ['mv-cartoon','mv-surface','mv-stick'].forEach(function(id){
+                var b=document.getElementById(id); if(b) b.className=''; });
+              if(btn) btn.className='on';
+              apply(rep);
+            },
+            spin: function(btn){ spinning=!spinning;
+              viewer.spin(spinning?'y':false, 0.4);
+              if(btn) btn.className = spinning ? '' : 'on'; },
+            reset: function(){ viewer.zoomTo(mut>0?{resi:mut}:{}); viewer.render(); }
+          };
+          apply('cartoon');
+          viewer.zoomTo(mut>0?{resi:mut}:{});
           viewer.render();
           viewer.spin('y', 0.4);
         } catch (e) {

@@ -3244,6 +3244,14 @@ class TestMutationStructure:
         safe = mutation_structure_html(self._PDB, "<script>alert(1)</script>")
         assert "<script>alert(1)</script>" not in safe
 
+    def test_has_representation_controls(self):
+        from utils.viz import mutation_structure_html
+        html_str = mutation_structure_html(self._PDB, "R175H")
+        # cartoon / surface / stick toggle + spin + reset controls
+        for token in ("mv-ctrls", "Surface", "Sticks", "Spin",
+                      "Reset view", "addSurface", "window.__mv"):
+            assert token in html_str
+
     def test_unknown_mutation_graceful(self):
         from utils.viz import mutation_structure_html
         html_str = mutation_structure_html(self._PDB, "???")
