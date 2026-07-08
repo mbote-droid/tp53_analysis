@@ -707,6 +707,13 @@ with tab1:
             except Exception:
                 pass
             render_clinvar_safety(answer_text, key_prefix="query_stream")
+            # 🔊 Jarvis voice on the streamed answer too
+            if st.checkbox("🔊 Read answer aloud", key="tts_query_stream"):
+                try:
+                    from utils.voice_output import speak_html
+                    components.html(speak_html(answer_text), height=70)
+                except Exception:
+                    pass
         except Exception as e:
             st.error("Streaming hit a snag — try unchecking stream mode. "
                      f"({str(e)[:100]})")
@@ -1798,14 +1805,29 @@ with tab6:
 
 # ── TAB 7: Voice ──────────────────────────────────────────────────
 with tab7:
-    st.markdown("## 🎤 Voice Input (Beta)")
-    st.markdown("Speak your question — transcribed locally via Whisper")
+    st.markdown("## 🎤 Jarvis — hands-free voice loop")
+    st.markdown("**Speak your question → Whisper transcribes → Gemma answers → "
+                "Jarvis reads it back.** A full spoken loop for a clinician "
+                "whose hands are busy.")
 
     WHISPER_AVAILABLE = whisper_available()
-    if WHISPER_AVAILABLE:
-        st.success("✅ Whisper ready")
-    else:
-        st.warning("⚠️ Install Whisper: `pip install openai-whisper`")
+    vc1, vc2 = st.columns(2)
+    vc1.success("✅ Whisper STT ready") if WHISPER_AVAILABLE else \
+        vc1.warning("⚠️ `pip install openai-whisper` for speech-in")
+    vc2.success("✅ Jarvis TTS ready (in-browser)")
+    speak_back = st.toggle("🔊 Speak the answer back", value=True, key="voice_tts")
+
+    def _render_voice_answer(result):
+        st.markdown("### Answer")
+        st.markdown(result["answer"])
+        if speak_back:
+            try:
+                from utils.voice_output import speak_html
+                components.html(speak_html(result.get("answer", ""),
+                                           autoplay=True), height=70)
+            except Exception as e:
+                st.caption(f"Voice output unavailable: {str(e)[:120]}")
+        render_clinvar_safety(result.get("answer", ""), key_prefix="voice")
 
     audio_bytes = st.audio_input("🎙️ Record your question (max 30s):")
 
@@ -1813,11 +1835,10 @@ with tab7:
         with st.spinner("Transcribing with Whisper..."):
             text = transcribe(audio_bytes)
         if not text.startswith("Transcription error"):
-            st.success(f"**Transcribed:** {text}")
+            st.success(f"🗣️ **Heard:** {text}")
             with st.spinner("Querying Gemma 4..."):
                 result = safe_query(text, agent_type=forced_agent)
-            st.markdown("### Answer")
-            st.markdown(result["answer"])
+            _render_voice_answer(result)
         else:
             st.error(text)
 
@@ -1829,7 +1850,7 @@ with tab7:
         if voice_text:
             with st.spinner("Processing..."):
                 result = safe_query(voice_text, agent_type=forced_agent)
-            st.markdown(result["answer"])
+            _render_voice_answer(result)
 
 # ── TAB 8: Debug ──────────────────────────────────────────────────
 with tab8:
