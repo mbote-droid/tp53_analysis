@@ -3309,3 +3309,175 @@ class TestDigitalTwin:
     def test_registered_in_registry(self):
         from config.settings import AGENT_REGISTRY
         assert "digital_twin" in AGENT_REGISTRY
+
+
+class TestGemmaVisionAgent:
+    """Gemma-4-vision-backed pathology slide + lab report reading
+    (agents/gemma_vision.py). Network fully mocked — no live calls."""
+
+    def test_health_reflects_key(self):
+        from agents.gemma_vision import GemmaVisionAgent
+        assert GemmaVisionAgent(api_key="k").health() is True
+        assert GemmaVisionAgent(api_key="").health() is False
+
+    def test_pathology_no_key_is_graceful(self):
+        from agents.gemma_vision import GemmaVisionAgent
+        agent = GemmaVisionAgent(api_key="")
+        out = agent.read_pathology_slide(b"fakebytes", "image/png")
+        assert out["success"] is False and "GOOGLE_API_KEY" in out["error"]
+
+    def test_lab_report_no_key_is_graceful(self):
+        from agents.gemma_vision import GemmaVisionAgent
+        agent = GemmaVisionAgent(api_key="")
+        out = agent.read_lab_report_photo(b"fakebytes", "image/png")
+        assert out["success"] is False and "GOOGLE_API_KEY" in out["error"]
+
+    def test_pathology_success_calls_vision_backend(self):
+        from agents.gemma_vision import GemmaVisionAgent
+
+        class _FakeBackend:
+            def generate_vision(self, **kwargs):
+                assert kwargs["image_bytes"] == b"imgdata"
+                assert kwargs["mime_type"] == "image/jpeg"
+                return "Dense cellularity with nuclear atypia noted."
+
+        agent = GemmaVisionAgent(api_key="k")
+        agent._get_backend = lambda: _FakeBackend()
+        out = agent.read_pathology_slide(b"imgdata", "image/jpeg")
+        assert out["success"] is True
+        assert "atypia" in out["narration"]
+        assert out["method"] == "gemma_vision"
+
+    def test_pathology_includes_mutation_context_in_prompt(self):
+        from agents.gemma_vision import GemmaVisionAgent
+        captured = {}
+
+        class _FakeBackend:
+            def generate_vision(self, **kwargs):
+                captured["prompt"] = kwargs["user_prompt"]
+                return "ok"
+
+        agent = GemmaVisionAgent(api_key="k")
+        agent._get_backend = lambda: _FakeBackend()
+        agent.read_pathology_slide(
+            b"x", "image/png",
+            mutation_data={"mutations": [{"amino_acid_change": "R175H"}]},
+        )
+        assert "R175H" in captured["prompt"]
+
+    def test_pathology_handles_backend_exception(self):
+        from agents.gemma_vision import GemmaVisionAgent
+
+        class _FakeBackend:
+            def generate_vision(self, **kwargs):
+                raise RuntimeError("quota exceeded")
+
+        agent = GemmaVisionAgent(api_key="k")
+        agent._get_backend = lambda: _FakeBackend()
+        out = agent.read_pathology_slide(b"x", "image/png")
+        assert out["success"] is False and "quota" in out["error"]
+
+    def test_lab_report_extracts_and_cross_checks_mutations(self):
+        from agents.gemma_vision import GemmaVisionAgent
+
+        class _FakeBackend:
+            def generate_vision(self, **kwargs):
+                return ("Gene: TP53. Variant: R175H. VAF: 42%. "
+                        "Sample type: FFPE tissue.")
+
+        agent = GemmaVisionAgent(api_key="k")
+        agent._get_backend = lambda: _FakeBackend()
+        out = agent.read_lab_report_photo(b"x", "image/png")
+        assert out["success"] is True
+        assert "R175H" in out["candidate_mutations"]
+        assert out["clinvar_cross_check"]
+        assert out["clinvar_cross_check"][0]["mutation"] == "R175H"
+        assert "verify" in out["caution"].lower()
+
+    def test_lab_report_no_mutations_found_is_still_success(self):
+        from agents.gemma_vision import GemmaVisionAgent
+
+        class _FakeBackend:
+            def generate_vision(self, **kwargs):
+                return "Text is illegible in this photo."
+
+        agent = GemmaVisionAgent(api_key="k")
+        agent._get_backend = lambda: _FakeBackend()
+        out = agent.read_lab_report_photo(b"x", "image/png")
+        assert out["success"] is True
+        assert out["candidate_mutations"] == []
+        assert out["clinvar_cross_check"] == []
+
+    def test_lab_report_handles_backend_exception(self):
+        from agents.gemma_vision import GemmaVisionAgent
+
+        class _FakeBackend:
+            def generate_vision(self, **kwargs):
+                raise RuntimeError("network error")
+
+        agent = GemmaVisionAgent(api_key="k")
+        agent._get_backend = lambda: _FakeBackend()
+        out = agent.read_lab_report_photo(b"x", "image/png")
+        assert out["success"] is False and "network" in out["error"]
+
+
+class TestGoogleGenAIBackendVision:
+    """generate_vision() on the real backend (agents/rag_chain.py) --
+    verifies the google.genai call shape, network fully mocked."""
+
+    def test_generate_vision_builds_multimodal_contents(self, monkeypatch):
+        from agents import rag_chain as rc
+
+        captured = {}
+
+        class _FakePart:
+            @staticmethod
+            def from_bytes(data, mime_type):
+                captured["part_data"] = data
+                captured["part_mime"] = mime_type
+                return "PART"
+
+        class _FakeConfig:
+            def __init__(self, **kwargs):
+                captured["config_kwargs"] = kwargs
+
+        class _FakeModels:
+            def generate_content(self, model, contents, config):
+                captured["model"] = model
+                captured["contents"] = contents
+                class _Resp:
+                    text = "  narrated  "
+                return _Resp()
+
+        class _FakeClient:
+            def __init__(self, api_key):
+                captured["api_key"] = api_key
+                self.models = _FakeModels()
+
+        import sys
+        import types as _pytypes
+
+        fake_types = _pytypes.ModuleType("google.genai.types")
+        fake_types.GenerateContentConfig = _FakeConfig
+        fake_types.Part = _FakePart
+
+        fake_genai = _pytypes.ModuleType("google.genai")
+        fake_genai.Client = _FakeClient
+        fake_genai.types = fake_types
+
+        fake_google = _pytypes.ModuleType("google")
+        fake_google.__path__ = []  # mark as a package so submodule imports resolve
+        fake_google.genai = fake_genai
+
+        monkeypatch.setitem(sys.modules, "google", fake_google)
+        monkeypatch.setitem(sys.modules, "google.genai", fake_genai)
+        monkeypatch.setitem(sys.modules, "google.genai.types", fake_types)
+
+        backend = rc.GoogleGenAIBackend(api_key="k", model="gemma-4-26b-a4b-it")
+        out = backend.generate_vision("sys prompt", b"bytes", "image/png",
+                                      "describe this")
+        assert out == "narrated"
+        assert captured["part_data"] == b"bytes"
+        assert captured["part_mime"] == "image/png"
+        assert captured["contents"] == ["PART", "describe this"]
+        assert captured["model"] == "gemma-4-26b-a4b-it"

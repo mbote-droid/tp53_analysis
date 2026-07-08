@@ -757,6 +757,28 @@ class GoogleGenAIBackend:
             log.error(f"Google stream failed: {e}")
             yield self.generate(system_prompt, user_prompt, max_tokens)
 
+    def generate_vision(self, system_prompt: str, image_bytes: bytes,
+                        mime_type: str, user_prompt: str,
+                        max_tokens: int = 1024) -> str:
+        """Multimodal call: image + text -> text. Gemma 4 is natively
+        multimodal on Google AI Studio; this is the one backend in this file
+        that accepts image input (Fireworks/Ollama/llama.cpp here are
+        text-only), so vision features route through this method regardless
+        of the active INFERENCE_MODE."""
+        from google import genai
+        from google.genai import types
+        client = genai.Client(api_key=self._key)
+        config = types.GenerateContentConfig(
+            temperature=0.0, top_p=0.95,
+            max_output_tokens=max_tokens,
+            system_instruction=system_prompt,
+        )
+        part = types.Part.from_bytes(data=image_bytes, mime_type=mime_type)
+        resp = client.models.generate_content(
+            model=self._model, contents=[part, user_prompt], config=config,
+        )
+        return (resp.text or "").strip()
+
     def health(self) -> bool:
         return bool(self._key)
 
