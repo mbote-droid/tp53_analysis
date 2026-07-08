@@ -13,6 +13,19 @@ The platform runs today as a **modular monolith**: one Streamlit process in
 which ~26 agents are cleanly-separated Python modules sharing in-process state.
 A thin service layer (FastAPI, n8n, docker-compose) sits on top for integration.
 
+### n8n automation (automation-ready)
+
+`n8n_workflow.json` is a 15-node automation graph — webhook trigger → validate
+→ health-check → analysis pipeline → RAG → risk triage → EHR/FHIR alert →
+email → append-only audit. Its wiring is **verified structurally** by
+`tools/validate_n8n.py` (fully connected, webhook present, 3 httpRequest nodes
+that call the FastAPI service, 2 writeFile audit nodes) and by a unit test —
+so the integration is real, not a drawing. A live end-to-end execution requires
+the n8n container: `docker compose up n8n`, open `http://localhost:5678`,
+import `n8n_workflow.json`, and POST to the webhook; the httpRequest nodes hit
+FastAPI at `http://api:8000`. *(We validate the wiring in CI; we do not claim a
+live run happens automatically — that needs the container up.)*
+
 ```
             User input  (text · voice · VCF upload)
                             │

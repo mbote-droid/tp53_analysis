@@ -4029,3 +4029,21 @@ class TestPathwayGraph:
         from knowledge_base.ingestion import TP53DocumentIngester
         docs = TP53DocumentIngester().load_curated_knowledge()
         assert any(d.metadata.get("source") == "pathway_graph" for d in docs)
+
+
+class TestN8nWorkflow:
+    """Structural validation of the n8n automation graph (no live daemon)."""
+
+    def test_workflow_is_fully_wired(self):
+        from tools.validate_n8n import validate_workflow
+        rep = validate_workflow()
+        assert rep["ok"] is True
+        assert rep["orphans"] == []
+        assert rep["checks"]["has_webhook_trigger"] is True
+        assert rep["checks"]["has_fastapi_httprequest"] is True
+        assert rep["checks"]["has_audit_writefile"] is True
+
+    def test_missing_file_is_graceful(self, tmp_path):
+        from tools.validate_n8n import validate_workflow
+        rep = validate_workflow(tmp_path / "nope.json")
+        assert rep["ok"] is False and rep["reason"] == "workflow_missing"
