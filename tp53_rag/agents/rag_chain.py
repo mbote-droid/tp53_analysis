@@ -876,8 +876,11 @@ class FireworksBackend:
         return self._session
 
     def generate(self, system_prompt: str, user_prompt: str,
-                 max_tokens: int = CTX_RESPONSE, temperature: float = 0.1) -> str:
-        """Call the Fireworks OpenAI-compatible /chat/completions endpoint."""
+                 max_tokens: int = CTX_RESPONSE, temperature: float = 0.1,
+                 frequency_penalty: float = 0.0) -> str:
+        """Call the Fireworks OpenAI-compatible /chat/completions endpoint.
+        frequency_penalty is honoured so orthogonal-persona agents (skeptic vs
+        proposer) genuinely sample differently."""
         session = self._get_session()
         payload = {
             "model": self._model,
@@ -889,6 +892,8 @@ class FireworksBackend:
             "temperature": temperature,
             "top_p": 0.95,
         }
+        if frequency_penalty:
+            payload["frequency_penalty"] = frequency_penalty
         headers = {
             "Authorization": f"Bearer {self._key}",
             "Content-Type": "application/json",

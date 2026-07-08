@@ -1179,6 +1179,11 @@ with tab13:
     if board:
         from utils.viz import tumor_board_html, explainability_panel_html
         components.html(tumor_board_html(board), height=760, scrolling=True)
+        _temps = [f"{m.get('member')} ({m.get('temperament')})"
+                  for m in board.get("members", []) if m.get("temperament")]
+        if _temps:
+            st.caption("🎭 Orthogonal by design (not an echo chamber): "
+                       + " · ".join(_temps))
 
         # ── Explainability "Why?" trace for the same case ──
         st.markdown("### 🔎 Why? — evidence behind the assessment")

@@ -146,19 +146,32 @@ _PROPOSER_SYSTEM = (
 
 def bounded_debate(proposal: str, contradicting_evidence: List[str],
                    generate_fn: Callable[[str, str], str],
-                   max_turns: int = 2) -> Dict:
+                   max_turns: int = 2,
+                   role_generate: Optional[Callable[[str], Callable]] = None
+                   ) -> Dict:
     """A HARD-CAPPED skeptic↔proposer exchange. Exactly min(max_turns, 2)
     LLM calls — never loops to convergence. `generate_fn(system, user)->str`
-    is injected. Never raises."""
+    is injected. If `role_generate(role)->generate_fn` is supplied, each role
+    uses its own (orthogonal-temperature) generator so the debate is not an
+    echo chamber. Never raises."""
     turns: List[Dict] = []
     cap = max(1, min(int(max_turns), 2))  # hard ceiling of 2, per design
     evidence_txt = ("\n".join(f"- {c}" for c in contradicting_evidence)
                     or "- No specific contradicting evidence was retrieved.")
+
+    def _gen_for(role: str):
+        if role_generate is not None:
+            try:
+                return role_generate(role)
+            except Exception:
+                return generate_fn
+        return generate_fn
+
     try:
         skeptic_user = (f"PROPOSED RECOMMENDATION:\n{proposal}\n\n"
                         f"CONTRADICTING EVIDENCE:\n{evidence_txt}\n\n"
                         "Give your strongest evidence-bound challenge.")
-        skeptic = (generate_fn(_SKEPTIC_SYSTEM, skeptic_user) or "").strip()
+        skeptic = (_gen_for("Skeptic")(_SKEPTIC_SYSTEM, skeptic_user) or "").strip()
         turns.append({"role": "skeptic", "text": skeptic})
 
         if cap >= 2:
@@ -166,7 +179,8 @@ def bounded_debate(proposal: str, contradicting_evidence: List[str],
                              f"SKEPTIC'S CHALLENGE:\n{skeptic}\n\n"
                              "Respond: concede, rebut, and state residual "
                              "uncertainty.")
-            rebuttal = (generate_fn(_PROPOSER_SYSTEM, proposer_user) or "").strip()
+            rebuttal = (_gen_for("Proposer")(_PROPOSER_SYSTEM, proposer_user)
+                        or "").strip()
             turns.append({"role": "proposer", "text": rebuttal})
     except Exception as e:
         log.error(f"bounded_debate failed: {e}")
@@ -184,15 +198,23 @@ def adversarial_review(mutation: str, proposal: str, cancer: str = "",
     """Full pass: gather contradicting evidence, then run the bounded debate.
     If no generate_fn is supplied, builds the default backend. Never raises."""
     evidence = gather_contradicting_evidence(mutation, cancer, matcher=matcher)
+    role_generate = None
     if generate_fn is None:
         try:
             from agents.rag_chain import _build_backend
+            from agents.orthogonal_personas import orthogonal_generate
             backend = _build_backend()
 
             def generate_fn(system, user):  # noqa: E306
                 return backend.generate(system, user, max_tokens=512)
+
+            # Orthogonal sampling per role → the skeptic reasons strictly, the
+            # proposer more exploratorily, so the debate isn't an echo chamber.
+            def role_generate(role):  # noqa: E306
+                return orthogonal_generate(backend, role, max_tokens=512)
         except Exception as e:
             return {"success": False, "reason": str(e), "evidence": evidence}
-    debate = bounded_debate(proposal, evidence["contradictions"], generate_fn)
+    debate = bounded_debate(proposal, evidence["contradictions"], generate_fn,
+                            role_generate=role_generate)
     return {"success": debate.get("success", False), "evidence": evidence,
             "debate": debate, "viability": evidence.get("viability")}

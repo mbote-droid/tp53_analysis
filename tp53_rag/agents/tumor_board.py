@@ -428,12 +428,27 @@ class TumorBoard:
         debate = self._debate(opinions)
         consensus = self._consensus(opinions)
 
+        # Attach each specialist's orthogonal temperament — an honest label of
+        # their designed reasoning posture (conservative ↔ exploratory). The
+        # board is deliberately diverse by construction, not an echo chamber;
+        # this makes that diversity explicit (and is the sampling posture used
+        # when a role is elaborated by the LLM).
+        try:
+            from agents.orthogonal_personas import persona_for
+            member_dicts = []
+            for o in opinions:
+                d = asdict(o)
+                d["temperament"] = persona_for(o.member).get("temperament")
+                member_dicts.append(d)
+        except Exception:  # pragma: no cover
+            member_dicts = [asdict(o) for o in opinions]
+
         self._audit(f"board:{vp.raw} class={vp.klass} -> "
                     f"{consensus.recommendation} @ {consensus.confidence}")
         return {
             "mutation": vp.raw,
             "variant_profile": asdict(vp),
-            "members": [asdict(o) for o in opinions],
+            "members": member_dicts,
             "debate": debate,
             "consensus": asdict(consensus),
             "disclaimer": DISCLAIMER,

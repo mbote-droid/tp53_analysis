@@ -3926,3 +3926,68 @@ class TestCacheWarming:
         out2 = cache.warm("R175H", "clinical_interpretation", gen, max_related=3)
         assert out2["warmed"] == [] and len(out2["skipped"]) == 3
         assert calls == []
+
+
+class TestOrthogonalPersonas:
+    """Orthogonal personas / anti echo-chamber (agents/orthogonal_personas.py)."""
+
+    def test_personas_have_distinct_temperatures(self):
+        from agents.orthogonal_personas import ORTHOGONAL_PERSONAS
+        temps = {r: p["temperature"] for r, p in ORTHOGONAL_PERSONAS.items()}
+        # skeptic must be stricter (lower temp) than pharmacologist (exploratory)
+        assert temps["Skeptic"] < temps["Pharmacologist"]
+        assert len(set(temps.values())) >= 3  # genuinely varied
+
+    def test_persona_for_case_insensitive_and_default(self):
+        from agents.orthogonal_personas import persona_for
+        assert persona_for("skeptic")["temperament"] == "adversarial"
+        assert persona_for("Nonexistent Role")["temperament"] == "balanced"
+
+    def test_orthogonal_generate_binds_role_params(self):
+        from agents.orthogonal_personas import orthogonal_generate, persona_for
+        captured = {}
+
+        class _BK:
+            def generate(self, system, user, max_tokens=512, temperature=0.3,
+                         frequency_penalty=0.0):
+                captured["temperature"] = temperature
+                captured["frequency_penalty"] = frequency_penalty
+                return "ok"
+
+        gen = orthogonal_generate(_BK(), "Skeptic")
+        assert gen("s", "u") == "ok"
+        assert captured["temperature"] == persona_for("Skeptic")["temperature"]
+        assert captured["frequency_penalty"] == persona_for("Skeptic")["frequency_penalty"]
+
+    def test_orthogonal_generate_tolerates_narrow_backend(self):
+        from agents.orthogonal_personas import orthogonal_generate
+
+        class _NarrowBK:
+            def generate(self, system, user, max_tokens=512):
+                return "narrow-ok"
+
+        gen = orthogonal_generate(_NarrowBK(), "Proposer")
+        assert gen("s", "u") == "narrow-ok"  # falls back gracefully
+
+    def test_board_members_carry_temperament(self):
+        from agents.tumor_board import convene_tumor_board
+        board = convene_tumor_board("R175H", {"cancer": "Breast", "stage": "II"})
+        temps = [m.get("temperament") for m in board["members"]]
+        assert all(temps)  # every specialist labelled
+        assert "conservative" in temps  # the pathologist
+
+    def test_debate_uses_role_specific_generators(self):
+        from agents.adversarial_evidence import bounded_debate
+        used_roles = []
+
+        def role_generate(role):
+            def _g(system, user):
+                used_roles.append(role)
+                return f"{role} says"
+            return _g
+
+        out = bounded_debate("give drug", ["trial stopped"],
+                             generate_fn=lambda s, u: "unused",
+                             role_generate=role_generate)
+        assert out["success"] is True
+        assert used_roles == ["Skeptic", "Proposer"]
