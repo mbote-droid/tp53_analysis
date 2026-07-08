@@ -310,6 +310,8 @@ def load_gemma_vision_agent():
 # Bundled, clearly-watermarked SYNTHETIC demo images for the one-click path.
 SAMPLE_SLIDE_PATH = Path(__file__).parent / "assets" / "sample_pathology_slide.jpg"
 SAMPLE_REPORT_PATH = Path(__file__).parent / "assets" / "sample_lab_report.jpg"
+SAMPLE_SANGER_PATH = Path(__file__).parent / "assets" / "sample_sanger.ab1"
+SAMPLE_SANGER_REF_PATH = Path(__file__).parent / "assets" / "sample_sanger_reference.txt"
 
 if "rag" not in st.session_state:
     st.session_state.rag, st.session_state.store = init_rag_system()
@@ -841,6 +843,86 @@ with tab2:
                            "HGVS annotation. Unannotated variants are shown genomic-only.")
             except Exception as e:
                 st.error(f"VCF parsing failed: {str(e)[:160]}")
+
+    # ── 🧬 Sanger .ab1 chromatogram → variant calling ──────────────
+    # expanded once a trace is loaded so results stay visible across the
+    # button-triggered reruns (Streamlit collapses expanders otherwise).
+    _ab1_loaded = bool(st.session_state.get("ab1_sample")) or \
+        st.session_state.get("ab1_up") is not None
+    with st.expander("🧬 Sanger .ab1 chromatogram → variant calling (novel input)",
+                     expanded=_ab1_loaded):
+        st.caption(
+            "Reads a real Sanger trace (ABIF/.ab1): quality QC, base calls, "
+            "**heterozygous double-peak detection**, and — with a reference — "
+            "variant calls with per-base PHRED confidence. Research use only.")
+        ab1_up = st.file_uploader("Chromatogram (.ab1):", type=["ab1"],
+                                  key="ab1_up")
+        ab1_use_sample = st.button("✨ Use sample trace (synthetic demo)",
+                                   key="ab1_sample_btn")
+
+        if ab1_use_sample and SAMPLE_SANGER_PATH.exists():
+            st.session_state["ab1_sample"] = {
+                "bytes": SAMPLE_SANGER_PATH.read_bytes(),
+                "ref": (SAMPLE_SANGER_REF_PATH.read_text(encoding="utf-8").strip()
+                        if SAMPLE_SANGER_REF_PATH.exists() else ""),
+            }
+
+        ab1_bytes, ab1_is_sample, ab1_ref_default = None, False, ""
+        if ab1_up is not None:
+            ab1_bytes = ab1_up.getvalue()
+            st.session_state.pop("ab1_sample", None)
+        elif st.session_state.get("ab1_sample"):
+            ab1_bytes = st.session_state["ab1_sample"]["bytes"]
+            ab1_ref_default = st.session_state["ab1_sample"]["ref"]
+            ab1_is_sample = True
+
+        # Security gate on real uploads (size / exe-magic-byte); samples bypass.
+        ab1_ok = True
+        if ab1_bytes and not ab1_is_sample:
+            from utils.security import validate_upload
+            v = validate_upload(ab1_bytes, getattr(ab1_up, "name", ""),
+                                allowed_ext=(".ab1",), require_text=False)
+            if not v["ok"]:
+                st.warning(f"⚠️ {v['friendly']}")
+                ab1_ok = False
+
+        if ab1_bytes and ab1_ok:
+            if ab1_is_sample:
+                st.caption("Loaded **synthetic** demo trace (not real patient data).")
+            ref_seq = st.text_area(
+                "Optional reference segment (for variant calling):",
+                value=ab1_ref_default, height=68, key="ab1_ref",
+                help="Leave blank for QC + heterozygous detection only.")
+            if st.button("🔬 Analyse trace", key="ab1_analyse"):
+                from agents.sanger_ab1 import analyze_ab1
+                with st.spinner("Reading chromatogram…"):
+                    res = analyze_ab1(ab1_bytes,
+                                      reference=(ref_seq.strip() or None))
+                if res.get("success"):
+                    qc = res["qc"]
+                    c1, c2, c3 = st.columns(3)
+                    c1.metric("Read length", qc["length"])
+                    c2.metric("Mean quality", qc["mean_quality"])
+                    c3.metric("≥Q20", f"{qc['q20_fraction']*100:.0f}%")
+                    st.caption(("✅ " if qc["usable"] else "⚠️ ") + qc["note"])
+                    st.code(res["sequence"], language="text")
+                    het = res.get("heterozygous_sites", [])
+                    if het:
+                        st.markdown("**Heterozygous (double-peak) sites:**")
+                        st.dataframe(pd.DataFrame(het), width="stretch",
+                                     hide_index=True)
+                    else:
+                        st.caption("No heterozygous double-peaks detected.")
+                    if "variants" in res:
+                        if res["variants"]:
+                            st.markdown("**Variants vs reference:**")
+                            st.dataframe(pd.DataFrame(res["variants"]),
+                                         width="stretch", hide_index=True)
+                        else:
+                            st.caption("No variants vs the supplied reference.")
+                    st.caption(f"⚠️ {res['disclaimer']}")
+                else:
+                    st.error(f"Could not read trace: {res.get('error')}")
 
     _default_mut = st.session_state.get("vcf_picked_mut") or "R175H"
     mutation = st.text_input("TP53 Mutation:", placeholder="e.g., R175H", value=_default_mut)

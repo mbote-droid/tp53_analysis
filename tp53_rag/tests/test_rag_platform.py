@@ -3481,3 +3481,99 @@ class TestGoogleGenAIBackendVision:
         assert captured["part_mime"] == "image/png"
         assert captured["contents"] == ["PART", "describe this"]
         assert captured["model"] == "gemma-4-26b-a4b-it"
+
+
+class TestSangerAb1:
+    """Sanger .ab1 chromatogram reader + variant caller (agents/sanger_ab1.py).
+    Uses the module's own minimal ABIF writer to round-trip through the REAL
+    Biopython abi parser — no mock file."""
+
+    SEQ = "ACGTACGTCCGGTTAACCGGTTAACGTACGTAGCTAGCTAGGCCTTAAGG"
+
+    def test_synthesize_parse_roundtrip(self):
+        from agents.sanger_ab1 import synthesize_ab1, parse_ab1
+        ab1 = synthesize_ab1(self.SEQ)
+        assert ab1[:4] == b"ABIF"
+        p = parse_ab1(ab1)
+        assert p["success"] is True
+        assert p["sequence"] == self.SEQ
+        assert p["length"] == len(self.SEQ)
+        assert len(p["quality"]) == len(self.SEQ)
+        assert set(p["trace"].keys()) == set("GATC")
+        assert len(p["peaks"]) == len(self.SEQ)
+
+    def test_parse_junk_is_graceful(self):
+        from agents.sanger_ab1 import parse_ab1
+        out = parse_ab1(b"not an ab1 file at all")
+        assert out["success"] is False and "error" in out
+
+    def test_qc_metrics_empty_good_low(self):
+        from agents.sanger_ab1 import qc_metrics
+        assert qc_metrics([])["usable"] is False
+        good = qc_metrics([40] * 100)
+        assert good["usable"] is True and good["q20_fraction"] == 1.0
+        low = qc_metrics([5] * 100)
+        assert low["usable"] is False and low["mean_quality"] == 5.0
+
+    def test_heterozygous_site_detected(self):
+        from agents.sanger_ab1 import synthesize_ab1, parse_ab1, \
+            detect_heterozygous_sites
+        ab1 = synthesize_ab1(self.SEQ, het_sites={20: "T"})
+        p = parse_ab1(ab1)
+        het = detect_heterozygous_sites(p["sequence"], p["trace"], p["peaks"],
+                                        p["base_order"])
+        positions = [h["position"] for h in het]
+        assert 20 in positions
+        site = next(h for h in het if h["position"] == 20)
+        assert site["secondary_base"] == "T" and site["ratio"] >= 0.35
+
+    def test_no_heterozygous_when_clean(self):
+        from agents.sanger_ab1 import synthesize_ab1, parse_ab1, \
+            detect_heterozygous_sites
+        p = parse_ab1(synthesize_ab1(self.SEQ))
+        het = detect_heterozygous_sites(p["sequence"], p["trace"], p["peaks"],
+                                        p["base_order"])
+        assert het == []
+
+    def test_call_variants_substitution(self):
+        from agents.sanger_ab1 import call_variants
+        ref = list(self.SEQ)
+        ref[9] = "A" if ref[9] != "A" else "C"
+        ref = "".join(ref)
+        variants = call_variants(self.SEQ, [40] * len(self.SEQ), ref)
+        subs = [v for v in variants if v["type"] == "substitution"]
+        assert len(subs) == 1
+        assert subs[0]["ref_position"] == 10
+        assert subs[0]["confidence"] == "high"
+
+    def test_call_variants_identical_is_empty(self):
+        from agents.sanger_ab1 import call_variants
+        assert call_variants(self.SEQ, [40] * len(self.SEQ), self.SEQ) == []
+
+    def test_low_quality_variant_flagged(self):
+        from agents.sanger_ab1 import call_variants
+        ref = list(self.SEQ)
+        ref[9] = "A" if ref[9] != "A" else "C"
+        ref = "".join(ref)
+        quals = [40] * len(self.SEQ)
+        quals[9] = 8  # low quality at the variant base
+        variants = call_variants(self.SEQ, quals, ref)
+        sub = next(v for v in variants if v["ref_position"] == 10)
+        assert sub["low_confidence"] is True and sub["confidence"] == "low"
+
+    def test_analyze_ab1_full_pipeline(self):
+        from agents.sanger_ab1 import synthesize_ab1, analyze_ab1
+        ab1 = synthesize_ab1(self.SEQ, het_sites={20: "T"})
+        ref = list(self.SEQ)
+        ref[9] = "A" if ref[9] != "A" else "C"
+        ref = "".join(ref)
+        res = analyze_ab1(ab1, reference=ref)
+        assert res["success"] is True
+        assert res["qc"]["usable"] is True
+        assert any(h["position"] == 20 for h in res["heterozygous_sites"])
+        assert any(v["ref_position"] == 10 for v in res["variants"])
+        assert "research use only" in res["disclaimer"].lower()
+
+    def test_analyze_ab1_junk_is_graceful(self):
+        from agents.sanger_ab1 import analyze_ab1
+        assert analyze_ab1(b"garbage")["success"] is False
