@@ -292,6 +292,25 @@ def load_pathology_agent():
         log.warning(f"Pathology agent failed to load: {e}")
         return None
 
+
+@st.cache_resource
+def load_gemma_vision_agent():
+    """Gemma-4 native multimodal reader (no torch/timm, no OCR). Needs only
+    GOOGLE_API_KEY. Returns None gracefully if unavailable so the app never
+    crashes on this optional capability."""
+    try:
+        from agents.gemma_vision import GemmaVisionAgent
+        agent = GemmaVisionAgent()
+        return agent if agent.health() else None
+    except Exception as e:
+        log.warning(f"Gemma vision agent unavailable: {e}")
+        return None
+
+
+# Bundled, clearly-watermarked SYNTHETIC demo images for the one-click path.
+SAMPLE_SLIDE_PATH = Path(__file__).parent / "assets" / "sample_pathology_slide.jpg"
+SAMPLE_REPORT_PATH = Path(__file__).parent / "assets" / "sample_lab_report.jpg"
+
 if "rag" not in st.session_state:
     st.session_state.rag, st.session_state.store = init_rag_system()
 if "messages" not in st.session_state:
@@ -1709,86 +1728,180 @@ with tab8:
 
 # ── TAB 9: Pathology ──────────────────────────────────────────────
 with tab9:
-    st.markdown("## 🔬 Pathology Slide Analysis")
+    st.markdown("## 🔬 Multimodal Pathology — Gemma 4 Vision")
     st.markdown(
-        "Upload an H&E stained pathology slide — "
-        "tissue classification powered by UNI/ResNet foundation model, "
-        "correlated with your TP53 pipeline findings."
+        "Gemma 4 reads images **directly** — a stained slide *or* a photographed "
+        "paper lab report — with **no separate OCR engine**. One model sees the "
+        "image, reasons over it, and cross-checks any mutation it reads against "
+        "ClinVar. This is the platform's *Gemma-as-multimodal-core*."
     )
+
+    gv = load_gemma_vision_agent()
 
     col1, col2 = st.columns([2, 1])
 
     with col1:
-        uploaded = st.file_uploader(
-            "Upload H&E slide image (JPG, PNG, TIFF):",
-            type=["jpg", "jpeg", "png", "tiff"]
+        input_mode = st.radio(
+            "What are you sharing?",
+            ["🧫 Pathology slide", "📄 Photographed lab report"],
+            horizontal=True,
+        )
+        is_slide = input_mode.startswith("🧫")
+        exts = ["jpg", "jpeg", "png", "tiff"] if is_slide else ["jpg", "jpeg", "png"]
+
+        up = st.file_uploader(
+            f"Upload {'an H&E slide' if is_slide else 'a photo of a paper lab report'} "
+            f"({'/'.join(e.upper() for e in exts)}):",
+            type=exts, key=f"path_up_{is_slide}",
+        )
+        use_sample = st.button(
+            f"✨ Use sample {'slide' if is_slide else 'report'} (synthetic demo)",
+            width="stretch",
         )
 
-        if uploaded:
-            st.image(uploaded, caption="Uploaded slide", width="stretch")
-
-        if uploaded and st.button("🔬 Analyse Slide", width="stretch"):
-            # FIXED: safe load with None check — won't crash on cloud if torch missing
-            agent = load_pathology_agent()
-
-            if agent is None:
-                st.error(
-                    "Pathology agent unavailable in this environment. "
-                    "torch/torchvision not installed. Run locally for full functionality."
-                )
+        # The "Use sample" button is one-shot (True only on its own rerun), so
+        # persist the chosen sample in session_state — otherwise clicking a
+        # downstream button (e.g. "Read report") reruns with the sample gone and
+        # the click is lost. A real upload persists on its own via the widget.
+        if use_sample:
+            sample_path = SAMPLE_SLIDE_PATH if is_slide else SAMPLE_REPORT_PATH
+            if sample_path.exists():
+                st.session_state["path_sample"] = {
+                    "bytes": sample_path.read_bytes(),
+                    "name": sample_path.name,
+                    "is_slide": is_slide,
+                }
             else:
-                # NamedTemporaryFile avoids writing into the (read-only on
-                # Streamlit Cloud) working directory.
-                suffix = Path(uploaded.name).suffix or ".jpg"
-                with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as _tf:
-                    _tf.write(uploaded.getvalue())
-                    tmp = Path(_tf.name)
+                st.warning("Sample image not found in assets/.")
 
-                try:
-                    with st.spinner("Analysing slide with pathology foundation model..."):
-                        result = agent.process_slide(
-                            str(tmp),
-                            mutation_data=st.session_state.pipeline_data
-                        )
-                finally:
-                    try:
-                        if tmp.exists():
-                            tmp.unlink()
-                    except Exception as cleanup_err:
-                        log.warning(f"Failed to cleanup temp slide: {cleanup_err}")
+        # Resolve image bytes from a real upload or the persisted sample.
+        img_bytes, img_name, is_sample = None, "", False
+        if up is not None:
+            img_bytes, img_name = up.getvalue(), up.name
+            st.session_state.pop("path_sample", None)  # a real upload wins
+        else:
+            s = st.session_state.get("path_sample")
+            if s and s.get("is_slide") == is_slide:
+                img_bytes, img_name, is_sample = s["bytes"], s["name"], True
 
-                if result["success"]:
-                    st.session_state.last_pathology_result = result
-                    st.success(f"✅ Top tissue: **{result['top_tissue']}**")
-                    st.divider()
+        # Security gate on real uploads (size / exe-magic-byte / extension).
+        # Synthetic bundled samples bypass the gate.
+        gate_ok = True
+        if img_bytes and not is_sample:
+            from utils.security import validate_upload
+            v = validate_upload(img_bytes, img_name,
+                                allowed_ext=tuple("." + e for e in exts),
+                                require_text=False)
+            if not v["ok"]:
+                st.warning(f"⚠️ {v['friendly']}")
+                gate_ok = False
 
-                    st.markdown("### Tissue Classifications")
-                    tissue_df = pd.DataFrame(result["tissue_classifications"])
-                    st.dataframe(tissue_df, width="stretch", hide_index=True)
+        if img_bytes and gate_ok:
+            st.image(img_bytes,
+                     caption="Synthetic demo image" if is_sample else "Your image",
+                     width="stretch")
+            mime = "image/png" if img_name.lower().endswith(".png") else "image/jpeg"
 
-                    if result["mutation_correlations"]:
-                        st.markdown("### TP53 Mutation Correlation")
-                        for corr in result["mutation_correlations"]:
-                            st.markdown(f"**{corr['mutation']}** cancer associations:")
-                            for cancer, freq in corr["cancer_correlations"].items():
-                                st.progress(freq, text=f"{cancer}: {freq:.0%}")
+            if gv is None:
+                st.info(
+                    "Gemma vision needs `GOOGLE_API_KEY` in `.env` (the same key "
+                    "as `INFERENCE_MODE=api`). The classic CNN slide path below "
+                    "still works without it."
+                )
 
-                    st.divider()
-                    st.markdown("### 🧠 Gemma 4 Clinical Narration")
-                    st.markdown(result["llm_narration"])
+            # ── Slide path ──────────────────────────────────────────
+            if is_slide:
+                if gv is not None and st.button(
+                        "👁️ Read slide with Gemma Vision",
+                        type="primary", width="stretch"):
+                    with st.spinner("Gemma 4 is reading the slide…"):
+                        res = gv.read_pathology_slide(
+                            img_bytes, mime,
+                            mutation_data=st.session_state.pipeline_data)
+                    if res.get("success"):
+                        st.markdown("### 🧠 Gemma 4 Vision — slide narration")
+                        st.markdown(res["narration"])
+                        st.caption(f"Model: {res.get('model')} · direct image "
+                                   "reading, no separate CNN or OCR")
+                        st.download_button(
+                            "⬇️ Download narration",
+                            data=stamp_markdown(
+                                res["narration"],
+                                title="Gemma Vision Pathology Narration"),
+                            file_name="gemma_vision_pathology.md",
+                            mime="text/markdown")
+                    else:
+                        st.error(f"Gemma vision failed: {res.get('error')}")
 
-                    st.download_button(
-                        "⬇️ Download Report",
-                        data=stamp_markdown(result["llm_narration"],
-                                            title="TP53 Pathology Report"),
-                        file_name="pathology_report.md",
-                        mime="text/markdown"
-                    )
-                else:
-                    st.error(f"Analysis failed: {result.get('error')}")
+                # Classic CNN tissue-classification path — kept as a secondary
+                # option (needs torch/timm; unavailable on the slim cloud image).
+                with st.expander("Classic CNN tissue classification (UNI/ResNet)"):
+                    if st.button("🔬 Analyse with CNN", key="cnn_analyse"):
+                        agent = load_pathology_agent()
+                        if agent is None:
+                            st.error(
+                                "CNN pathology agent unavailable here "
+                                "(torch/torchvision not installed). Gemma Vision "
+                                "above needs no such dependency.")
+                        else:
+                            suffix = Path(img_name).suffix or ".jpg"
+                            with tempfile.NamedTemporaryFile(
+                                    delete=False, suffix=suffix) as _tf:
+                                _tf.write(img_bytes)
+                                tmp = Path(_tf.name)
+                            try:
+                                with st.spinner("Analysing slide with CNN…"):
+                                    result = agent.process_slide(
+                                        str(tmp),
+                                        mutation_data=st.session_state.pipeline_data)
+                            finally:
+                                try:
+                                    if tmp.exists():
+                                        tmp.unlink()
+                                except Exception as ce:
+                                    log.warning(f"temp slide cleanup: {ce}")
+                            if result["success"]:
+                                st.session_state.last_pathology_result = result
+                                st.success(f"Top tissue: **{result['top_tissue']}**")
+                                st.dataframe(
+                                    pd.DataFrame(result["tissue_classifications"]),
+                                    width="stretch", hide_index=True)
+                                if result["mutation_correlations"]:
+                                    for corr in result["mutation_correlations"]:
+                                        st.markdown(f"**{corr['mutation']}**:")
+                                        for c, f in corr["cancer_correlations"].items():
+                                            st.progress(f, text=f"{c}: {f:.0%}")
+                                st.markdown(result["llm_narration"])
+                            else:
+                                st.error(f"CNN analysis failed: {result.get('error')}")
 
-        if not uploaded:
-            st.info("Upload an H&E slide image to begin")
+            # ── Lab-report photo path ───────────────────────────────
+            else:
+                if gv is not None and st.button(
+                        "📑 Read report with Gemma Vision",
+                        type="primary", width="stretch"):
+                    with st.spinner("Gemma 4 is reading the report…"):
+                        res = gv.read_lab_report_photo(img_bytes, mime)
+                    if res.get("success"):
+                        st.markdown("### 📄 Extracted fields")
+                        st.markdown(res["summary"])
+                        muts = res.get("candidate_mutations") or []
+                        if muts:
+                            st.markdown("### 🔬 Mutations read → ClinVar cross-check")
+                            for note in res.get("clinvar_cross_check", []):
+                                st.markdown(
+                                    f"- **{note['mutation']}** → ClinVar: "
+                                    f"`{note['verdict']}`")
+                        else:
+                            st.info("No mutation notation was confidently read "
+                                    "from the image.")
+                        if res.get("caution"):
+                            st.warning(res["caution"])
+                    else:
+                        st.error(f"Gemma vision failed: {res.get('error')}")
+
+        if img_bytes is None:
+            st.info("Upload an image or click **Use sample** to watch Gemma read it.")
             st.markdown("""
 **Free slide datasets:**
 - [TCGA Portal](https://portal.gdc.cancer.gov)
@@ -1796,47 +1909,36 @@ with tab9:
 """)
 
     with col2:
-        st.markdown("### About This Agent")
+        st.markdown("### How this works")
         st.markdown("""
-**Model:** UNI (Harvard/MGH) or ResNet fallback
+**Primary:** Gemma 4 Vision reads the image **directly** — slide *or*
+photographed paper report — then reasons over it. No OCR engine, no separate
+CNN, one model for sight + language.
 
-**Tissue classes detected:**
-- Tumor
-- Stroma
-- Inflammatory
-- Necrosis
-- Normal epithelium
-- Mucus
-- Smooth muscle
-- Adipose
+**Lab-report reader:** extracts gene / variant / VAF / sample type, then
+**cross-checks every mutation it reads against ClinVar** before trusting it.
 
-**TP53 correlations:**
-- R248W → Colorectal (90%)
-- R273H → Colorectal (88%)
-- R175H → Breast (85%)
-- R249S → Liver (95%)
-- G245S → Sarcoma (80%)
+**Fallback:** a classic UNI/ResNet CNN tissue classifier (local only, needs
+torch/timm).
 """)
 
-        st.markdown("### Model Status")
-        # FIXED: safe check — no crash if torch missing on cloud
+        st.markdown("### Status")
+        if gv is not None:
+            st.success("✅ Gemma Vision ready (GOOGLE_API_KEY set)")
+        else:
+            st.warning("⚠️ Gemma Vision needs GOOGLE_API_KEY in `.env`")
         try:
-            agent_check = load_pathology_agent()
-            if agent_check is not None and agent_check.model:
-                st.success("✅ Model loaded")
-            elif agent_check is None:
-                st.warning("⚠️ Pathology agent unavailable (cloud mode)")
+            cnn = load_pathology_agent()
+            if cnn is not None and getattr(cnn, "model", None):
+                st.caption("CNN fallback: model loaded")
             else:
-                st.error("❌ No model")
-        except Exception as e:
-            st.error(f"❌ {e}")
+                st.caption("CNN fallback: unavailable (cloud mode)")
+        except Exception:
+            st.caption("CNN fallback: unavailable")
 
-        st.markdown("### Get UNI Access")
-        st.markdown(
-            "For best results request UNI model access: "
-            "[HuggingFace MahmoodLab/UNI](https://huggingface.co/MahmoodLab/UNI)\n\n"
-            "Set your token in `.env`: `HF_TOKEN=your_token`"
-        )
+        st.info(
+            "Sample images are **synthetic, watermarked demo assets** — not real "
+            "patient data.")
 
 # ── TAB 10: TNM Staging ───────────────────────────────────────────
 with tab10:
