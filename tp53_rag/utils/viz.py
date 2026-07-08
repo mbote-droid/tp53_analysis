@@ -2304,7 +2304,8 @@ def codegraph_helix_html(graph: Optional[dict], height: int = 620) -> str:
   <div style="position:absolute;top:10px;left:14px;z-index:5;font-family:
        'JetBrains Mono',monospace;color:#8b98a5;font-size:.72rem;">
     🧬 codebase as DNA · <span style="color:#00d4ff">__MC__ modules</span> ·
-    <span style="color:#2ecc71">__EC__ imports</span> · drag to rotate
+    <span style="color:#2ecc71">__EC__ imports</span> · drag to rotate ·
+    scroll to zoom · double-click to pause
   </div>
   <div id="dna-graph" style="width:100%;height:__H__px;"></div>
   <div id="dna-fallback" style="display:none;padding:18px;color:#8b98a5;
@@ -2344,6 +2345,32 @@ def codegraph_helix_html(graph: Optional[dict], height: int = 620) -> str:
       halo.position.copy(m.position); group.add(halo);
     });
 
+    // Zoom-responsive module-name labels (canvas-texture sprites). They stay
+    // hidden while zoomed out (avoids clutter) and fade in as you zoom in.
+    var labels = [];
+    function makeLabel(text, color){
+      var c = document.createElement('canvas'); var ctx = c.getContext('2d');
+      var fs = 44; ctx.font = 'bold ' + fs + 'px monospace';
+      var w = ctx.measureText(text).width + 20;
+      c.width = w; c.height = fs + 20;
+      ctx.font = 'bold ' + fs + 'px monospace';
+      ctx.fillStyle = 'rgba(5,8,15,0.72)';
+      ctx.fillRect(0,0,c.width,c.height);
+      ctx.fillStyle = color || '#e6edf3';
+      ctx.textBaseline = 'middle'; ctx.fillText(text, 10, c.height/2);
+      var tex = new THREE.CanvasTexture(c);
+      var spr = new THREE.Sprite(new THREE.SpriteMaterial(
+        {map:tex, transparent:true, depthTest:false}));
+      spr.scale.set(w*0.09, (fs+20)*0.09, 1);
+      return spr;
+    }
+    DATA.nodes.forEach(function(n){
+      var lbl = makeLabel(n.label || n.id, n.color || '#e6edf3');
+      lbl.position.set((n.x||0), (n.y||0)+3.2, (n.z||0));
+      lbl.visible = false;
+      group.add(lbl); labels.push(lbl);
+    });
+
     function strandCurve(parity, color){
       var pts = DATA.nodes.filter(function(n){return (n.strand||0)===parity;})
         .map(function(n){return new THREE.Vector3(n.x||0,n.y||0,n.z||0);});
@@ -2372,17 +2399,30 @@ def codegraph_helix_html(graph: Optional[dict], height: int = 620) -> str:
         {color:0x00d4ff, transparent:true, opacity:0.12})));
     });
 
-    // Drag to rotate + gentle auto-spin.
-    var rx=0, ry=0, down=false, px=0, py=0, auto=true;
-    renderer.domElement.addEventListener('mousedown',function(e){down=true;auto=false;px=e.clientX;py=e.clientY;});
+    // Drag to rotate · scroll to zoom · double-click toggles auto-spin.
+    var rx=0, ry=0, down=false, px=0, py=0, paused=false;
+    renderer.domElement.addEventListener('mousedown',function(e){
+      down=true;px=e.clientX;py=e.clientY;});
     window.addEventListener('mouseup',function(){down=false;});
     window.addEventListener('mousemove',function(e){
       if(!down)return; ry+=(e.clientX-px)*0.01; rx+=(e.clientY-py)*0.01;
       px=e.clientX; py=e.clientY;});
+    // Double-click properly TOGGLES pause/resume (previously a click paused
+    // forever with no way back).
+    renderer.domElement.addEventListener('dblclick',function(){paused=!paused;});
+    // Scroll to zoom (clamped); labels reveal as you get closer.
+    renderer.domElement.addEventListener('wheel',function(e){
+      e.preventDefault();
+      camera.position.z = Math.max(60, Math.min(360,
+        camera.position.z + (e.deltaY>0?12:-12)));
+    }, {passive:false});
     function animate(){
       requestAnimationFrame(animate);
-      if(auto) ry+=0.0025;
+      if(!paused) ry+=0.0025;
       group.rotation.y=ry; group.rotation.x=rx;
+      // Zoom-responsive labels: show the module names once zoomed in enough.
+      var showLabels = camera.position.z < 150;
+      for(var i=0;i<labels.length;i++){ labels[i].visible = showLabels; }
       renderer.render(scene,camera);
     }
     animate();

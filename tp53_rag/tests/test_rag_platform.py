@@ -2643,6 +2643,19 @@ class TestCodegraph:
         assert len(codegraph_helix_html(None)) > 40
         assert len(codegraph_helix_html({"nodes": []})) > 40
 
+    def test_helix_has_labels_zoom_and_pause_toggle(self):
+        from utils.viz import codegraph_helix_html
+        from utils.codegraph import build_helix_codegraph
+        html_str = codegraph_helix_html(build_helix_codegraph())
+        # zoom-responsive module-name labels
+        assert "makeLabel" in html_str and "labels.push" in html_str
+        assert "showLabels" in html_str
+        # scroll-to-zoom
+        assert "wheel" in html_str
+        # double-click TOGGLES pause (regression: old code paused forever)
+        assert "dblclick" in html_str and "paused=!paused" in html_str
+        assert "auto=false" not in html_str
+
 
 class TestAgentEval:
     """Agent evaluation harness (benchmarks/agent_eval.py). Deterministic,
