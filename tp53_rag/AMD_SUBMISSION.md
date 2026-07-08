@@ -50,6 +50,19 @@ Precision Onco Africa uses AMD infrastructure in three concrete ways:
 > feature — consistent with the hackathon's cloud-based format and this
 > project's honesty principle. We do not simulate hardware we do not have.
 
+### Hardware-elastic inference (one build, cloud → clinic)
+
+The same `INFERENCE_MODE` switch makes the platform **hardware-elastic**: it
+runs *serialised and quantised on an 8 GB commodity laptop* (`ollama` /
+`llamacpp`, fully offline) and *parallel-batched on AMD Instinct GPUs*
+(`fireworks`) — with no code change, just an environment variable. That is the
+whole thesis in one lever: the AMD-hosted path gives the throughput that makes
+the multi-agent tumour board feel real-time (182 s → 5.1 s, ~35× — see below),
+while the local path guarantees the tool still works in a clinic with no
+connectivity. The constraint (8 GB, intermittent internet) becomes the
+selling point: **precision oncology that scales from the Cloud to the Clinic on
+the same codebase.**
+
 ### Benchmark: local CPU vs AMD cloud
 
 Real numbers, captured by `tools/benchmark_amd.py`, committed at
