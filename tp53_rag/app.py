@@ -2105,6 +2105,17 @@ with tab9:
                             mutation_data=st.session_state.pipeline_data)
                     if res.get("success"):
                         st.session_state["fusion_pathology"] = res["narration"]
+                        # Feed the TNM handoff (last_pathology_result) so the
+                        # Gemma-vision reading — not only the CNN path — can flow
+                        # into TNM staging. Shape-compatible with the CNN result.
+                        st.session_state["last_pathology_result"] = {
+                            "success": True,
+                            "top_tissue": "See Gemma narration",
+                            "tissue_classifications": [],
+                            "mutation_correlations": [],
+                            "llm_narration": res["narration"],
+                            "source": "gemma_vision",
+                        }
                         st.markdown("### 🧠 Gemma 4 Vision — slide narration")
                         st.markdown(res["narration"])
                         st.caption(f"Model: {res.get('model')} · direct image "
