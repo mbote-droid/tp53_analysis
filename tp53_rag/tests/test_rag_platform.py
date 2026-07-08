@@ -3758,3 +3758,67 @@ class TestTrustWeight:
         out = rr.rerank("p53", [(clean, 1.0), (retracted, 1.0)], top_k=2)
         # clean doc must outrank the retracted one despite equal raw score
         assert out[0][0].metadata.get("source") == "a"
+
+
+class TestEpistemicUncertainty:
+    """Multi-sample epistemic uncertainty (agents/uncertainty.py). Embedder
+    and generator injected — deterministic, no live model."""
+
+    @staticmethod
+    def _embed(text):
+        # tiny deterministic bag-of-chars embedding over a fixed alphabet
+        alpha = "abcdefghijklmnopqrstuvwxyz "
+        t = text.lower()
+        return [float(t.count(c)) for c in alpha]
+
+    def test_identical_samples_zero_uncertainty(self):
+        from agents.uncertainty import epistemic_uncertainty
+        out = epistemic_uncertainty(["the same answer", "the same answer",
+                                     "the same answer"], self._embed)
+        assert out["uncertainty"] == 0.0
+        assert out["band"] == "green"
+        assert out["n_samples"] == 3
+
+    def test_divergent_samples_higher_uncertainty(self):
+        from agents.uncertainty import epistemic_uncertainty
+        same = epistemic_uncertainty(["cisplatin now", "cisplatin now"],
+                                     self._embed)["uncertainty"]
+        diff = epistemic_uncertainty(
+            ["cisplatin now",
+             "zzzz qqqq wholly unrelated words xxxx"], self._embed)["uncertainty"]
+        assert diff > same
+
+    def test_single_sample_is_undefined(self):
+        from agents.uncertainty import epistemic_uncertainty
+        out = epistemic_uncertainty(["only one"], self._embed)
+        assert out["uncertainty"] is None and out["band"] == "unknown"
+
+    def test_band_thresholds(self):
+        from agents.uncertainty import band
+        assert band(0.05) == "green"
+        assert band(0.25) == "amber"
+        assert band(0.5) == "red"
+
+    def test_sample_and_measure_uses_injected_fns(self):
+        from agents.uncertainty import sample_and_measure
+        calls = {"n": 0}
+
+        def gen(system, user):
+            calls["n"] += 1
+            return f"answer variant {calls['n']}"
+
+        out = sample_and_measure("sys", "usr", gen, embed_fn=self._embed, n=3)
+        assert out["success"] is True
+        assert calls["n"] == 3
+        assert out["n_samples"] == 3
+        assert 0.0 <= out["uncertainty"] <= 1.0
+        assert out["answer"] in out["samples"]
+
+    def test_sample_and_measure_all_fail_is_graceful(self):
+        from agents.uncertainty import sample_and_measure
+
+        def boom(system, user):
+            raise RuntimeError("down")
+
+        out = sample_and_measure("s", "u", boom, embed_fn=self._embed, n=2)
+        assert out["success"] is False

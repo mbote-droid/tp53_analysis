@@ -643,6 +643,12 @@ with tab1:
         "⚡ Stream the answer (lower perceived latency)", value=True,
         help="Shows tokens as they are generated. Uncheck for the full "
              "self-correcting pipeline (slightly slower, validated).")
+    measure_certainty = st.checkbox(
+        "🎯 Measure epistemic certainty (samples the model 3×, slower)",
+        value=False,
+        help="Re-asks the model several times and measures how much the "
+             "answers agree — an honest confidence signal. Runs on the "
+             "non-streaming path.")
 
     if submit and question and stream_mode and st.session_state.get("rag"):
         # Streaming path: tokens appear live via st.write_stream. Single-pass
@@ -692,6 +698,47 @@ with tab1:
 
         st.markdown("### Answer")
         st.markdown(result["answer"])
+
+        # 🎯 Epistemic certainty — sample the model N× and measure agreement
+        if measure_certainty:
+            st.markdown("#### 🎯 Epistemic certainty")
+            try:
+                from agents.uncertainty import sample_and_measure
+                from agents.rag_chain import _build_backend
+                _bk = _build_backend()
+
+                def _gen(system, user):
+                    return _bk.generate(system, user, max_tokens=512,
+                                        temperature=0.7)
+
+                _sys = ("You are a concise TP53 clinical-genomics assistant. "
+                        "Answer accurately and briefly.")
+                with st.spinner("Sampling the model 3× to gauge agreement…"):
+                    unc = sample_and_measure(_sys, question, _gen, n=3)
+                if unc.get("success") and unc.get("uncertainty") is not None:
+                    _b = unc["band"]
+                    _color = {"green": "🟢", "amber": "🟠",
+                              "red": "🔴"}.get(_b, "⚪")
+                    cc1, cc2 = st.columns(2)
+                    cc1.metric("Epistemic Uncertainty Index",
+                               f"{unc['uncertainty']*100:.0f}%")
+                    cc2.metric("Model agreement",
+                               f"{_color} {unc['agreement']*100:.0f}%")
+                    if _b == "green":
+                        st.success("High certainty — the model's repeated "
+                                   "answers agree closely.")
+                    elif _b == "amber":
+                        st.warning("Moderate uncertainty — answers vary; treat "
+                                   "specifics with caution.")
+                    else:
+                        st.error("High uncertainty — the model's answers "
+                                 "diverge. Verify independently.")
+                    st.caption(f"⚠️ {unc.get('disclaimer', '')}")
+                else:
+                    st.caption("Certainty unavailable: "
+                               f"{unc.get('reason', 'insufficient samples')[:100]}")
+            except Exception as e:
+                st.caption(f"Certainty check unavailable: {str(e)[:100]}")
 
         # 🔊 Jarvis voice — speak the answer in-browser (Web Speech API)
         if st.checkbox("🔊 Read answer aloud", key="tts_query"):
