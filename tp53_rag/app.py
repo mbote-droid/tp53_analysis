@@ -900,6 +900,12 @@ with tab2:
                                       reference=(ref_seq.strip() or None))
                 if res.get("success"):
                     qc = res["qc"]
+                    _het_n = len(res.get("heterozygous_sites", []))
+                    _var_n = len(res.get("variants", []))
+                    st.session_state["fusion_sanger"] = (
+                        f"Sanger read length {qc['length']}, mean Q "
+                        f"{qc['mean_quality']}, {_het_n} heterozygous "
+                        f"double-peak site(s), {_var_n} variant(s) vs reference.")
                     c1, c2, c3 = st.columns(3)
                     c1.metric("Read length", qc["length"])
                     c2.metric("Mean quality", qc["mean_quality"])
@@ -1404,6 +1410,46 @@ with tab5:
             file_name=f"report_{rep_mutation}_{datetime.now().strftime('%Y%m%d')}.md",
         )
 
+    # ── 🧩 Multimodal fusion — one summary across every modality ──
+    st.divider()
+    st.markdown("### 🧩 Multimodal Case Fusion")
+    st.caption("Synthesises everything you've gathered — variant, Gemma-vision "
+               "slide + lab-report readings, Sanger trace, and your notes — into "
+               "one unified case summary. Only modalities you actually provided "
+               "are used.")
+    _fusion_inputs = {
+        "mutation": rep_mutation,
+        "cancer": rep_cancer,
+        "vaf": f"{rep_vaf}%",
+        "pathology_narration": st.session_state.get("fusion_pathology"),
+        "lab_report_summary": st.session_state.get("fusion_lab_report"),
+        "sanger_summary": st.session_state.get("fusion_sanger"),
+    }
+    _available = [k for k in ("pathology_narration", "lab_report_summary",
+                              "sanger_summary") if st.session_state.get(k)]
+    st.caption("Modalities detected this session: "
+               + (", ".join(_available) if _available
+                  else "variant/report only (add a slide, lab photo, or Sanger "
+                       "trace for a richer fusion)."))
+    fusion_notes = st.text_area("Clinician notes (optional):", height=80,
+                                key="fusion_notes")
+    if st.button("🧩 Fuse case summary", key="fusion_go"):
+        _fusion_inputs["notes"] = fusion_notes
+        from agents.multimodal_fusion import fuse_case
+        with st.spinner("Fusing the case across modalities via Gemma 4…"):
+            fused = fuse_case(_fusion_inputs, llm=st.session_state.get("rag"))
+        if fused.get("success"):
+            st.success("Fused: " + ", ".join(fused["modalities_used"]))
+            st.markdown(fused["summary"])
+            st.caption(f"⚠️ {fused['disclaimer']}")
+            st.download_button(
+                "⬇️ Download fused summary",
+                stamp_markdown(fused["summary"],
+                               title="Multimodal Case Fusion"),
+                file_name="fused_case_summary.md", key="fusion_dl")
+        else:
+            st.warning(fused.get("reason", "Nothing to fuse yet."))
+
     # ── 🌍 Swahili / multilingual patient report ──
     st.divider()
     st.markdown("### 🌍 Patient report — English & Kiswahili")
@@ -1901,6 +1947,7 @@ with tab9:
                             img_bytes, mime,
                             mutation_data=st.session_state.pipeline_data)
                     if res.get("success"):
+                        st.session_state["fusion_pathology"] = res["narration"]
                         st.markdown("### 🧠 Gemma 4 Vision — slide narration")
                         st.markdown(res["narration"])
                         st.caption(f"Model: {res.get('model')} · direct image "
@@ -1965,6 +2012,7 @@ with tab9:
                     with st.spinner("Gemma 4 is reading the report…"):
                         res = gv.read_lab_report_photo(img_bytes, mime)
                     if res.get("success"):
+                        st.session_state["fusion_lab_report"] = res["summary"]
                         st.markdown("### 📄 Extracted fields")
                         st.markdown(res["summary"])
                         muts = res.get("candidate_mutations") or []

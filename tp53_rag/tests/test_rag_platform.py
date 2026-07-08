@@ -3577,3 +3577,65 @@ class TestSangerAb1:
     def test_analyze_ab1_junk_is_graceful(self):
         from agents.sanger_ab1 import analyze_ab1
         assert analyze_ab1(b"garbage")["success"] is False
+
+
+class TestMultimodalFusion:
+    """Unified multimodal case fusion (agents/multimodal_fusion.py).
+    LLM injected — no live model."""
+
+    def test_no_inputs_is_graceful(self):
+        from agents.multimodal_fusion import fuse_case
+        out = fuse_case({}, generate_fn=lambda s, u: "should not be called")
+        assert out["success"] is False
+        assert out["modalities_used"] == []
+
+    def test_blank_strings_count_as_absent(self):
+        from agents.multimodal_fusion import fuse_case
+        out = fuse_case({"mutation": "  ", "notes": ""},
+                        generate_fn=lambda s, u: "x")
+        assert out["success"] is False and out["modalities_used"] == []
+
+    def test_fuses_only_present_modalities(self):
+        from agents.multimodal_fusion import fuse_case
+        captured = {}
+
+        def fake(system, user):
+            captured["user"] = user
+            return "Unified summary."
+
+        out = fuse_case(
+            {"mutation": "R175H", "cancer": "Breast",
+             "sanger_summary": "het A/G at pos 30", "notes": ""},
+            generate_fn=fake)
+        assert out["success"] is True
+        assert out["summary"] == "Unified summary."
+        assert "TP53 variant" in out["modalities_used"]
+        assert "Sanger .ab1 chromatogram" in out["modalities_used"]
+        # absent modality must not appear in the prompt
+        assert "Photographed lab report" not in captured["user"]
+        assert "R175H" in captured["user"]
+
+    def test_uses_rag_chain_query_when_given(self):
+        from agents.multimodal_fusion import fuse_case
+
+        class _FakeRag:
+            def query(self, question, agent_type=None):
+                assert "CASE EVIDENCE" in question
+                return {"answer": "From RAG."}
+
+        out = fuse_case({"mutation": "R248W"}, llm=_FakeRag())
+        assert out["success"] is True and out["summary"] == "From RAG."
+
+    def test_empty_model_output_is_failure(self):
+        from agents.multimodal_fusion import fuse_case
+        out = fuse_case({"mutation": "R175H"}, generate_fn=lambda s, u: "   ")
+        assert out["success"] is False and "empty" in out["reason"].lower()
+
+    def test_backend_exception_is_graceful(self):
+        from agents.multimodal_fusion import fuse_case
+
+        def boom(system, user):
+            raise RuntimeError("model down")
+
+        out = fuse_case({"mutation": "R175H"}, generate_fn=boom)
+        assert out["success"] is False and "model down" in out["reason"]
