@@ -1134,6 +1134,43 @@ with tab13:
         except Exception as e:
             st.caption(f"Scenario explorer unavailable: {str(e)[:120]}")
 
+        # ── 🔴 Skeptic's cross-examination (adversarial evidence layer) ──
+        st.markdown("### 🔴 Skeptic's cross-examination")
+        st.caption("Before you trust the consensus, an adversarial skeptic "
+                   "hunts for *contradicting* evidence — ClinVar conflicts and "
+                   "trials that were stopped early — and challenges the "
+                   "recommendation in a bounded 2-turn exchange (never run to "
+                   "convergence, so it can't stall on a laptop).")
+        if st.button("🔴 Run skeptic cross-examination", key="adv_go"):
+            _rec = (board.get("consensus", {}) or {}).get("recommendation", "")
+            _mut = board.get("mutation", "")
+            if not _rec:
+                st.info("No consensus recommendation to challenge.")
+            else:
+                from agents.adversarial_evidence import adversarial_review
+                with st.spinner("Retrieving contradicting evidence + debating…"):
+                    rev = adversarial_review(_mut, _rec, cancer=tb_cancer)
+                ev = rev.get("evidence", {})
+                if ev.get("viability") is not None:
+                    st.metric("Counterfactual trial viability",
+                              f"{ev['viability']*100:.0f}%")
+                if ev.get("contradictions"):
+                    st.markdown("**Contradicting evidence found:**")
+                    for c in ev["contradictions"]:
+                        st.markdown(f"- {c}")
+                else:
+                    st.caption("No specific contradicting evidence retrieved "
+                               "— the recommendation largely stands.")
+                deb = rev.get("debate", {})
+                if deb.get("success"):
+                    for t in deb.get("turns", []):
+                        icon = "🔴" if t["role"] == "skeptic" else "🟢"
+                        st.markdown(f"{icon} **{t['role'].title()}:** {t['text']}")
+                    st.caption(deb.get("note", ""))
+                else:
+                    st.caption("Debate unavailable: "
+                               f"{deb.get('reason', 'unknown')[:120]}")
+
         with st.expander("⬇️ Export consensus (JSON, RUO-stamped)"):
             st.download_button(
                 "Download tumour-board consensus",
@@ -2310,7 +2347,34 @@ with tab12:
     with tc3:
         ct_live = st.checkbox("Live API", value=True, key="ct_live")
 
-    if st.button("🔎 Find Trials", width="stretch", key="ct_go"):
+    cta, ctb = st.columns(2)
+    _do_find = cta.button("🔎 Find Trials", width="stretch", key="ct_go")
+    _do_counter = ctb.button("⚖️ Counterfactual viability", width="stretch",
+                             key="ct_counter",
+                             help="Also searches for trials that were STOPPED "
+                                  "early for this variant — a safety-first "
+                                  "counterfactual, not just positive matches.")
+    if _do_counter:
+        from agents.adversarial_evidence import counterfactual_trials
+        with st.spinner("Searching matching AND stopped trials…"):
+            cf = counterfactual_trials(ct_mut or "", ct_cancer or "")
+        if cf.get("success"):
+            v = cf["viability"]
+            vc = "🟢" if v >= 0.6 else ("🟠" if v >= 0.35 else "🔴")
+            k1, k2, k3 = st.columns(3)
+            k1.metric("Matching (recruiting)", cf["positive_count"])
+            k2.metric("Stopped early", cf["stopped_count"])
+            k3.metric("Viability", f"{vc} {v*100:.0f}%")
+            if cf["stopped_trials"]:
+                st.markdown("**Trials stopped early for this variant/condition:**")
+                for t in cf["stopped_trials"]:
+                    st.markdown(f"- `{t.get('nct_id','?')}` — {t.get('status')} "
+                                f"· {t.get('title','')[:80]}")
+            st.caption(f"⚠️ {cf['disclaimer']}")
+        else:
+            st.warning(f"Counterfactual search failed: {cf.get('reason','')[:120]}")
+
+    if _do_find:
         try:
             from agents.clinical_trials import ClinicalTrialsMatcher
             with st.spinner("Searching ClinicalTrials.gov..."):

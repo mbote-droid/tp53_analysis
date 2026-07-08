@@ -241,6 +241,29 @@ class BM25:
 # Cross-Encoder Reranker (lightweight, no GPU needed)
 # ═══════════════════════════════════════════════════════════════════
 
+def compute_trust_weight(metadata: Optional[Dict]) -> float:
+    """A transparent multiplicative trust prior applied at retrieval, so a
+    retracted or superseded source is down-weighted BEFORE it can reach the
+    prompt (the honest version of 'epistemic reranking' — no model internals).
+
+    τ = τ_retraction · τ_recency · τ_authority ∈ (0, 1]. Defaults to 1.0 for
+    ordinary documents, so it never perturbs normal retrieval. Pure.
+    """
+    if not metadata:
+        return 1.0
+    w = 1.0
+    if metadata.get("retracted"):
+        w *= 0.05                                   # τ_retraction
+    if metadata.get("superseded") or metadata.get("outdated"):
+        w *= 0.4
+    tier = str(metadata.get("source_tier", "")).lower()
+    if tier == "low":
+        w *= 0.7                                     # τ_authority
+    elif tier == "preprint":
+        w *= 0.85
+    return max(0.0, min(1.0, w))
+
+
 class CrossEncoderReranker:
     """
     Reranks retrieved documents using a cross-encoder.
@@ -282,10 +305,12 @@ class CrossEncoderReranker:
         if self._available and self._model:
             pairs  = [(query, doc.page_content[:512]) for doc, _ in candidates]
             scores = self._model.predict(pairs)
-            ranked = sorted(
-                zip([d for d, _ in candidates], scores),
-                key=lambda x: x[1], reverse=True,
-            )
+            # Apply the retrieval-layer trust prior: retracted/superseded/low-
+            # authority sources are down-weighted before ranking. No-op (×1.0)
+            # for ordinary documents.
+            weighted = [(d, float(s) * compute_trust_weight(d.metadata))
+                        for d, s in zip([d for d, _ in candidates], scores)]
+            ranked = sorted(weighted, key=lambda x: x[1], reverse=True)
             # Diversity filter: no 2 chunks from same source
             seen_sources: set = set()
             diverse = []
@@ -298,11 +323,12 @@ class CrossEncoderReranker:
                     break
             return diverse
 
-        # Fallback: normalise and fuse scores
+        # Fallback: normalise and fuse scores (with the same trust prior)
         if not candidates:
             return []
         max_s = max(s for _, s in candidates) or 1.0
-        normed = [(d, s / max_s) for d, s in candidates]
+        normed = [(d, (s / max_s) * compute_trust_weight(d.metadata))
+                  for d, s in candidates]
         normed.sort(key=lambda x: x[1], reverse=True)
         return normed[:top_k]
 

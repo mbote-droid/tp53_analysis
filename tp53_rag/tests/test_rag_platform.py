@@ -3639,3 +3639,122 @@ class TestMultimodalFusion:
 
         out = fuse_case({"mutation": "R175H"}, generate_fn=boom)
         assert out["success"] is False and "model down" in out["reason"]
+
+
+class TestAdversarialEvidence:
+    """Adversarial evidence layer (agents/adversarial_evidence.py):
+    viability score, counterfactual trials, bounded debate. LLM/matcher
+    injected — no live calls."""
+
+    def test_viability_high_when_positive_no_negatives(self):
+        from agents.adversarial_evidence import viability_score
+        v = viability_score(3, {})
+        assert v > 0.6
+
+    def test_viability_drops_with_negatives(self):
+        from agents.adversarial_evidence import viability_score
+        clean = viability_score(3, {})
+        hit = viability_score(3, {"stopped_trials": 3, "clinvar_conflicts": 3,
+                                  "resistance": 3})
+        assert hit < clean
+        assert 0.0 <= hit <= 1.0
+
+    def test_viability_zero_positive_is_low(self):
+        from agents.adversarial_evidence import viability_score
+        assert viability_score(0, {}) <= 0.35
+
+    def test_counterfactual_trials_classifies_stopped(self):
+        from agents.adversarial_evidence import counterfactual_trials
+
+        class _FakeMatcher:
+            def search(self, mutation=None, cancer_type=None, status="",
+                       **kw):
+                if status == "RECRUITING":
+                    return {"trials": [{"nct_id": "N1", "status": "RECRUITING"},
+                                       {"nct_id": "N2", "status": "RECRUITING"}]}
+                return {"trials": [
+                    {"nct_id": "N1", "status": "RECRUITING"},
+                    {"nct_id": "N3", "status": "TERMINATED"},
+                    {"nct_id": "N4", "status": "WITHDRAWN"}]}
+
+        out = counterfactual_trials("R175H", "Breast", matcher=_FakeMatcher())
+        assert out["success"] is True
+        assert out["positive_count"] == 2
+        assert out["stopped_count"] == 2
+        assert 0.0 <= out["viability"] <= 1.0
+
+    def test_bounded_debate_is_hard_capped_at_two(self):
+        from agents.adversarial_evidence import bounded_debate
+        calls = []
+
+        def fake(system, user):
+            calls.append(system[:20])
+            return "response"
+
+        out = bounded_debate("Give drug X.", ["trial stopped for toxicity"],
+                             fake, max_turns=99)
+        assert out["success"] is True
+        assert out["turn_count"] == 2          # never more than 2
+        assert len(calls) == 2
+        assert out["hard_capped_at"] == 2
+        assert out["turns"][0]["role"] == "skeptic"
+        assert out["turns"][1]["role"] == "proposer"
+
+    def test_bounded_debate_single_turn(self):
+        from agents.adversarial_evidence import bounded_debate
+        out = bounded_debate("claim", [], lambda s, u: "x", max_turns=1)
+        assert out["turn_count"] == 1 and out["turns"][0]["role"] == "skeptic"
+
+    def test_bounded_debate_handles_llm_error(self):
+        from agents.adversarial_evidence import bounded_debate
+
+        def boom(system, user):
+            raise RuntimeError("llm down")
+
+        out = bounded_debate("claim", [], boom)
+        assert out["success"] is False and "llm down" in out["reason"]
+
+    def test_gather_contradicting_evidence_shape(self):
+        from agents.adversarial_evidence import gather_contradicting_evidence
+
+        class _EmptyMatcher:
+            def search(self, **kw):
+                return {"trials": []}
+
+        out = gather_contradicting_evidence("R175H", "Breast",
+                                            matcher=_EmptyMatcher())
+        assert "contradictions" in out and "has_contradictions" in out
+        assert isinstance(out["contradictions"], list)
+
+
+class TestTrustWeight:
+    """Retrieval-layer trust prior (compute_trust_weight in rag_chain)."""
+
+    def test_ordinary_doc_is_unweighted(self):
+        from agents.rag_chain import compute_trust_weight
+        assert compute_trust_weight({}) == 1.0
+        assert compute_trust_weight({"source": "curated"}) == 1.0
+        assert compute_trust_weight(None) == 1.0
+
+    def test_retracted_is_heavily_downweighted(self):
+        from agents.rag_chain import compute_trust_weight
+        assert compute_trust_weight({"retracted": True}) < 0.1
+
+    def test_superseded_and_tier_downweight(self):
+        from agents.rag_chain import compute_trust_weight
+        assert compute_trust_weight({"superseded": True}) < 1.0
+        assert compute_trust_weight({"source_tier": "low"}) < 1.0
+        assert compute_trust_weight({"source_tier": "preprint"}) < 1.0
+
+    def test_rerank_downweights_retracted(self):
+        from agents.rag_chain import CrossEncoderReranker
+        from langchain_core.documents import Document
+        rr = CrossEncoderReranker()
+        rr._available = False  # force score-fusion fallback (deterministic)
+        clean = Document(page_content="p53 restores apoptosis",
+                         metadata={"source": "a"})
+        retracted = Document(page_content="p53 restores apoptosis",
+                             metadata={"source": "b", "retracted": True})
+        out = rr.rerank("p53", [(clean, 1.0), (retracted, 1.0)], top_k=2)
+        # clean doc must outrank the retracted one despite equal raw score
+        assert out[0][0].metadata.get("source") == "a"
