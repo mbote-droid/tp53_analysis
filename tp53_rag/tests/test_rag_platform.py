@@ -3991,3 +3991,33 @@ class TestOrthogonalPersonas:
                              role_generate=role_generate)
         assert out["success"] is True
         assert used_roles == ["Skeptic", "Proposer"]
+
+
+class TestPathwayGraph:
+    """GraphRAG-lite pathway triples (knowledge_base/pathway_graph.py)."""
+
+    def test_triples_render(self):
+        from knowledge_base.pathway_graph import (TP53_PATHWAY_TRIPLES,
+                                                  triple_text)
+        assert len(TP53_PATHWAY_TRIPLES) >= 10
+        txt = triple_text(TP53_PATHWAY_TRIPLES[0])
+        assert "→" in txt and "TP53" in txt
+
+    def test_enrichment_text_has_relations(self):
+        from knowledge_base.pathway_graph import pathway_enrichment_text
+        t = pathway_enrichment_text()
+        assert "CDKN1A" in t and "MDM2" in t and "→" in t
+
+    def test_pathway_documents_shape(self):
+        from knowledge_base.pathway_graph import pathway_documents
+        docs = pathway_documents()
+        assert len(docs) >= 1
+        for d in docs:
+            assert d["content"] and d["metadata"]["source"] == "pathway_graph"
+        # the combined graph doc must be present
+        assert any("relationship graph" in d["content"] for d in docs)
+
+    def test_curated_knowledge_includes_pathway_graph(self):
+        from knowledge_base.ingestion import TP53DocumentIngester
+        docs = TP53DocumentIngester().load_curated_knowledge()
+        assert any(d.metadata.get("source") == "pathway_graph" for d in docs)

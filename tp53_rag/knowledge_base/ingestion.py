@@ -90,6 +90,16 @@ class TP53DocumentIngester:
                 metadata={**item["metadata"], "ingestion_source": "curated_embedded", "offline_available": True}
             )
             documents.append(doc)
+        # GraphRAG-lite: fold the TP53 pathway relationship graph in as
+        # retrievable chunks so a single vector lookup returns both prose and
+        # the subject→relation→target structure.
+        try:
+            from knowledge_base.pathway_graph import pathway_documents
+            for pd in pathway_documents():
+                documents.append(Document(page_content=pd["content"].strip(),
+                                          metadata=pd["metadata"]))
+        except Exception as e:  # pragma: no cover
+            log.warning(f"Pathway-graph enrichment skipped: {e}")
         return documents
 
     def load_ncbi_gene_summary(self) -> List[Document]:
