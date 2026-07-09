@@ -121,11 +121,75 @@ $$
 (`utils/microfluidic.py`). The intelligence demonstrated is the abort decision,
 on simulated telemetry — not image recognition.
 
+## 9. Epistemic Uncertainty Index (multi-sample agreement)
+
+For a hosted model whose internals we cannot access, honest uncertainty is the
+*disagreement across repeated samples*. Sampling the same prompt $N$ times at
+temperature $>0$ and embedding each answer $e_i$, the index is one minus the
+mean pairwise cosine similarity:
+
+$$
+U = 1 - \frac{2}{N(N-1)} \sum_{i<j} \cos(e_i, e_j)
+$$
+
+Bands: green $U<0.15$, amber $0.15\le U<0.35$, red $U\ge0.35$
+(`agents/uncertainty.py`). **Computed on real model outputs.** This measures
+model-output *agreement* — an epistemic-uncertainty proxy — **not** a clinical
+probability.
+
+## 10. Counterfactual trial viability (illustrative heuristic)
+
+Beyond positive trial matches, the adversarial layer counts negative signals
+$h_k$ (stopped trials, ClinVar conflicts, resistance) and folds them into a
+viability score:
+
+$$
+V = S_{\text{match}} \cdot \left(1 - \min\!\Big(1, \sum_k w_k\, h_k\Big)\right),
+\qquad h_k = \min\!\Big(1, \tfrac{\text{count}_k}{3}\Big)
+$$
+
+where $S_{\text{match}}$ scales with the number of matching recruiting trials
+and $\sum_k w_k \le 1$ (`agents/adversarial_evidence.py`). **Illustrative
+composite heuristic (RUO)** — a triage/attention signal, **not** a validated
+efficacy or survival probability.
+
+## 11. Trust-adjusted retrieval rerank
+
+A transparent multiplicative trust prior is applied to each candidate's
+relevance score *before* ranking, so a retracted or superseded source is
+down-weighted before it can reach the prompt:
+
+$$
+\text{score}' = \text{score}_{\text{rel}} \cdot \tau, \qquad
+\tau = \tau_{\text{retraction}} \cdot \tau_{\text{recency}} \cdot \tau_{\text{authority}} \in (0, 1]
+$$
+
+$\tau=1$ for ordinary documents (no perturbation to normal retrieval);
+$\tau_{\text{retraction}}\!\approx\!0.05$ for retracted content
+(`compute_trust_weight`, `agents/rag_chain.py`). The honest, retrieval-layer
+version of "epistemic reranking" — no model internals.
+
+## 12. Kiswahili → HPO/ICD-10 mapping with confidence gate
+
+An exact-substring lookup maps known Kiswahili phrases to codes; an unmatched
+phrase is mapped to the nearest curated term only if the embedding similarity
+clears a threshold, otherwise it is passed through as "no confident mapping":
+
+$$
+\text{code} = \operatorname*{arg\,max}_{p}\; \cos\!\big(\text{emb}(\text{phrase}), \text{emb}(\text{term}_p)\big)
+\quad\text{accepted iff}\quad \max_p \cos \ge \theta\;(\approx 0.60)
+$$
+
+(`agents/kiswahili_hpo.py`). The threshold is a safety gate against a
+wrong-but-confident clinical-code mapping; the table is a curated,
+clinically-reviewable starter set.
+
 ---
 
 ### A note on honesty
 
-Two of the items above (ΔΔG, microfluidic telemetry) are curated or simulated
-inputs, and say so. The remaining methods operate on real model outputs or real
-retrieval. Keeping that line clear — computed vs curated vs simulated — is
-itself part of the methodology.
+Some items above are curated or simulated inputs (ΔΔG, microfluidic telemetry),
+and one is an explicitly illustrative heuristic (§10 viability), and they say
+so. The rest operate on real model outputs (§1, §9) or real retrieval
+(§2, §11). Keeping that line clear — computed vs curated vs simulated vs
+illustrative-heuristic — is itself part of the methodology.

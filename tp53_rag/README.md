@@ -143,7 +143,23 @@ service if a workload ever demands it.
 ✅ **PubMed Citations**: live Entrez literature with inline `[PMID]` references  
 ✅ **Animated Clinical UI**: dark bioinformatics theme, animated VAF/hotspot charts, live agent-status board, animated dispatch network, auto-rotating domain-coloured 3D structure, drug-docking pose  
 ✅ **FHIR R4 Export**: HL7 clinical interoperability  
-✅ **n8n Workflows**: visual node-based automation with EHR alerting  
+✅ **n8n Workflows**: visual node-based automation with EHR alerting (wiring CI-verified — `tools/validate_n8n.py`)  
+
+### ✨ New: multimodal core, honest-uncertainty & the adversarial evidence layer
+
+🧬 **Gemma-as-multimodal-core**: Gemma 4 vision reads a **pathology slide** *or* a **photographed paper lab report** directly — no separate CNN, no OCR engine — and cross-checks any mutation it reads against ClinVar (Pathology tab, one-click synthetic demo).  
+🧫 **Sanger `.ab1` chromatogram → variant calling**: real Biopython trace parse + QC + **heterozygous double-peak detection** + reference variant calls with per-base quality gating (Analysis tab; ships a synthetic sample trace).  
+🧩 **Multimodal case fusion**: unify variant + slide + lab-report + Sanger + notes into one Gemma-written case summary — only the modalities you actually provided (Report tab).  
+🔴 **Adversarial Evidence Layer**: a bounded 2-turn skeptic↔proposer debate that *actively retrieves contradicting evidence* (ClinVar conflicts, trials **stopped early**), plus a **counterfactual trial Viability gauge** and a retraction/trust rerank prior. Never runs to convergence (laptop-safe).  
+🎯 **Honest epistemic uncertainty**: samples the model N× and reports a green/amber/red **Epistemic Uncertainty Index** from answer agreement — the legitimate version of MC-dropout for a hosted model (Query tab).  
+🎭 **Orthogonal personas**: each specialist/role samples at a distinct temperature so multi-agent disagreement is real, not an echo chamber.  
+🌍 **Kiswahili → HPO/ICD-10** mapping with a confidence gate (equity layer maps meaning, not just words).  
+⚡ **Semantic cache warming**: pre-computes related TP53 hotspots so likely follow-ups are instant.  
+🕸️ **GraphRAG-lite**: TP53 pathway relationship triples folded into retrieval, so one vector lookup returns both prose and structure.  
+🖥️ **Hardware-elastic inference**: same codebase runs serialised/offline on an 8 GB laptop ↔ parallel-batched on AMD Instinct via `INFERENCE_MODE` — **182 s → 5.1 s (~35×)**.  
+🎤 **Jarvis voice loop**: speak a question → Whisper transcribes → Gemma answers → the browser reads it back.  
+
+> Math behind the new signals (Epistemic Uncertainty Index, Viability, trust rerank, Kiswahili→HPO gate) is documented in **[METHODS.md](METHODS.md)** §9–§12.
 
 > ⚠️ **Research & educational use only — not for clinical decisions.** Some visuals (e.g. docking affinities) are illustrative, not measured; live data (ClinVar/ChEMBL/ClinicalTrials.gov) should be verified at source.
 
