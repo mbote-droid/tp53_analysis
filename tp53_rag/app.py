@@ -1812,8 +1812,11 @@ with tab7:
 
     WHISPER_AVAILABLE = whisper_available()
     vc1, vc2 = st.columns(2)
-    vc1.success("✅ Whisper STT ready") if WHISPER_AVAILABLE else \
-        vc1.warning("⚠️ `pip install openai-whisper` for speech-in")
+    with vc1:
+        if WHISPER_AVAILABLE:
+            st.success("✅ Whisper STT ready")
+        else:
+            st.warning("⚠️ `pip install openai-whisper` for speech-in")
     vc2.success("✅ Jarvis TTS ready (in-browser)")
     speak_back = st.toggle("🔊 Speak the answer back", value=True, key="voice_tts")
 
