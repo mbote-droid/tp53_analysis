@@ -54,8 +54,45 @@ KISWAHILI_HPO: Dict[str, Dict[str, str]] = {
     "uvimbe": {"en": "swelling / oedema", "hpo": "HP:0000969", "icd10": "R60.9"},
 }
 
+# Surface-form aliases → canonical key. Clinicians type conjugated verbs
+# ("ana kohoa" = has a cough) and noun forms ("kikohozi" = a cough), not the
+# dictionary infinitive ("kukohoa" = to cough). Map those real forms too.
+_ALIASES: Dict[str, str] = {
+    # cough
+    "kikohozi": "kukohoa", "anakohoa": "kukohoa", "kohoa": "kukohoa",
+    # vomiting
+    "anatapika": "kutapika", "tapika": "kutapika", "kutapika": "kutapika",
+    # diarrhoea
+    "anaharisha": "kuharisha", "kuhara": "kuharisha", "anahara": "kuharisha",
+    "harisha": "kuharisha",
+    # fatigue
+    "amechoka": "uchovu", "kuchoka": "uchovu",
+    # weight loss
+    "amepungua uzito": "kupungua uzito", "kupungua kwa uzito": "kupungua uzito",
+    # constipation
+    "amevimbiwa": "kuvimbiwa",
+    # bleeding
+    "anatokwa na damu": "kutokwa na damu", "kuvuja damu": "kutokwa na damu",
+    # dyspnoea
+    "kushindwa kupumua": "kupumua kwa shida",
+    "anashindwa kupumua": "kupumua kwa shida", "pumzi fupi": "kupumua kwa shida",
+    # loss of appetite
+    "hana hamu ya kula": "kukosa hamu ya kula",
+    "amekosa hamu ya kula": "kukosa hamu ya kula",
+    # nausea
+    "anahisi kichefuchefu": "kichefuchefu",
+    # jaundice
+    "rangi ya manjano": "manjano",
+}
+
+# Full lookup = canonical entries + aliases pointing at the same codes.
+_LOOKUP: Dict[str, Dict[str, str]] = dict(KISWAHILI_HPO)
+for _alias, _canon in _ALIASES.items():
+    if _canon in KISWAHILI_HPO:
+        _LOOKUP[_alias] = KISWAHILI_HPO[_canon]
+
 # Longest phrases first so "maumivu ya tumbo" wins over "maumivu".
-_TERMS_BY_LEN = sorted(KISWAHILI_HPO.keys(), key=len, reverse=True)
+_TERMS_BY_LEN = sorted(_LOOKUP.keys(), key=len, reverse=True)
 
 
 def _normalise(s: str) -> str:
@@ -90,7 +127,7 @@ def map_text(text: str, embed_fn: Optional[Callable[[str], List[float]]] = None,
     consumed = norm
     for term in _TERMS_BY_LEN:
         if term in consumed:
-            e = KISWAHILI_HPO[term]
+            e = _LOOKUP[term]
             mappings.append({"kiswahili": term, "english": e["en"],
                              "hpo": e["hpo"], "icd10": e["icd10"],
                              "match": "exact"})
@@ -102,12 +139,12 @@ def map_text(text: str, embed_fn: Optional[Callable[[str], List[float]]] = None,
         try:
             tvec = embed_fn(norm)
             best_term, best_sim = None, -1.0
-            for term, e in KISWAHILI_HPO.items():
+            for term, e in _LOOKUP.items():
                 sim = _cosine(tvec, embed_fn(term))
                 if sim > best_sim:
                     best_term, best_sim = term, sim
             if best_term is not None:
-                e = KISWAHILI_HPO[best_term]
+                e = _LOOKUP[best_term]
                 entry = {"kiswahili": best_term, "english": e["en"],
                          "hpo": e["hpo"], "icd10": e["icd10"],
                          "similarity": round(best_sim, 2)}

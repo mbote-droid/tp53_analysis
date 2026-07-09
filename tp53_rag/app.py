@@ -307,6 +307,23 @@ def load_gemma_vision_agent():
         return None
 
 
+@st.cache_resource
+def _kiswahili_embedder_model():
+    """Cached embedding model reused for the Kiswahili→HPO fuzzy fallback."""
+    try:
+        from knowledge_base.vector_store import _get_embedding_model
+        return _get_embedding_model()
+    except Exception as e:
+        log.warning(f"Kiswahili embedder unavailable: {e}")
+        return None
+
+
+def _get_kiswahili_embedder():
+    """Return an embed_query callable (text -> vector), or None if unavailable."""
+    m = _kiswahili_embedder_model()
+    return getattr(m, "embed_query", None) if m is not None else None
+
+
 # Bundled, clearly-watermarked SYNTHETIC demo images for the one-click path.
 SAMPLE_SLIDE_PATH = Path(__file__).parent / "assets" / "sample_pathology_slide.jpg"
 SAMPLE_REPORT_PATH = Path(__file__).parent / "assets" / "sample_lab_report.jpg"
@@ -643,7 +660,9 @@ with tab1:
                                 key="sw_input")
         if sw_text:
             from agents.kiswahili_hpo import map_text
-            _swres = map_text(sw_text)
+            # Pass the app's cached ONNX embedder so the confidence-gated fuzzy
+            # fallback catches phrasings the table doesn't list verbatim.
+            _swres = map_text(sw_text, embed_fn=_get_kiswahili_embedder())
             if _swres["mappings"]:
                 st.dataframe(pd.DataFrame([
                     {"Kiswahili": m["kiswahili"], "Clinical term": m["english"],

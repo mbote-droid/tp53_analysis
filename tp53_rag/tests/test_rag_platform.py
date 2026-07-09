@@ -3894,6 +3894,24 @@ class TestKiswahiliHPO:
         s = to_clinical_terms("ana manjano")
         assert "jaundice" in s and "HP:0000952" in s
 
+    def test_conjugated_surface_forms_map(self):
+        from agents.kiswahili_hpo import map_text
+        # the real bug report: "patient has a cough" in natural conjugated form
+        out = map_text("mgonjwa ana kohoa")
+        assert out["matched"] is True
+        assert any(m["hpo"] == "HP:0012735" for m in out["mappings"])  # cough
+
+    def test_various_conjugations(self):
+        from agents.kiswahili_hpo import map_text
+        cases = {
+            "anatapika": "HP:0002013",       # vomiting
+            "mtoto anaharisha": "HP:0002014",  # diarrhoea
+            "amepungua uzito": "HP:0001824",   # weight loss
+        }
+        for phrase, hpo in cases.items():
+            out = map_text(phrase)
+            assert any(m["hpo"] == hpo for m in out["mappings"]), phrase
+
 
 class TestCacheWarming:
     """Semantic-cache warming for related hotspots (A5)."""
