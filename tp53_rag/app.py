@@ -1211,6 +1211,40 @@ with tab13:
             st.caption("🎭 Orthogonal by design (not an echo chamber): "
                        + " · ".join(_temps))
 
+        # ── 🧮 Agent-Confidence Consensus (mathematical vote) ──
+        st.markdown("### 🧮 Agent-confidence consensus")
+        st.caption("Instead of prose, each specialist returns a probability "
+                   "distribution over the management options; the board's "
+                   "consensus is the aggregate — a vote you can graph. Six "
+                   "independent votes run concurrently. Model-reported "
+                   "confidence, RUO.")
+        if st.button("🧮 Run confidence vote", key="cc_go"):
+            from agents.confidence_consensus import convene_confidence_consensus
+            from agents.rag_chain import _build_backend
+            from utils.viz import confidence_consensus_chart
+            with st.spinner("Six specialists voting concurrently…"):
+                cc = convene_confidence_consensus(
+                    board.get("mutation", ""),
+                    {"cancer": tb_cancer, "stage": tb_stage},
+                    backend=_build_backend())
+            if cc.get("success"):
+                st.session_state["cc_result"] = cc
+        _cc = st.session_state.get("cc_result")
+        if _cc:
+            from utils.viz import confidence_consensus_chart
+            st.plotly_chart(confidence_consensus_chart(_cc), width="stretch")
+            st.markdown(f"**Board leans:** {_cc['top_label']} "
+                        f"(agreement {_cc['agreement']*100:.0f}%)")
+            with st.expander("Per-specialist distributions"):
+                st.dataframe(pd.DataFrame([
+                    {"Specialist": a["member"], "temperament": a["temperament"],
+                     **{o["letter"]: f"{a['distribution'][o['letter']]*100:.0f}%"
+                        for o in _cc["options"]},
+                     "parsed": "✓" if a["parsed"] else "⚠ uniform"}
+                    for a in _cc["agents"]]),
+                    width="stretch", hide_index=True)
+            st.caption(f"⚠️ {_cc['disclaimer']}")
+
         # ── Explainability "Why?" trace for the same case ──
         st.markdown("### 🔎 Why? — evidence behind the assessment")
         try:

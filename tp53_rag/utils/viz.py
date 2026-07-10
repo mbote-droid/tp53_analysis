@@ -1375,6 +1375,41 @@ def trials_priority_chart(trials) -> go.Figure:
     return fig
 
 
+def confidence_consensus_chart(result: Optional[dict]) -> go.Figure:
+    """Board's aggregated probability vote over the management options — the
+    'mathematical consensus' view. Winning option highlighted. Never empty."""
+    result = result or {}
+    consensus = result.get("consensus") or {}
+    options = result.get("options") or []
+    if not consensus or not options:
+        return _empty_fig("Run the confidence vote to see the distribution.")
+    top = result.get("top_option")
+    labels, vals, cols, texts = [], [], [], []
+    for o in options:
+        k = o["letter"]
+        labels.append(f"{k} · {o['label']}")
+        v = float(consensus.get(k, 0.0))
+        vals.append(round(v * 100, 1))
+        cols.append("#8b7cf6" if k == top else "#3a4356")   # amethyst winner
+        texts.append(f"{v*100:.0f}%")
+    fig = go.Figure(go.Bar(
+        x=vals, y=labels, orientation="h", text=texts, textposition="auto",
+        marker=dict(color=cols),
+        hovertemplate="%{y}<br>%{x:.1f}%<extra></extra>",
+    ))
+    agree = result.get("agreement", 0.0)
+    fig.update_layout(
+        template="plotly_dark", height=max(220, 46 * len(options) + 90),
+        title=dict(text=f"Agent-confidence consensus · agreement {agree*100:.0f}%"
+                        f" · {result.get('parsed_ok','?')}/"
+                        f"{result.get('n_agents','?')} agents voted",
+                   font=dict(size=13)),
+        xaxis=dict(title="mean model-reported probability (%)", range=[0, 100]),
+        margin=dict(l=10, r=20, t=50, b=10),
+    )
+    return fig
+
+
 def chembl_phase_chart(compounds) -> go.Figure:
     """Horizontal bar of TP53-pathway compounds by clinical phase (0-4).
 

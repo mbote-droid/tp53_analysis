@@ -4078,3 +4078,65 @@ class TestN8nWorkflow:
         from tools.validate_n8n import validate_workflow
         rep = validate_workflow(tmp_path / "nope.json")
         assert rep["ok"] is False and rep["reason"] == "workflow_missing"
+
+
+class TestConfidenceConsensus:
+    """Agent-confidence consensus (agents/confidence_consensus.py). LLM
+    injected — no live calls."""
+
+    def test_parse_valid_json(self):
+        from agents.confidence_consensus import parse_distribution, DEFAULT_OPTIONS
+        dist, ok = parse_distribution('{"A":0.1,"B":0.2,"C":0.6,"D":0.1}',
+                                      DEFAULT_OPTIONS)
+        assert ok is True
+        assert abs(sum(dist.values()) - 1.0) < 1e-6
+        assert dist["C"] > dist["A"]
+
+    def test_parse_normalises_unnormalised(self):
+        from agents.confidence_consensus import parse_distribution, DEFAULT_OPTIONS
+        dist, ok = parse_distribution('{"A":1,"B":1,"C":2,"D":0}', DEFAULT_OPTIONS)
+        assert ok is True and abs(sum(dist.values()) - 1.0) < 1e-6
+        assert dist["C"] == 0.5
+
+    def test_parse_garbage_is_uniform_flagged(self):
+        from agents.confidence_consensus import parse_distribution, DEFAULT_OPTIONS
+        dist, ok = parse_distribution("no json at all", DEFAULT_OPTIONS)
+        assert ok is False
+        assert all(abs(v - 0.25) < 1e-6 for v in dist.values())
+
+    def test_convene_aggregates_and_ranks(self):
+        from agents.confidence_consensus import convene_confidence_consensus
+        import itertools
+        replies = itertools.cycle([
+            '{"A":0.0,"B":0.1,"C":0.8,"D":0.1}',
+            '{"A":0.1,"B":0.1,"C":0.7,"D":0.1}'])
+
+        def fake(system, user):
+            return next(replies)
+
+        r = convene_confidence_consensus("R175H", {"cancer": "Breast"},
+                                         generate_fn=fake)
+        assert r["success"] is True
+        assert r["top_option"] == "C"
+        assert r["parsed_ok"] == r["n_agents"] == 6
+        assert abs(sum(r["consensus"].values()) - 1.0) < 1e-3
+        assert 0.0 <= r["agreement"] <= 1.0
+        assert [a["member"] for a in r["agents"]][0] == "Pathologist"
+
+    def test_convene_survives_bad_replies(self):
+        from agents.confidence_consensus import convene_confidence_consensus
+        r = convene_confidence_consensus("R175H", generate_fn=lambda s, u: "junk")
+        assert r["success"] is True          # never raises
+        assert r["parsed_ok"] == 0           # all fell back to uniform
+        # uniform everywhere -> consensus is flat
+        assert all(abs(v - 0.25) < 1e-6 for v in r["consensus"].values())
+
+    def test_chart_builds_and_empty_safe(self):
+        from utils.viz import confidence_consensus_chart
+        from agents.confidence_consensus import convene_confidence_consensus
+        r = convene_confidence_consensus(
+            "R175H", generate_fn=lambda s, u: '{"A":0,"B":0,"C":1,"D":0}')
+        fig = confidence_consensus_chart(r)
+        assert len(fig.data) == 1
+        # empty input -> non-empty placeholder figure
+        assert confidence_consensus_chart(None) is not None
