@@ -19,7 +19,7 @@ science project.
 |---|---|
 | **Creativity & Originality** | The **Live AI Tumour Board** — specialists that debate, cite evidence, and vote with *earned* confidence — plus an honesty framework that refuses to fabricate. Nothing on the market debates a case this way. |
 | **Product/Market Potential** | A concrete user (Dr. Amara, below), a real market (precision oncology for the ~2.7B people in low-oncologist-density regions), and a credible revenue model. |
-| **Completeness** | Fully functional: 26 agents, 419 automated tests, real benchmarks vs ClinVar/IARC, containerized, deployed. Not a mock-up. |
+| **Completeness** | Fully functional: 26 agents, 517 automated tests, real benchmarks vs ClinVar/IARC, containerized, deployed. Not a mock-up. |
 | **Use of AMD Platforms** | Fireworks AI (AMD-hardware-hosted models) as a first-class inference mode, AMD Developer Cloud + ROCm for heavy compute, and a ROCm/vLLM benchmark harness. Details below. |
 
 ---
@@ -182,7 +182,7 @@ offline mode), which is what makes the low-resource market economically viable.
 - **26 agents**; **25 run without any LLM call** (deterministic curation,
   staging, tumour board, explainability) — the model touches only language
   generation. This is the opposite of a fragile "5-LLM-calls-chained" design.
-- **419 automated tests** (2 skip off-GPU), CI on every push.
+- **517 automated tests**, CI on every push.
 - Real evaluation vs **ClinVar / IARC** ground truth.
 - Containerized (`docker compose up`), public repo, offline-capable.
 - Security-hardened (see [SECURITY.md](SECURITY.md)); methods documented (see
@@ -190,7 +190,7 @@ offline mode), which is what makes the low-resource market economically viable.
 
 ## Quick links
 
-- **Demo app:** `__DEMO_URL__`  *(Streamlit — to be finalised)*
+- **Demo app:** https://tp53analysis-g8iqzkuhoqmjcjtkvjcgbb.streamlit.app/
 - **Repo:** https://github.com/mbote-droid/precision-onco-africa
 - **Guided demo:** [DEMO.md](DEMO.md) · **Methods:** [METHODS.md](METHODS.md) ·
   **Security:** [SECURITY.md](SECURITY.md) · **Architecture:** [ARCHITECTURE.md](ARCHITECTURE.md)

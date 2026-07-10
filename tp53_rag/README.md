@@ -2,18 +2,32 @@
 
  — A local-first, privacy-preserving multi-agent AI platform for TP53 analysis
 
-[![Gemma 4](https://img.shields.io/badge/Powered%20by-Gemma%204-blue)](https://ai.google.dev/gemma)
-[![Ollama](https://img.shields.io/badge/Runtime-Ollama-green)](https://ollama.com)
-[![ChromaDB](https://img.shields.io/badge/Vector%20DB-ChromaDB-orange)](https://trychroma.com)
-[![FastAPI](https://img.shields.io/badge/API-FastAPI-009688)](https://fastapi.tiangolo.com)
-![Status](https://img.shields.io/badge/Deploy-local%20%2F%20pending-orange?logo=streamlit&logoColor=white)
+[![Live demo](https://img.shields.io/badge/Live%20demo-Streamlit-8b5cf6?logo=streamlit&logoColor=white)](https://tp53analysis-g8iqzkuhoqmjcjtkvjcgbb.streamlit.app/)
+[![Gemma 4](https://img.shields.io/badge/Multimodal%20core-Gemma%204-8b5cf6)](https://ai.google.dev/gemma)
+[![AMD Instinct](https://img.shields.io/badge/Accelerated%20on-AMD%20Instinct%20%2F%20ROCm-ed1c24)](https://www.amd.com/en/products/accelerators/instinct.html)
+[![Tests](https://img.shields.io/badge/tests-517%20passing-34d399)](tests/)
+[![Docker](https://img.shields.io/badge/Deploy-docker%20compose-2496ED?logo=docker&logoColor=white)](docker-compose.yml)
+[![Python](https://img.shields.io/badge/Python-3.11%2B-f0a830?logo=python&logoColor=white)](https://www.python.org)
+[![License: MIT](https://img.shields.io/badge/License-MIT-98a0bd)](LICENSE)
+[![GitHub](https://img.shields.io/badge/GitHub-precision--onco--africa-141a2e?logo=github)](https://github.com/mbote-droid/precision-onco-africa)
 
 ![Precision Onco Africa trailer](assets/trailer.gif)
 
-> ## 🏁 Quick Start for Judges (AMD Hackathon ACT II · Track 3)
+> ## 🏁 Quick Start for Judges — AMD Hackathon ACT II · Track 3 **and** Best Use of Gemma
 >
-> **What it is:** six AI specialists debate a TP53 cancer case and vote toward a
-> consensus you can trust — running on AMD infrastructure, working even offline.
+> **What it is:** an offline-capable, honesty-first oncology copilot where six AI
+> specialists **debate a TP53 case, vote toward a consensus, and hunt for
+> evidence that would _contradict_ it** — before it reaches a clinician.
+>
+> **Why it wins Track 3 (Unicorn):** a concrete user (Dr. Amara, a district
+> clinician with no oncologist and no reliable internet), a real market, and
+> genuine AMD use — **Gemma served on AMD Instinct via Fireworks/vLLM**, a ROCm
+> benchmark harness, and an honest self-healing GPU-ops layer.
+>
+> **Why it wins Best Use of Gemma:** Gemma is the **multimodal core** — it *sees*
+> pathology slides, *reads* photographed lab reports (no OCR), and *looks at* a
+> rendered protein structure, then reasons over all of it. One open model for
+> sight + language, offline or on AMD.
 >
 > **Run it in one command:**
 > ```bash
@@ -29,7 +43,7 @@
 > **AMD-specific submission details:** **[AMD_SUBMISSION.md](AMD_SUBMISSION.md)**
 > (integration, benchmarks, product/market). Pitch kit: **[PITCH.md](PITCH.md)**.
 >
-> **Live demo:** `__DEMO_URL__` · **AMD inference mode:** set
+> **Live demo:** https://tp53analysis-g8iqzkuhoqmjcjtkvjcgbb.streamlit.app/ · **AMD inference mode:** set
 > `INFERENCE_MODE=fireworks` in `.env`.
 
 Precision Onco Africa is less a chatbot than an **AI operating environment for precision oncology**: a multi-agent platform for interpreting TP53 mutations, built to work where it is needed most — clinics and labs with constrained hardware and unreliable connectivity. It runs on a commodity laptop (8 GB RAM, no GPU), keeps patient-adjacent data on the machine by default, and degrades gracefully to a fully offline mode.
@@ -204,9 +218,12 @@ The quantitative methods are documented with their formulas (ESM-2 effect
 scoring, hybrid retrieval, semantic caching, consensus confidence, ΔΔG, pLDDT,
 routing and QC savings) — see [METHODS.md](METHODS.md). The system design and
 the heterogeneous AMD compute roadmap are in [ARCHITECTURE.md](ARCHITECTURE.md),
-and a 60-second guided demo walkthrough is in [DEMO.md](DEMO.md). For the AMD
-hackathon: [AMD_SUBMISSION.md](AMD_SUBMISSION.md) (integration, benchmarks,
-product/market) and [PITCH.md](PITCH.md) (slides + video script).
+and a 60-second guided demo walkthrough is in [DEMO.md](DEMO.md). A per-module
+reference (purpose + public API of all 80 modules) is auto-generated in
+[CODE_MAP.md](CODE_MAP.md). To serve Gemma on AMD Instinct via vLLM, see
+[AMD_VLLM_SETUP.md](AMD_VLLM_SETUP.md). For the AMD hackathon:
+[AMD_SUBMISSION.md](AMD_SUBMISSION.md) (integration, benchmarks, product/market)
+and [PITCH.md](PITCH.md) (slides + video script).
 
 ## 🗺️ Future Build Considerations
 
