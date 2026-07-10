@@ -324,6 +324,13 @@ def _get_kiswahili_embedder():
     return getattr(m, "embed_query", None) if m is not None else None
 
 
+@st.cache_resource
+def _get_clinic_memory():
+    """Shared clinic-memory store (epistemic override / doctor loop)."""
+    from utils.clinic_memory import ClinicMemory
+    return ClinicMemory()
+
+
 # Bundled, clearly-watermarked SYNTHETIC demo images for the one-click path.
 SAMPLE_SLIDE_PATH = Path(__file__).parent / "assets" / "sample_pathology_slide.jpg"
 SAMPLE_REPORT_PATH = Path(__file__).parent / "assets" / "sample_lab_report.jpg"
@@ -378,6 +385,14 @@ def safe_query(question: str, agent_type=None) -> dict:
     # Pull recent (PII-scrubbed) turns so the model has continuity across reruns
     # and restarts — the conversation doesn't start from zero.
     history = mem.history_strings(sid, limit=6) if mem else None
+    # Epistemic override: inject this clinic's saved corrections as
+    # high-priority CONTEXT (not the retrieval query, so retrieval stays clean).
+    try:
+        corr_block = _get_clinic_memory().as_prompt_block(question)
+        if corr_block:
+            history = [corr_block] + list(history or [])
+    except Exception:
+        pass
     try:
         # Cap concurrent inferences so parallel sessions can't exhaust the
         # 8GB RAM budget. Acquire/release is handled by the context manager.
@@ -795,6 +810,23 @@ with tab1:
                 components.html(speak_html(result.get("answer", "")), height=70)
             except Exception as e:
                 st.caption(f"Voice output unavailable: {str(e)[:120]}")
+
+        # ✏️ Doctor loop — correct the answer; the fix becomes high-priority
+        # context for future related questions (epistemic override / clinic
+        # memory, no weight update).
+        with st.expander("✏️ Correct this answer (teaches the clinic memory)"):
+            _corr = st.text_area(
+                "Your correction (treated as ground truth next time):",
+                key="doc_correction", height=80,
+                placeholder="e.g., In our centre, R175H MDM2-inhibitor trials "
+                            "are not available; prioritise standard chemo.")
+            if st.button("💾 Save correction", key="doc_save"):
+                if _corr.strip():
+                    _get_clinic_memory().add(question, _corr)
+                    st.success("Saved to clinic memory — it will steer future "
+                               "related answers.")
+                else:
+                    st.info("Type a correction first.")
 
         # ⛉ dual guardrails — form (syntactic) + fact (ClinVar) gates
         try:
@@ -2061,6 +2093,20 @@ with tab8:
                     wres = cache.warm(warm_mut, "clinical_interpretation", _wgen)
                 st.success(f"Warmed: {', '.join(wres['warmed']) or 'none'} · "
                            f"already cached: {', '.join(wres['skipped']) or 'none'}")
+
+    # ── ✏️ Clinic memory (doctor-loop corrections) ──
+    st.markdown("### ✏️ Clinic memory (doctor-loop corrections)")
+    _cm = _get_clinic_memory()
+    _corrs = _cm.all(limit=25)
+    st.caption(f"{len(_corrs)} saved correction(s). Injected as high-priority "
+               "context into related future answers — no model weights change.")
+    if _corrs:
+        st.dataframe(pd.DataFrame([
+            {"question": c["question"][:60], "correction": c["correction"][:80]}
+            for c in _corrs]), width="stretch", hide_index=True)
+        if st.button("🗑 Clear clinic memory", key="cm_clear"):
+            n = _cm.clear()
+            st.success(f"Cleared {n} correction(s).")
 
     # ── Conversation memory (persistent, PII-scrubbed) ──
     _mem = st.session_state.get("memory")

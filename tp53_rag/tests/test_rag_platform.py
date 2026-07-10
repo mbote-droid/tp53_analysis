@@ -4215,3 +4215,45 @@ class TestStructureSnapshot:
         out = GemmaVisionAgent(api_key="").read_structure_snapshot(
             b"x", "image/png", "R175H")
         assert out["success"] is False and "GOOGLE_API_KEY" in out["error"]
+
+
+class TestClinicMemory:
+    """Epistemic override / doctor loop (utils/clinic_memory.py)."""
+
+    def test_add_and_all(self, tmp_path):
+        from utils.clinic_memory import ClinicMemory
+        cm = ClinicMemory(path=tmp_path / "cm.json")
+        r = cm.add("What for R175H?", "Prefer standard chemo here.")
+        assert r["ok"] is True
+        assert len(cm.all()) == 1
+
+    def test_empty_correction_rejected(self, tmp_path):
+        from utils.clinic_memory import ClinicMemory
+        cm = ClinicMemory(path=tmp_path / "cm.json")
+        assert cm.add("q", "   ")["ok"] is False
+        assert cm.all() == []
+
+    def test_persists_across_instances(self, tmp_path):
+        from utils.clinic_memory import ClinicMemory
+        p = tmp_path / "cm.json"
+        ClinicMemory(path=p).add("R175H prognosis?", "Poor in our cohort.")
+        cm2 = ClinicMemory(path=p)
+        assert len(cm2.all()) == 1
+
+    def test_relevant_prefers_overlap(self, tmp_path):
+        from utils.clinic_memory import ClinicMemory
+        cm = ClinicMemory(path=tmp_path / "cm.json")
+        cm.add("What treatment for R175H breast?", "Chemo first.")
+        cm.add("What is BRCA?", "Unrelated.")
+        hits = cm.relevant("treatment options for R175H", limit=1)
+        assert hits and "Chemo first." in hits[0]["correction"]
+
+    def test_prompt_block_and_clear(self, tmp_path):
+        from utils.clinic_memory import ClinicMemory
+        cm = ClinicMemory(path=tmp_path / "cm.json")
+        assert cm.as_prompt_block("anything") == ""      # empty store
+        cm.add("R175H trial?", "No MDM2 trials available locally.")
+        block = cm.as_prompt_block("R175H trial availability")
+        assert "high-priority" in block.lower()
+        assert "No MDM2 trials" in block
+        assert cm.clear() == 1 and cm.all() == []
