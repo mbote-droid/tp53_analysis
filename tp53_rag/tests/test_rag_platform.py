@@ -4277,3 +4277,53 @@ class TestClinicMemory:
         assert "high-priority" in block.lower()
         assert "No MDM2 trials" in block
         assert cm.clear() == 1 and cm.all() == []
+
+
+class TestAutonomicManager:
+    """Autonomic resource manager + honest GPU telemetry (utils/autonomic.py)."""
+
+    def test_system_stats_real(self):
+        from utils.autonomic import system_stats
+        s = system_stats()
+        assert s["available"] is True
+        assert 0 <= s["ram_used_pct"] <= 100
+        assert s["ram_total_gb"] > 0
+
+    def test_gpu_stats_honest_when_absent(self):
+        from utils.autonomic import gpu_stats
+        g = gpu_stats()
+        # On a non-AMD host it must say so, NOT fabricate numbers.
+        assert "available" in g
+        if not g["available"]:
+            assert "note" in g and g.get("gpus", []) == []
+
+    def test_status_shape(self):
+        from utils.autonomic import AutonomicManager
+        st = AutonomicManager(ram_threshold_pct=99.9).status()
+        assert "system" in st and "gpu" in st
+        assert st["over_threshold"] in (True, False)
+
+    def test_self_heal_below_threshold_noop(self):
+        from utils.autonomic import AutonomicManager
+        m = AutonomicManager(ram_threshold_pct=100.0)  # never over
+        r = m.self_heal()
+        assert r["triggered"] is False
+
+    def test_self_heal_forced_runs_reclaimers(self):
+        from utils.autonomic import AutonomicManager
+        m = AutonomicManager()
+        ran = []
+        r = m.self_heal(reclaimers=[("fake", lambda: ran.append(1))], force=True)
+        assert r["triggered"] is True
+        assert ran == [1]
+        assert any("gc.collect" in a for a in r["actions"])
+        assert "ram_before_pct" in r and "ram_after_pct" in r
+        assert len(m.log) == 1
+
+    def test_self_heal_reclaimer_error_is_caught(self):
+        from utils.autonomic import AutonomicManager
+        def boom():
+            raise RuntimeError("nope")
+        r = AutonomicManager().self_heal(reclaimers=[("bad", boom)], force=True)
+        assert r["triggered"] is True
+        assert any("failed" in a for a in r["actions"])

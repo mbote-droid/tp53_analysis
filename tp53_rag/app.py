@@ -2005,6 +2005,52 @@ with tab8:
     except Exception as e:
         st.caption(f"Compute probe unavailable: {str(e)[:120]}")
 
+    # ── 🩺 Autonomic resource manager (self-healing ops) ──
+    st.markdown("### 🩺 Autonomic resource manager")
+    st.caption("Real host memory (psutil) + real AMD GPU telemetry (rocm-smi / "
+               "amd-smi, when on an AMD host). If memory crosses the threshold "
+               "it performs a genuine reclaim (GC + cache/model unload) — no "
+               "fabricated numbers.")
+    if "autonomic" not in st.session_state:
+        from utils.autonomic import AutonomicManager
+        st.session_state["autonomic"] = AutonomicManager(ram_threshold_pct=90.0)
+    _auto = st.session_state["autonomic"]
+    _st = _auto.status()
+    _sys = _st["system"]
+    if _sys.get("available"):
+        oc1, oc2, oc3 = st.columns(3)
+        oc1.metric("RAM used", f"{_sys['ram_used_pct']:.0f}%",
+                   f"{_sys['ram_used_gb']}/{_sys['ram_total_gb']} GB")
+        oc2.metric("CPU", f"{_sys['cpu_pct']:.0f}%")
+        oc3.metric("Threshold", f"{_st['threshold_pct']:.0f}%",
+                   "OVER" if _st["over_threshold"] else "ok")
+    _gpu = _st["gpu"]
+    if _gpu.get("available"):
+        st.success(f"🟢 Live AMD GPU telemetry via {_gpu.get('source')}")
+        if _gpu.get("raw_text"):
+            st.code(_gpu["raw_text"][:1500], language="text")
+        elif _gpu.get("gpus"):
+            st.json(_gpu["gpus"])
+    else:
+        st.info("⚪ " + _gpu.get("note", "No AMD GPU on this host."))
+    ocol1, ocol2 = st.columns(2)
+    if ocol1.button("🩺 Run self-heal now", key="auto_heal"):
+        def _clear_semcache():
+            try:
+                st.session_state.rag.cache._entries.clear()
+            except Exception:
+                pass
+        r = _auto.self_heal(
+            reclaimers=[("clear semantic cache", _clear_semcache),
+                        ("clear Streamlit resource caches",
+                         st.cache_resource.clear)], force=True)
+        st.success(f"Reclaim ran · RAM {r['ram_before_pct']:.0f}% → "
+                   f"{r['ram_after_pct']:.0f}%")
+        for a in r["actions"]:
+            st.caption(f"• {a}")
+    ocol2.caption("On the AMD Developer Cloud, the 'VRAM spike → self-heal' "
+                  "demo shows real rocm-smi numbers reacting live.")
+
     # ── AMD deployment & hardware benchmarks ──
     st.markdown("### ⚡ AMD deployment & benchmarks")
     try:
