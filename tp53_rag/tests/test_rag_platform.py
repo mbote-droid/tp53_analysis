@@ -4140,3 +4140,78 @@ class TestConfidenceConsensus:
         assert len(fig.data) == 1
         # empty input -> non-empty placeholder figure
         assert confidence_consensus_chart(None) is not None
+
+
+class TestStructureSnapshot:
+    """Visual protein snapshots -> Gemma vision (agents/structure_snapshot.py)."""
+
+    @staticmethod
+    def _pdb():
+        return "\n".join(
+            f"ATOM  {i*2+1:5d}  CA  ALA A{i:4d}    "
+            f"{i*3.8:8.3f}{(i%5)*1.0:8.3f}{(i%3)*1.5:8.3f}  1.00 80.00           C"
+            for i in range(1, 30))
+
+    def test_mutation_codon(self):
+        from agents.structure_snapshot import mutation_codon
+        assert mutation_codon("R175H") == 175
+        assert mutation_codon("Y220C") == 220
+        assert mutation_codon("???") is None
+
+    def test_parse_ca_coords(self):
+        from agents.structure_snapshot import parse_ca_coords
+        c = parse_ca_coords(self._pdb())
+        assert len(c) == 29
+        assert all(len(v) == 3 for v in c.values())
+
+    def test_render_snapshot_png(self):
+        from agents.structure_snapshot import render_snapshot
+        png = render_snapshot(self._pdb(), highlight_resi=10, mutation="X10Y")
+        assert png and png[:4] == b"\x89PNG"
+
+    def test_render_empty_is_none(self):
+        from agents.structure_snapshot import render_snapshot
+        assert render_snapshot("no atoms here") is None
+
+    def test_analyze_structure_offline_render_only(self):
+        from agents.structure_snapshot import analyze_structure
+
+        class _NoGemma:
+            def health(self):
+                return False
+
+        out = analyze_structure("R175H", pdb_text=self._pdb(),
+                                gemma_agent=_NoGemma())
+        assert out["success"] is True
+        assert out["residue"] == 175
+        assert out["image_png"][:4] == b"\x89PNG"
+        assert out["narration"] is None
+        assert "narration_error" in out
+
+    def test_analyze_structure_with_injected_gemma(self):
+        from agents.structure_snapshot import analyze_structure
+
+        class _FakeGemma:
+            def health(self):
+                return True
+
+            def read_structure_snapshot(self, png, mime, mutation):
+                assert png[:4] == b"\x89PNG" and mutation == "R175H"
+                return {"success": True, "narration": "compact core residue",
+                        "caution": "coarse"}
+
+        out = analyze_structure("R175H", pdb_text=self._pdb(),
+                                gemma_agent=_FakeGemma())
+        assert out["success"] is True
+        assert out["narration"] == "compact core residue"
+
+    def test_analyze_no_structure_is_graceful(self):
+        from agents.structure_snapshot import analyze_structure
+        out = analyze_structure("R175H", pdb_text="")
+        assert out["success"] is False
+
+    def test_gemma_read_structure_no_key(self):
+        from agents.gemma_vision import GemmaVisionAgent
+        out = GemmaVisionAgent(api_key="").read_structure_snapshot(
+            b"x", "image/png", "R175H")
+        assert out["success"] is False and "GOOGLE_API_KEY" in out["error"]

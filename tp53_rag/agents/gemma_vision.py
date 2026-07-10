@@ -54,6 +54,16 @@ LAB_REPORT_SYSTEM_PROMPT = (
     "short structured summary, not a full transcript."
 )
 
+STRUCTURE_SYSTEM_PROMPT = (
+    "You are a structural-biology assistant looking at a rendered snapshot of a "
+    "protein's alpha-carbon backbone, with one residue highlighted. Comment on "
+    "the highlighted residue's structural context — is it in a compact core, an "
+    "exposed loop, or near the surface? — and what a substitution there might "
+    "plausibly do to fold stability or a binding interface, in general terms. "
+    "This is a coarse backbone rendering, not an all-atom model, so avoid "
+    "over-precise claims; describe what is visually supportable and flag "
+    "uncertainty. 3–5 sentences.")
+
 _HGVS_PATTERN = re.compile(r"\b([A-Z]\d{2,4}[A-Z*])\b")
 
 
@@ -139,4 +149,31 @@ class GemmaVisionAgent:
                                "original document before clinical use."}
         except Exception as e:
             log.error(f"Gemma lab-report vision failed: {e}")
+            return {"success": False, "error": str(e)}
+
+    def read_structure_snapshot(self, image_bytes: bytes, mime_type: str,
+                                mutation: str = "") -> Dict:
+        """Have Gemma vision comment on a rendered protein-structure snapshot
+        with the mutated residue highlighted. Never raises."""
+        if not self._api_key:
+            return {"success": False,
+                    "error": "GOOGLE_API_KEY not configured — Gemma vision "
+                             "requires the Google AI Studio backend."}
+        try:
+            prompt = ("Describe the highlighted residue's structural context "
+                      "and the plausible effect of a substitution there.")
+            if mutation:
+                prompt = (f"The highlighted residue is the site of TP53 "
+                          f"{mutation}. " + prompt)
+            narration = self._get_backend().generate_vision(
+                system_prompt=STRUCTURE_SYSTEM_PROMPT,
+                image_bytes=image_bytes, mime_type=mime_type,
+                user_prompt=prompt)
+            return {"success": True, "narration": narration,
+                    "model": self._model, "method": "gemma_vision",
+                    "caution": "Coarse backbone rendering read by a vision "
+                               "model — general structural context only, not an "
+                               "all-atom prediction. Research use only."}
+        except Exception as e:
+            log.error(f"Gemma structure vision failed: {e}")
             return {"success": False, "error": str(e)}

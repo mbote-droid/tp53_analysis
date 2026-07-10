@@ -1832,6 +1832,40 @@ with tab6:
                 result = safe_query(struct_q, agent_type="domain_annotation")
             st.markdown(result["answer"])
 
+    # ── 🖼️ Gemma SEES the structure (visual protein snapshot) ──
+    st.divider()
+    st.markdown("### 🖼️ Gemma sees the structure")
+    st.caption("We render the p53 Cα backbone with the mutated residue "
+               "highlighted — server-side, no GPU — then hand the *image* to "
+               "Gemma 4 vision. Instead of describing the fold in text, Gemma "
+               "looks at it. Coarse backbone only, research use only.")
+    vps_mut = st.text_input("Mutation to visualise:", value="R175H",
+                            key="vps_mut")
+    if st.button("🖼️ Render & let Gemma see it", key="vps_go"):
+        from agents.structure_snapshot import analyze_structure
+        with st.spinner("Rendering backbone + Gemma vision…"):
+            vps = analyze_structure(vps_mut)
+        if vps.get("success"):
+            st.session_state["vps_result"] = vps
+        else:
+            st.warning(vps.get("error", "Snapshot unavailable."))
+    _vps = st.session_state.get("vps_result")
+    if _vps and _vps.get("image_png"):
+        vcol1, vcol2 = st.columns([1, 1])
+        with vcol1:
+            st.image(_vps["image_png"],
+                     caption=f"p53 Cα backbone · residue {_vps.get('residue')} "
+                             f"({_vps.get('mutation')})", width="stretch")
+        with vcol2:
+            st.markdown("**🧠 Gemma 4 vision:**")
+            if _vps.get("narration"):
+                st.markdown(_vps["narration"])
+                if _vps.get("caution"):
+                    st.caption(f"⚠️ {_vps['caution']}")
+            else:
+                st.info(_vps.get("narration_error",
+                                 "Narration unavailable — snapshot rendered."))
+
     # ── 🔩 Structural Mechanics & Cavity Analysis ──
     st.divider()
     st.markdown("### 🔩 Structural Mechanics & Cavity Analysis")
