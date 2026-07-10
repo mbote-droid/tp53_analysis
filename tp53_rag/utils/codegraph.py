@@ -29,7 +29,7 @@ _SKIP_DIRS = {"venv", ".venv", "__pycache__", ".git", "node_modules",
 
 # Group colours by package (year-2100 neon palette).
 _GROUP_COLOR = {
-    "agents": "#00d4ff", "utils": "#2ecc71", "config": "#f1c40f",
+    "agents": "#8b7cf6", "utils": "#f0a830", "config": "#f1c40f",
     "knowledge_base": "#ff6b9d", "api": "#a29bfe", "benchmarks": "#f39c12",
     "tools": "#ff8c6b", "root": "#9aa7b4",
 }

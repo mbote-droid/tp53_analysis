@@ -80,13 +80,25 @@ def inject_theme() -> None:
         @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;600&family=JetBrains+Mono:wght@400;700&display=swap');
 
         :root {
-            --tp53-accent: #00d4ff;
-            --tp53-bg: #0d1117;
-            --tp53-panel: #161b22;
-            --tp53-text: #e6edf3;
+            /* Amethyst Nucleus palette */
+            --tp53-accent: #8b7cf6;        /* amethyst (primary) */
+            --tp53-accent-strong: #a78bfa;
+            --tp53-gold: #f0a830;          /* secondary */
+            --tp53-coral: #ff5d8f;         /* accent (sparing) */
+            --tp53-bg: #0b0e1a;
+            --tp53-panel: #141a2e;
+            --tp53-border: #2a3350;
+            --tp53-text: #e8eaf2;
+            --tp53-muted: #98a0bd;
             --tp53-sans: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             --tp53-mono: 'JetBrains Mono', 'Cascadia Code', 'Fira Code', Consolas, monospace;
         }
+
+        /* Base surfaces adopt the deep-indigo bg + amethyst selection */
+        [data-testid="stAppViewContainer"], [data-testid="stApp"] {
+            background: var(--tp53-bg);
+        }
+        ::selection { background: rgba(139,124,246,0.35); }
 
         html, body, [class*="css"], .stMarkdown, .stTextInput, .stSelectbox,
         button, input, textarea, .stTabs [data-baseweb="tab"] {
@@ -133,20 +145,20 @@ def inject_theme() -> None:
         .tp53-badge.running .dot {
             background: var(--tp53-accent);
             animation: tp53-spin 0.9s linear infinite;
-            box-shadow: 0 0 0 0 rgba(0,212,255,0.6);
+            box-shadow: 0 0 0 0 rgba(139,124,246,0.6);
         }
         .tp53-badge.running .name::after {
             content: ' …'; color: var(--tp53-accent);
         }
-        .tp53-badge.complete .dot { background: #2ecc71; }
+        .tp53-badge.complete .dot { background: #34d399; }
         .tp53-badge.complete { border-color: #1e3a2a; }
         .tp53-badge.failed   .dot { background: #ff4b4b; }
         .tp53-badge.failed   { border-color: #3a1e1e; }
 
         @keyframes tp53-spin {
-            0%   { box-shadow: 0 0 0 0 rgba(0,212,255,0.55); }
-            70%  { box-shadow: 0 0 0 7px rgba(0,212,255,0); }
-            100% { box-shadow: 0 0 0 0 rgba(0,212,255,0); }
+            0%   { box-shadow: 0 0 0 0 rgba(139,124,246,0.55); }
+            70%  { box-shadow: 0 0 0 7px rgba(139,124,246,0); }
+            100% { box-shadow: 0 0 0 0 rgba(139,124,246,0); }
         }
 
         /* ── Tabs: never let a tab row overflow — scroll horizontally ── */
@@ -184,7 +196,7 @@ def inject_theme() -> None:
         }
         div[data-testid="stMainBlockContainer"] > div[data-testid="stVerticalBlock"]
             > div[data-testid="stTabs"] > div > div > div[data-baseweb="tab-list"] button[aria-selected="true"] {
-            background: rgba(0, 212, 255, 0.12);
+            background: rgba(139, 124, 246, 0.12);
         }
 
         /* Charts and tables stay inside the viewport on any width */

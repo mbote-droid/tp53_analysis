@@ -332,11 +332,11 @@ class TestVizHelpers:
         assert animated_vaf_timeline([0, 1], ["x", "y"]).to_json()  # non-numeric
 
     def test_vaf_marker_colour_logic(self):
-        # rising VAF -> red marker, falling -> green
+        # rising VAF -> red marker, falling -> gold (Amethyst Nucleus palette)
         from utils.viz import animated_vaf_timeline
         fig = animated_vaf_timeline([0, 1, 2], [10, 20, 15])
         colours = fig.frames[-1].data[0].marker.color
-        assert colours[1] == "#ff4b4b" and colours[2] == "#2ecc71"
+        assert colours[1] == "#ff4b4b" and colours[2] == "#f0a830"
 
     def test_hotspot_bar_valid_and_bad_input(self):
         from utils.viz import animated_hotspot_bar

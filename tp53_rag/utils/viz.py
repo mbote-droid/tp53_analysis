@@ -21,9 +21,9 @@ CANONICAL_HOTSPOTS = (175, 248, 273)
 # p53 domain map — name, residue range, colour, function. Shared by the
 # 3D viewer colouring and the side legend chart so they always agree.
 P53_DOMAINS = [
-    {"name": "TAD", "start": 1,   "end": 66,  "color": "#00d4ff", "function": "Transactivation"},
+    {"name": "TAD", "start": 1,   "end": 66,  "color": "#8b7cf6", "function": "Transactivation"},
     {"name": "PRD", "start": 67,  "end": 93,  "color": "#a29bfe", "function": "Proline-rich"},
-    {"name": "DBD", "start": 94,  "end": 292, "color": "#2ecc71", "function": "DNA-binding (hotspots)"},
+    {"name": "DBD", "start": 94,  "end": 292, "color": "#f0a830", "function": "DNA-binding (hotspots)"},
     {"name": "NLS", "start": 293, "end": 322, "color": "#f1c40f", "function": "Nuclear localization"},
     {"name": "TET", "start": 323, "end": 356, "color": "#f39c12", "function": "Tetramerization"},
     {"name": "REG", "start": 357, "end": 393, "color": "#ff6b9d", "function": "Regulatory"},
@@ -78,14 +78,14 @@ def animated_vaf_timeline(days, vafs, mrd_threshold: float = 5.0) -> go.Figure:
     if not days or len(days) != len(vafs):
         return _empty_fig("No VAF timepoints to plot")
 
-    colours = ["#2ecc71"]
+    colours = ["#f0a830"]
     for i in range(1, len(vafs)):
-        colours.append("#ff4b4b" if vafs[i] > vafs[i - 1] else "#2ecc71")
+        colours.append("#ff4b4b" if vafs[i] > vafs[i - 1] else "#f0a830")
 
     def _trace(n):
         return go.Scatter(
             x=days[:n], y=vafs[:n], mode="lines+markers",
-            line=dict(color="#00d4ff", width=2),
+            line=dict(color="#8b7cf6", width=2),
             marker=dict(color=colours[:n], size=10,
                         line=dict(color="#0d1117", width=1)),
             hovertemplate="Day %{x}: %{y:.1f}%<extra></extra>",
@@ -158,9 +158,9 @@ def animated_hotspot_bar(codons, freqs) -> go.Figure:
 # agents that actually pass data/context to each other.
 _AGENT_GRAPH_GROUPS = {
     "Genomics":          (["variant_curator", "mutation_analysis", "domain_annotation",
-                           "gene_expression", "vcf_parser"], "#2ecc71"),
+                           "gene_expression", "vcf_parser"], "#f0a830"),
     "Clinical":          (["clinical_interpretation", "tnm_staging", "surgical_brief",
-                           "immunogenicity", "liquid_biopsy"], "#00d4ff"),
+                           "immunogenicity", "liquid_biopsy"], "#8b7cf6"),
     "Drug discovery":    (["drug_discovery", "molecular_docking", "synthetic_lethality",
                            "structural_analyzer", "ind_generator"], "#ff6b9d"),
     "Imaging":           (["pathology_vision", "structure_viz"], "#f39c12"),
@@ -197,7 +197,7 @@ def build_agent_graph_data(agent_names: Optional[list] = None) -> dict:
 
     nodes = [
         {"id": "dispatcher", "name": "Dispatcher", "group": "Core", "val": 26, "color": "#ffffff"},
-        {"id": "rag_core", "name": "RAG Core", "group": "Core", "val": 18, "color": "#00d4ff"},
+        {"id": "rag_core", "name": "RAG Core", "group": "Core", "val": 18, "color": "#8b7cf6"},
     ]
     links = [{"source": "dispatcher", "target": "rag_core"}]
 
@@ -253,7 +253,7 @@ def agent_graph_3d_html(graph_data: Optional[dict] = None, height: int = 560) ->
       .nodeColor(function(n){ return n.color; })
       .nodeOpacity(0.95)
       .nodeResolution(16)
-      .linkColor(function(){ return 'rgba(0,212,255,0.22)'; })
+      .linkColor(function(){ return 'rgba(139,124,246,0.22)'; })
       .linkWidth(0.6)
       .linkDirectionalParticles(2)
       .linkDirectionalParticleWidth(1.4)
@@ -357,7 +357,7 @@ def variant_effect_gauge(result: Optional[dict]) -> go.Figure:
                        f"{label}</span>"},
         gauge={
             "axis": {"range": [-15, 5], "tickcolor": "#8b98a5"},
-            "bar": {"color": "#00d4ff"},
+            "bar": {"color": "#8b7cf6"},
             "steps": [
                 {"range": [-15, -7.5], "color": "#5b1a1a"},   # likely deleterious
                 {"range": [-7.5, -4], "color": "#6b4a16"},    # possibly
@@ -412,7 +412,7 @@ def agent_architecture_diagram(agent_names,
 
     def active_edge(xs, ys, target):
         return go.Scatter(x=[cx, xs[target]], y=[cy, ys[target]], mode="lines",
-                          line=dict(color="#00d4ff", width=3), hoverinfo="skip")
+                          line=dict(color="#8b7cf6", width=3), hoverinfo="skip")
 
     def glow(xs, ys, target, on):
         return go.Scatter(
@@ -422,7 +422,7 @@ def agent_architecture_diagram(agent_names,
         )
 
     def nodes(xs, ys, active):
-        colors = ["#00d4ff"] + ["#3a4654"] * n
+        colors = ["#8b7cf6"] + ["#3a4654"] * n
         sizes = [36] + [22] * n
         if active is not None:
             colors[active] = "#00ff9c"
@@ -523,7 +523,7 @@ _NEEDLE_COLORS = {
     "uncertain": "#f1c40f",
     "vus": "#f1c40f",
     "likely_benign": "#5dade2",
-    "benign": "#2ecc71",
+    "benign": "#34d399",
 }
 _NEEDLE_DEFAULT_COLOR = "#9b9b9b"
 TP53_LENGTH = 393
@@ -1018,13 +1018,13 @@ def pathogenicity_gauge(significance: str, confidence: Optional[float] = None) -
                                   "Likely<br>path.", "Path."]},
             "bar": {"color": "#e6edf3", "thickness": 0.25},
             "steps": [
-                {"range": [0, 20], "color": "#2ecc71"},
+                {"range": [0, 20], "color": "#34d399"},
                 {"range": [20, 40], "color": "#a9dfbf"},
                 {"range": [40, 60], "color": "#f1c40f"},
                 {"range": [60, 80], "color": "#e67e22"},
                 {"range": [80, 100], "color": "#e74c3c"},
             ],
-            "threshold": {"line": {"color": "#00d4ff", "width": 4},
+            "threshold": {"line": {"color": "#8b7cf6", "width": 4},
                           "thickness": 0.8, "value": val},
         },
     ))
@@ -1075,7 +1075,7 @@ def vaf_gauge(vaf: float, mrd_threshold: float = 5.0) -> go.Figure:
         title={"text": "ctDNA Tumour Burden (VAF)", "font": {"size": 14}},
         gauge={
             "axis": {"range": [0, 60]},
-            "bar": {"color": "#00d4ff", "thickness": 0.3},
+            "bar": {"color": "#8b7cf6", "thickness": 0.3},
             "steps": [
                 {"range": [0, mrd_threshold], "color": "#1e3a2a"},
                 {"range": [mrd_threshold, 20], "color": "#3a3320"},
@@ -1165,7 +1165,7 @@ def synthetic_lethal_network(sl_result) -> go.Figure:
     fig.add_trace(go.Scatter(
         x=[cx], y=[cy], mode="markers+text", text=["TP53"],
         textposition="middle center", textfont=dict(color="#0d1117", size=11),
-        marker=dict(size=44, color="#00d4ff", line=dict(color="#0d1117", width=2)),
+        marker=dict(size=44, color="#8b7cf6", line=dict(color="#0d1117", width=2)),
         hovertemplate="TP53 (mutant)<extra></extra>", showlegend=False))
     fig.update_layout(
         template="plotly_dark", height=460, showlegend=False,
@@ -1191,7 +1191,7 @@ def ind_section_chart(ind_result) -> go.Figure:
         content = str(s.get("content", ""))
         placeholder = "[TO BE COMPLETED" in content or "[Populate" in content
         titles.append(f"{s.get('number','?')}. {str(s.get('title',''))[:34]}")
-        colors.append("#f39c12" if placeholder else "#2ecc71")
+        colors.append("#f39c12" if placeholder else "#f0a830")
         status.append("placeholder" if placeholder else "drafted")
     titles = titles[::-1]; colors = colors[::-1]; status = status[::-1]
     fig = go.Figure(go.Bar(
@@ -1234,7 +1234,7 @@ def structural_profile_radar(struct_result) -> go.Figure:
     mut = r.get("mutation", "?")
     fig = go.Figure(go.Scatterpolar(
         r=vals + [vals[0]], theta=axes + [axes[0]], fill="toself",
-        line=dict(color="#00d4ff"), fillcolor="rgba(0,212,255,0.25)",
+        line=dict(color="#8b7cf6"), fillcolor="rgba(139,124,246,0.25)",
         hovertemplate="%{theta}: %{r:.2f}<extra></extra>",
     ))
     fig.update_layout(
@@ -1271,14 +1271,14 @@ def docking_affinity_gauge(docking_result) -> go.Figure:
                        f"{label}</span>", "font": {"size": 14}},
         gauge={
             "axis": {"range": [-12, 0]},
-            "bar": {"color": "#00d4ff", "thickness": 0.3},
+            "bar": {"color": "#8b7cf6", "thickness": 0.3},
             "steps": [
                 {"range": [-12, -9], "color": "#1e3a2a"},   # very strong
                 {"range": [-9, -7], "color": "#274d35"},
                 {"range": [-7, -5], "color": "#3a3320"},
                 {"range": [-5, 0], "color": "#3a1e1e"},      # weak
             ],
-            "threshold": {"line": {"color": "#2ecc71", "width": 4},
+            "threshold": {"line": {"color": "#34d399", "width": 4},
                           "thickness": 0.85, "value": val},
         },
     ))
@@ -1304,7 +1304,7 @@ def vcf_variant_chart(variants) -> go.Figure:
     def _col(v):
         if v.get("is_hotspot"):
             return "#e74c3c"
-        return "#00d4ff" if v.get("annotated") else "#5a6b7a"
+        return "#8b7cf6" if v.get("annotated") else "#5a6b7a"
 
     rows = sorted(rows, key=_qual)[-16:]
     labels = []
@@ -1422,7 +1422,7 @@ def chembl_phase_chart(compounds) -> go.Figure:
     rows = sorted(rows, key=lambda c: c.get("max_phase", 0))[-14:]
     names = [str(c.get("name", "?"))[:34] for c in rows]
     phases = [c.get("max_phase", 0) for c in rows]
-    phase_colour = {4: "#2ecc71", 3: "#7ac943", 2: "#f1c40f",
+    phase_colour = {4: "#34d399", 3: "#7ac943", 2: "#f1c40f",
                     1: "#e67e22", 0: "#8b98a5"}
     fig = go.Figure(go.Bar(
         x=phases, y=names, orientation="h",
@@ -1474,12 +1474,12 @@ def clinvar_conflict_chart(findings) -> go.Figure:
         conflict = bool(f.get("conflict"))
         fig.add_trace(go.Scatter(
             x=[ai_x[i], cv_x[i]], y=[muts[i], muts[i]], mode="lines",
-            line=dict(color="#e74c3c" if conflict else "#2ecc71", width=4),
+            line=dict(color="#e74c3c" if conflict else "#f0a830", width=4),
             hoverinfo="skip", showlegend=False,
         ))
     fig.add_trace(go.Scatter(
         x=cv_x, y=muts, mode="markers", name="ClinVar",
-        marker=dict(symbol="circle", size=15, color="#00d4ff",
+        marker=dict(symbol="circle", size=15, color="#8b7cf6",
                     line=dict(color="#0d1117", width=1)),
         hovertemplate="%{y} · ClinVar<extra></extra>",
     ))
@@ -1569,7 +1569,7 @@ def tnm_stage_bar(stage_group: str) -> go.Figure:
     highlighted. Colour runs green (early) → red (advanced). Never empty.
     """
     stages = ["I", "II", "III", "IV"]
-    colours = {"I": "#2ecc71", "II": "#f1c40f", "III": "#e67e22", "IV": "#e74c3c"}
+    colours = {"I": "#34d399", "II": "#f1c40f", "III": "#e67e22", "IV": "#e74c3c"}
     # Map full group (e.g. "IIIB") to its coarse Roman stage for positioning.
     sg = str(stage_group or "").upper().strip()
     coarse = "IV" if sg.startswith("IV") else \
@@ -1778,8 +1778,8 @@ def docking_pose_html(pdb_id: str, residues, drug_name: str = "",
 
 # ── Live AI Tumour Board (the hero visual) ────────────────────────
 _THEME_TAG_COLOR = {
-    "p53-reactivation pathway (trial / molecular board referral)": "#00d4ff",
-    "stage-directed standard of care with TP53-aware prognosis": "#2ecc71",
+    "p53-reactivation pathway (trial / molecular board referral)": "#8b7cf6",
+    "stage-directed standard of care with TP53-aware prognosis": "#34d399",
     "reclassify the variant before acting (insufficient evidence)": "#f1c40f",
 }
 
@@ -1791,7 +1791,7 @@ def _conf_color(c: float) -> str:
     except (TypeError, ValueError):
         c = 0.0
     if c >= 0.75:
-        return "#2ecc71"
+        return "#34d399"
     if c >= 0.5:
         return "#f1c40f"
     return "#ff6b6b"
@@ -1853,7 +1853,7 @@ def tumor_board_html(board: Optional[dict], height: int = 720) -> str:
     for j, d in enumerate(debate):
         kind = d.get("type", "note")
         icon = {"agreement": "🤝", "challenge": "⚔️", "note": "📋"}.get(kind, "💬")
-        col = {"agreement": "#2ecc71", "challenge": "#ff6b6b"}.get(kind, "#8b98a5")
+        col = {"agreement": "#34d399", "challenge": "#ff6b6b"}.get(kind, "#8b98a5")
         bubbles.append(
             "<div class='tb-bubble' style='animation-delay:%dms;border-left-color:%s'>"
             % (base_delay + j * 320, col)
@@ -1883,7 +1883,7 @@ def tumor_board_html(board: Optional[dict], height: int = 720) -> str:
         color:#e6edf3;border:1px solid #1f2937;}
     .tb-title{font-size:1.05rem;font-weight:700;letter-spacing:.3px;margin-bottom:2px;}
     .tb-sub{font-size:.78rem;color:#8b98a5;margin-bottom:14px;}
-    .tb-mut{color:#00d4ff;font-family:'JetBrains Mono',monospace;}
+    .tb-mut{color:#8b7cf6;font-family:'JetBrains Mono',monospace;}
     .tb-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));
         gap:12px;margin-bottom:16px;}
     .tb-card{background:rgba(22,32,58,.55);border:1px solid #25304a;border-radius:11px;
@@ -1909,7 +1909,7 @@ def tumor_board_html(board: Optional[dict], height: int = 720) -> str:
         padding:8px 11px;margin-bottom:7px;font-size:.78rem;color:#cdd9e5;
         display:flex;gap:8px;opacity:0;animation:tbIn .45s ease forwards;}
     .tb-bubble-ic{flex-shrink:0;}
-    .tb-consensus{background:linear-gradient(135deg,rgba(0,212,255,.08),
+    .tb-consensus{background:linear-gradient(135deg,rgba(139,124,246,.08),
         rgba(46,204,113,.06));border:1px solid #2a3a52;border-radius:12px;padding:16px;
         opacity:0;animation:tbIn .6s ease forwards;}
     .tb-consensus-h{font-size:.7rem;text-transform:uppercase;letter-spacing:1px;
@@ -1961,8 +1961,8 @@ def tumor_board_html(board: Optional[dict], height: int = 720) -> str:
 
 # ── Explainability ("Why?") panel ─────────────────────────────────
 _STRENGTH_STYLE = {
-    "strong":     ("#2ecc71", "STRONG"),
-    "moderate":   ("#00d4ff", "MODERATE"),
+    "strong":     ("#34d399", "STRONG"),
+    "moderate":   ("#8b7cf6", "MODERATE"),
     "supporting": ("#f1c40f", "SUPPORTING"),
     "uncertain":  ("#ff8c6b", "UNCERTAIN"),
 }
@@ -2032,12 +2032,12 @@ def explainability_panel_html(exp: Optional[dict], height: int = 640) -> str:
     .ex-head{display:flex;justify-content:space-between;align-items:center;
         flex-wrap:wrap;gap:10px;margin-bottom:6px;}
     .ex-title{font-size:1.02rem;font-weight:700;}
-    .ex-mut{color:#00d4ff;font-family:'JetBrains Mono',monospace;}
+    .ex-mut{color:#8b7cf6;font-family:'JetBrains Mono',monospace;}
     .ex-conf{text-align:right;}
     .ex-conf-v{font-size:1.5rem;font-weight:800;font-family:'JetBrains Mono',monospace;}
     .ex-conf-l{font-size:.62rem;color:#8b98a5;text-transform:uppercase;letter-spacing:.6px;}
     .ex-headline{font-size:.85rem;color:#cdd9e5;margin-bottom:12px;}
-    .ex-plain{background:rgba(0,212,255,.06);border-left:3px solid #00d4ff;
+    .ex-plain{background:rgba(139,124,246,.06);border-left:3px solid #8b7cf6;
         border-radius:7px;padding:10px 12px;font-size:.82rem;color:#cdd9e5;
         line-height:1.5;margin-bottom:14px;}
     .ex-sec{font-size:.66rem;text-transform:uppercase;letter-spacing:1px;
@@ -2172,8 +2172,8 @@ def deployment_panel_html(tiers: Optional[dict] = None) -> str:
     .dp-note{font-size:.66rem;color:#6b7685;margin-top:12px;}
   </style>
   <div class="dp-cols">
-    <div><div class="dp-h" style="color:#2ecc71">✓ Current deployment</div>__CURRENT__</div>
-    <div><div class="dp-h" style="color:#00d4ff">• Future deployment (roadmap)</div>__FUTURE__</div>
+    <div><div class="dp-h" style="color:#34d399">✓ Current deployment</div>__CURRENT__</div>
+    <div><div class="dp-h" style="color:#8b7cf6">• Future deployment (roadmap)</div>__FUTURE__</div>
   </div>
   <div class="dp-note">Current targets run today. Future targets are credible
     roadmap directions on AMD hardware — shown as aspiration, not as functioning
@@ -2181,8 +2181,8 @@ def deployment_panel_html(tiers: Optional[dict] = None) -> str:
 </div>
 """
     return (template
-            .replace("__CURRENT__", _rows(current, "✓", "#2ecc71"))
-            .replace("__FUTURE__", _rows(future, "•", "#00d4ff")))
+            .replace("__CURRENT__", _rows(current, "✓", "#34d399"))
+            .replace("__FUTURE__", _rows(future, "•", "#8b7cf6")))
 
 
 # ── African Oncology Command Center ───────────────────────────────
@@ -2199,8 +2199,8 @@ def command_center_html(snapshot: Optional[dict], height: int = 560) -> str:
                 "data loaded.</div>")
 
     kpi_defs = [
-        ("regions", "Regions", "#00d4ff"),
-        ("countries", "Countries", "#2ecc71"),
+        ("regions", "Regions", "#8b7cf6"),
+        ("countries", "Countries", "#34d399"),
         ("cancers", "Cancer types", "#f1c40f"),
         ("key_mutations", "Key mutations", "#ff6b9d"),
         ("drivers", "Env. drivers", "#a29bfe"),
@@ -2250,7 +2250,7 @@ def command_center_html(snapshot: Optional[dict], height: int = 560) -> str:
         border-radius:11px;padding:13px;}
     .cc-region{font-weight:700;font-size:.92rem;margin-bottom:7px;color:#cdd9e5;}
     .cc-line{font-size:.76rem;color:#a9b6c2;line-height:1.5;margin-bottom:3px;}
-    .cc-mono{font-family:'JetBrains Mono',monospace;color:#00d4ff;}
+    .cc-mono{font-family:'JetBrains Mono',monospace;color:#8b7cf6;}
     .cc-access{font-size:.72rem;color:#c9a24a;margin-top:7px;line-height:1.45;
         border-top:1px solid #1a2230;padding-top:6px;}
     .cc-foot{font-size:.65rem;color:#6b7685;margin-top:14px;border-top:1px solid
@@ -2280,7 +2280,7 @@ def offline_readiness_html(status: Optional[dict]) -> str:
     rows = []
     for c in caps:
         off = bool(c.get("offline"))
-        col = "#2ecc71" if off else "#f1c40f"
+        col = "#34d399" if off else "#f1c40f"
         tag = "OFFLINE" if off else "NEEDS NET"
         rows.append(
             "<div class='of-row'>"
@@ -2338,8 +2338,8 @@ def codegraph_helix_html(graph: Optional[dict], height: int = 620) -> str:
      position:relative;">
   <div style="position:absolute;top:10px;left:14px;z-index:5;font-family:
        'JetBrains Mono',monospace;color:#8b98a5;font-size:.72rem;">
-    🧬 codebase as DNA · <span style="color:#00d4ff">__MC__ modules</span> ·
-    <span style="color:#2ecc71">__EC__ imports</span> · drag to rotate ·
+    🧬 codebase as DNA · <span style="color:#8b7cf6">__MC__ modules</span> ·
+    <span style="color:#f0a830">__EC__ imports</span> · drag to rotate ·
     scroll to zoom · double-click to pause
   </div>
   <div id="dna-graph" style="width:100%;height:__H__px;"></div>
@@ -2415,7 +2415,7 @@ def codegraph_helix_html(graph: Optional[dict], height: int = 620) -> str:
       group.add(new THREE.Mesh(geo, new THREE.MeshBasicMaterial(
         {color:color, transparent:true, opacity:0.55})));
     }
-    strandCurve(0, 0x00d4ff); strandCurve(1, 0x2ecc71);
+    strandCurve(0, 0x8b7cf6); strandCurve(1, 0xf0a830);
 
     // Base-pair rungs.
     DATA.rungs.forEach(function(e){
@@ -2431,7 +2431,7 @@ def codegraph_helix_html(graph: Optional[dict], height: int = 620) -> str:
       var g=new THREE.BufferGeometry().setFromPoints([
         new THREE.Vector3(a.x,a.y,a.z), new THREE.Vector3(b.x,b.y,b.z)]);
       group.add(new THREE.Line(g, new THREE.LineBasicMaterial(
-        {color:0x00d4ff, transparent:true, opacity:0.12})));
+        {color:0x8b7cf6, transparent:true, opacity:0.12})));
     });
 
     // Drag to rotate · scroll to zoom · double-click toggles auto-spin.
@@ -2526,7 +2526,7 @@ def token_router_chart(report: Optional[dict]) -> go.Figure:
               report.get("llm", 0)]
     fig = go.Figure(go.Pie(
         labels=labels, values=values, hole=0.62,
-        marker=dict(colors=["#2ecc71", "#00d4ff", "#ff6b6b"]),
+        marker=dict(colors=["#f0a830", "#8b7cf6", "#ff5d8f"]),
         textinfo="value",
     ))
     saved = report.get("tokens_saved", 0)
@@ -2554,13 +2554,13 @@ def guardrails_html(verdict: Optional[dict]) -> str:
                 "background:#0d1117;border-radius:10px'>No guardrail check run."
                 "</div>")
     gate = str(verdict.get("gate", "pass"))
-    gate_col = {"pass": "#2ecc71", "flag": "#f1c40f", "block": "#ff6b6b"}.get(
+    gate_col = {"pass": "#34d399", "flag": "#f1c40f", "block": "#ff6b6b"}.get(
         gate, "#8b98a5")
     conf = float(verdict.get("confidence", 0.0))
     rows = []
     for g in gates:
         sev = g.get("severity", "ok")
-        col = {"ok": "#2ecc71", "warn": "#f1c40f", "fail": "#ff6b6b"}.get(sev, "#8b98a5")
+        col = {"ok": "#34d399", "warn": "#f1c40f", "fail": "#ff6b6b"}.get(sev, "#8b98a5")
         icon = {"ok": "✓", "warn": "!", "fail": "✗"}.get(sev, "•")
         name = "Form (syntactic)" if g.get("name") == "syntactic" else "Fact (ClinVar)"
         rows.append(
@@ -2608,8 +2608,8 @@ def mock_device_html(demo: Optional[dict]) -> str:
     for p in pipeline:
         reached = p.get("reached")
         active = p.get("active")
-        col = "#00d4ff" if active else ("#2ecc71" if reached else "#2a3240")
-        glow = "box-shadow:0 0 12px #00d4ff;" if active else ""
+        col = "#8b7cf6" if active else ("#34d399" if reached else "#2a3240")
+        glow = "box-shadow:0 0 12px #8b7cf6;" if active else ""
         steps.append(
             f"<div class='md-step'><div class='md-dot' style='background:{col};"
             f"{glow}'></div><div class='md-lab' style='color:"
@@ -2650,8 +2650,8 @@ def mock_device_html(demo: Optional[dict]) -> str:
     <span class="md-badge">SIMULATED DEVICE</span></div>
   <div class="md-rail">__STEPS__</div>
   <div class="md-tele">
-    <div class="md-cell"><div class="md-v" style="color:#00d4ff">__BC__</div><div class="md-k">barcode</div></div>
-    <div class="md-cell"><div class="md-v" style="color:#2ecc71">__FOCUS__</div><div class="md-k">focus</div></div>
+    <div class="md-cell"><div class="md-v" style="color:#8b7cf6">__BC__</div><div class="md-k">barcode</div></div>
+    <div class="md-cell"><div class="md-v" style="color:#8b7cf6">__FOCUS__</div><div class="md-k">focus</div></div>
     <div class="md-cell"><div class="md-v">__TEMP__°C</div><div class="md-k">flowcell temp</div></div>
     <div class="md-cell"><div class="md-v" style="color:#f1c40f">__PROG__%</div><div class="md-k">run progress</div></div>
   </div>
@@ -2679,7 +2679,7 @@ def microfluidic_html(run: Optional[dict]) -> str:
     cells = []
     for v in verdicts:
         fault = v.get("fault")
-        col = "#ff6b6b" if fault else "#2ecc71"
+        col = "#ff6b6b" if fault else "#f0a830"
         title = html.escape(str(fault)) if fault else f"q={v.get('quality')}"
         cells.append(
             f"<div class='mf-cell' style='background:{col}'>"
@@ -2687,7 +2687,7 @@ def microfluidic_html(run: Optional[dict]) -> str:
             f"<span class='mf-t'>{title}</span></div>")
     cells_html = "\n".join(cells)
     decision = str(run.get("decision", "completed"))
-    dcol = "#ff6b6b" if decision == "aborted" else "#2ecc71"
+    dcol = "#ff6b6b" if decision == "aborted" else "#f0a830"
     saved = run.get("compute_saved_s", 0)
     msg = html.escape(str(run.get("message", "")))
 
@@ -2730,7 +2730,7 @@ def microfluidic_html(run: Optional[dict]) -> str:
 
 # ── Evidence scenario explorer ("digital twin") ───────────────────
 _CONF_BADGE = {
-    "high": "#2ecc71", "moderate": "#00d4ff", "low": "#f1c40f",
+    "high": "#34d399", "moderate": "#8b7cf6", "low": "#f1c40f",
     "investigational": "#a78bfa",
 }
 
@@ -2784,7 +2784,7 @@ def scenario_explorer_html(exploration: Optional[dict]) -> str:
     .sc-cav{font-size:.7rem;color:#c9a24a;line-height:1.4;}
   </style>
   <div class="sc-title">🧪 Evidence Scenario Explorer</div>
-  <div class="sc-sub">Case <span style="color:#00d4ff;font-family:monospace">__MUT__</span> · __CANCER__ · stage __STAGE__</div>
+  <div class="sc-sub">Case <span style="color:#8b7cf6;font-family:monospace">__MUT__</span> · __CANCER__ · stage __STAGE__</div>
   <div class="sc-warn">⚠ Illustrative scenarios from published cohort patterns —
     <b>not a prediction or prognosis for this patient.</b> Explore options; do not act on these alone.</div>
   <div class="sc-grid">__CARDS__</div>
