@@ -3004,6 +3004,23 @@ class TestVoiceOutput:
         assert "u.rate = 2.0" in speak_html("hi", rate=9.0)
         assert "u.rate = 0.5" in speak_html("hi", rate=0.1)
 
+    def test_bargein_is_local_and_private(self):
+        from utils.voice_output import speak_html_bargein
+        out = speak_html_bargein("R175H prognosis is guarded.")
+        # on-device VAD via Web Audio API
+        for tok in ("getUserMedia", "createAnalyser", "AudioContext",
+                    "getByteTimeDomainData", "speechSynthesis.cancel",
+                    "Go ahead"):
+            assert tok in out, tok
+        # honesty: NO transcription / third-party network in the widget
+        for bad in ("fetch(", "http://", "https://", "WebSocket",
+                    "SpeechRecognition"):
+            assert bad not in out, f"unexpected: {bad}"
+
+    def test_bargein_empty_disabled(self):
+        from utils.voice_output import speak_html_bargein
+        assert "Nothing to speak" in speak_html_bargein("")
+
 
 class TestHardwareProbe:
     """Honest compute-backend probe (utils/hardware_probe.py). Reports only what

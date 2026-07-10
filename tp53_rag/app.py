@@ -1960,16 +1960,26 @@ with tab7:
         else:
             st.warning("⚠️ `pip install openai-whisper` for speech-in")
     vc2.success("✅ Jarvis TTS ready (in-browser)")
-    speak_back = st.toggle("🔊 Speak the answer back", value=True, key="voice_tts")
+    vtc1, vtc2 = st.columns(2)
+    speak_back = vtc1.toggle("🔊 Speak the answer back", value=True,
+                             key="voice_tts")
+    bargein = vtc2.toggle("✋ Barge-in (interrupt to talk)", value=False,
+                          key="voice_bargein",
+                          help="Jarvis yields politely when you start speaking "
+                               "— detected on-device via mic energy, no "
+                               "transcription, no third party. Needs mic access.")
 
     def _render_voice_answer(result):
         st.markdown("### Answer")
         st.markdown(result["answer"])
         if speak_back:
             try:
-                from utils.voice_output import speak_html
-                components.html(speak_html(result.get("answer", ""),
-                                           autoplay=True), height=70)
+                from utils.voice_output import speak_html, speak_html_bargein
+                ans = result.get("answer", "")
+                if bargein:
+                    components.html(speak_html_bargein(ans), height=96)
+                else:
+                    components.html(speak_html(ans, autoplay=True), height=70)
             except Exception as e:
                 st.caption(f"Voice output unavailable: {str(e)[:120]}")
         render_clinvar_safety(result.get("answer", ""), key_prefix="voice")
