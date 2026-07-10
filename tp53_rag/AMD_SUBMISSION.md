@@ -17,10 +17,10 @@ science project.
 
 | Criterion | Where we deliver |
 |---|---|
-| **Creativity & Originality** | The **Live AI Tumour Board** — specialists that debate, cite evidence, and vote with *earned* confidence — plus an honesty framework that refuses to fabricate. Nothing on the market debates a case this way. |
+| **Creativity & Originality** | Gemma used as a **multimodal reasoning core, not a chatbot**: it *sees* the rendered p53 structure and reasons about the warp; *reads* photographed lab reports + H&E slides (no OCR); casts a **mathematical vote** (six personas → probability distributions → graphed consensus); and **argues against itself** via an adversarial skeptic that hunts for *contradicting* evidence. Plus an honesty framework that refuses to fabricate. Nothing on the market debates a case this way. |
 | **Product/Market Potential** | A concrete user (Dr. Amara, below), a real market (precision oncology for the ~2.7B people in low-oncologist-density regions), and a credible revenue model. |
 | **Completeness** | Fully functional: 26 agents, 517 automated tests, real benchmarks vs ClinVar/IARC, containerized, deployed. Not a mock-up. |
-| **Use of AMD Platforms** | Fireworks AI (AMD-hardware-hosted models) as a first-class inference mode, AMD Developer Cloud + ROCm for heavy compute, and a ROCm/vLLM benchmark harness. Details below. |
+| **Use of AMD Platforms** | **Hardware-elastic** inference — Gemma served on **AMD Instinct via Fireworks/vLLM** (182 s → 5.1 s, ~35×); a ROCm/vLLM **benchmark harness**; an **autonomic self-healing GPU-ops layer** on *real* `rocm-smi`/`psutil` telemetry (never faked); and an honest compute probe. Details below. |
 
 ---
 

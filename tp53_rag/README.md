@@ -45,6 +45,32 @@
 >
 > **Live demo:** https://tp53analysis-g8iqzkuhoqmjcjtkvjcgbb.streamlit.app/ · **AMD inference mode:** set
 > `INFERENCE_MODE=fireworks` in `.env`.
+>
+> ---
+>
+> ### ✨ Why this is a *creative* use of Gemma 4 and AMD
+>
+> **Gemma 4 as a multimodal reasoning core — not a chatbot:**
+> - 👁️ **Gemma *sees* the protein.** We render the mutated p53 backbone and hand
+>   Gemma the *image* — it looks at the structural warp and reasons about it, no
+>   text hand-off. *(also reads H&E slides + photographed paper lab reports — no OCR.)*
+> - 🧮 **Gemma *votes with math*.** Six specialist personas each return a
+>   probability distribution over treatments; the board consensus is a graphed
+>   vote, not a wall of prose.
+> - 🔴 **Gemma *argues against itself*.** An adversarial skeptic actively hunts
+>   for *contradicting* evidence — retracted papers, trials stopped early —
+>   before any answer reaches the clinician.
+> - 🌍 **Gemma *speaks the clinic's language*.** Kiswahili symptoms are mapped to
+>   HPO/ICD-10 codes; answers can be read back hands-free (with on-device barge-in).
+>
+> **AMD, used intelligently — cloud to clinic on one codebase:**
+> - ⚡ **Hardware-elastic.** One env var moves inference from an 8 GB *offline*
+>   laptop to **Gemma served on AMD Instinct via Fireworks / vLLM** — **182 s →
+>   5.1 s (~35×)**, measured.
+> - 🩺 **Autonomic GPU ops.** A self-healing manager watches *real* `rocm-smi` +
+>   `psutil` telemetry and reclaims memory under load — honest by design (real
+>   GPU numbers only on real AMD hardware, never faked).
+> - 🔬 A ROCm/vLLM **benchmark harness** and an honest compute probe throughout.
 
 Precision Onco Africa is less a chatbot than an **AI operating environment for precision oncology**: a multi-agent platform for interpreting TP53 mutations, built to work where it is needed most — clinics and labs with constrained hardware and unreliable connectivity. It runs on a commodity laptop (8 GB RAM, no GPU), keeps patient-adjacent data on the machine by default, and degrades gracefully to a fully offline mode.
 
