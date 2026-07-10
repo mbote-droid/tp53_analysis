@@ -4202,6 +4202,7 @@ class TestStructureSnapshot:
         assert all(len(v) == 3 for v in c.values())
 
     def test_render_snapshot_png(self):
+        pytest.importorskip("matplotlib")  # optional; render degrades to None
         from agents.structure_snapshot import render_snapshot
         png = render_snapshot(self._pdb(), highlight_resi=10, mutation="X10Y")
         assert png and png[:4] == b"\x89PNG"
@@ -4217,6 +4218,7 @@ class TestStructureSnapshot:
             def health(self):
                 return False
 
+        pytest.importorskip("matplotlib")
         out = analyze_structure("R175H", pdb_text=self._pdb(),
                                 gemma_agent=_NoGemma())
         assert out["success"] is True
@@ -4237,6 +4239,7 @@ class TestStructureSnapshot:
                 return {"success": True, "narration": "compact core residue",
                         "caution": "coarse"}
 
+        pytest.importorskip("matplotlib")
         out = analyze_structure("R175H", pdb_text=self._pdb(),
                                 gemma_agent=_FakeGemma())
         assert out["success"] is True
@@ -4300,6 +4303,7 @@ class TestAutonomicManager:
     """Autonomic resource manager + honest GPU telemetry (utils/autonomic.py)."""
 
     def test_system_stats_real(self):
+        pytest.importorskip("psutil")  # optional; stats degrade to unavailable
         from utils.autonomic import system_stats
         s = system_stats()
         assert s["available"] is True

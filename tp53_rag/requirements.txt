@@ -38,6 +38,9 @@ biopython>=1.83
 pandas>=2.2.2,<3.0.0
 numpy>=1.26.4,<2.0.0
 plotly>=5.22.0,<6.0.0
+# matplotlib renders the server-side protein-structure snapshot fed to Gemma
+# vision (agents/structure_snapshot.py). Lightweight — no torch pulled.
+matplotlib>=3.7.0,<4.0.0
 
 # Search & Ranking
 rank-bm25>=0.2.1
@@ -64,6 +67,7 @@ google-genai>=0.3.0
 huggingface-hub>=0.23.0,<1.0
 
 # Utilities
+psutil>=5.9.0                 # host RAM/CPU for the autonomic resource manager
 python-dotenv>=1.0.1
 pydantic>=2.7.1,<3.0.0
 rich>=13.7.1
