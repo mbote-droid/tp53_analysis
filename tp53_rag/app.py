@@ -762,6 +762,17 @@ with tab1:
         st.markdown("### Answer")
         st.markdown(result["answer"])
 
+        # 🕸️ Topology-aware retrieval — show the pathway-graph neighbours that
+        # were also searched (graph-guided RAG).
+        try:
+            from knowledge_base.pathway_graph import related_concepts
+            _rel = related_concepts(question)
+            if _rel:
+                st.caption("🕸️ Topology-aware retrieval also searched pathway "
+                           "neighbours: " + ", ".join(_rel))
+        except Exception:
+            pass
+
         # 🎯 Epistemic certainty — sample the model N× and measure agreement
         if measure_certainty:
             st.markdown("#### 🎯 Epistemic certainty")

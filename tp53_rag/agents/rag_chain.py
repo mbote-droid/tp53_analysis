@@ -1146,7 +1146,17 @@ class HybridSearchEngine:
             self._ensure_bm25([d for d, _ in vector_results])
 
         if self._fitted:
-            bm25_results = self.bm25.score(query, top_k=k)
+            # Graph-guided (topology-aware) retrieval: expand ONLY the keyword
+            # query with pathway-graph neighbours (e.g. TP53 → MDM2, CDKN1A),
+            # so related entities are searched too. The vector query stays clean
+            # so the semantic match isn't diluted.
+            bm25_query = query
+            try:
+                from knowledge_base.pathway_graph import expand_query_keywords
+                bm25_query = expand_query_keywords(query)
+            except Exception:
+                pass
+            bm25_results = self.bm25.score(bm25_query, top_k=k)
 
         if not vector_results and not bm25_results:
             return []

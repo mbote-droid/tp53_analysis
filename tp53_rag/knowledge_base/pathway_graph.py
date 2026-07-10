@@ -45,6 +45,62 @@ def triple_text(t: Tuple[str, str, str, str]) -> str:
     return f"{s} —{p}→ {o} ({note})."
 
 
+import re as _re  # noqa: E402
+_PAREN = _re.compile(r"\(([^)]*)\)")
+
+
+def _concept_terms(name: str) -> set:
+    """Lowercased match-terms for a graph node ('CDKN1A (p21)' → cdkn1a, p21)."""
+    terms = set()
+    main = _PAREN.sub("", name)
+    for t in _re.split(r"[\s/,]+", main):
+        if len(t) >= 2:
+            terms.add(t.lower())
+    for m in _PAREN.findall(name):
+        for t in _re.split(r"[\s,]+", m):
+            if len(t) >= 2:
+                terms.add(t.lower())
+    return terms
+
+
+def related_concepts(query: str, max_n: int = 6) -> List[str]:
+    """Graph traversal: for each pathway triple whose one endpoint is mentioned
+    in `query`, return the OTHER endpoint's concept name. This is the
+    'topology-aware' expansion — the graph tells us which neighbouring entities
+    are worth also searching for. Pure; never raises."""
+    q = set(_re.findall(r"[a-z0-9]+", (query or "").lower()))
+    if not q:
+        return []
+    # p53 and TP53 are the same gene — treat as synonyms both ways.
+    if "p53" in q:
+        q.add("tp53")
+    if "tp53" in q:
+        q.add("p53")
+    out: List[str] = []
+    seen = set()
+
+    def _push(node: str):
+        name = _PAREN.sub("", node).strip()
+        key = name.lower()
+        if name and key not in seen:
+            out.append(name)
+            seen.add(key)
+
+    for s, _p, o, _note in TP53_PATHWAY_TRIPLES:
+        if q & _concept_terms(s):
+            _push(o)
+        if q & _concept_terms(o):
+            _push(s)
+    return out[:max_n]
+
+
+def expand_query_keywords(query: str, max_n: int = 6) -> str:
+    """Append graph-neighbour concept names to a query (for keyword search).
+    Returns the query unchanged when nothing related is found."""
+    rel = related_concepts(query, max_n)
+    return f"{query} {' '.join(rel)}" if rel else query
+
+
 def pathway_enrichment_text() -> str:
     """One combined, retrievable block of the p53 relationship graph."""
     lines = ["TP53 pathway relationship graph (subject → relation → target):"]

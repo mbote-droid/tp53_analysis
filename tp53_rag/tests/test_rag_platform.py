@@ -4061,6 +4061,26 @@ class TestPathwayGraph:
         docs = TP53DocumentIngester().load_curated_knowledge()
         assert any(d.metadata.get("source") == "pathway_graph" for d in docs)
 
+    def test_graph_guided_related_concepts(self):
+        from knowledge_base.pathway_graph import related_concepts
+        rel = related_concepts("role of p53")          # p53 synonym of TP53
+        assert "CDKN1A" in rel and "MDM2" in rel
+        assert related_concepts("MDM2 nutlin")          # reverse direction
+        assert related_concepts("breast cancer staging") == []  # unrelated
+
+    def test_graph_guided_expand_query(self):
+        from knowledge_base.pathway_graph import expand_query_keywords
+        expanded = expand_query_keywords("what does p53 activate")
+        assert expanded.startswith("what does p53 activate")
+        assert "CDKN1A" in expanded                     # neighbours appended
+        # nothing related -> unchanged
+        assert expand_query_keywords("random text") == "random text"
+
+    def test_retriever_imports_graph_expansion(self):
+        # the hybrid retriever hook must import cleanly
+        from knowledge_base.pathway_graph import expand_query_keywords
+        assert callable(expand_query_keywords)
+
 
 class TestN8nWorkflow:
     """Structural validation of the n8n automation graph (no live daemon)."""
