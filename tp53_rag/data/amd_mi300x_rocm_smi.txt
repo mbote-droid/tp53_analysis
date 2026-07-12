@@ -25,6 +25,19 @@ VRAM total      : 205,822,885,888 bytes (~191.7 GiB HBM3)
 VRAM used (idle): ~0.3 GB
 VRAM% / GPU%    : 0% / 0% (idle at capture time)
 
+rocm-smi (under real load — ESMFold folding p53)
+------------------------------------------------
+Device : 0
+Temp (junction) : 63.0 C
+Power           : 749.0 W   (at the 750 W cap — GPU fully engaged)
+SCLK            : 1719 MHz  (boosted from 138 MHz idle)
+MCLK            : 1300 MHz
+GPU%            : 100%      (accelerator saturated)
+VRAM%           : 8%
+
+ESMFold structural generation on this device:
+  full-length p53 (393 aa) folded in ~2.8 s per structure.
+
 Reproduce
 ---------
   rocm-smi

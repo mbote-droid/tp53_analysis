@@ -80,9 +80,12 @@ inference backend changed.
 Fireworks cut answer latency **from 182 s to 5.1 s (~35×)** — the difference
 between a multi-agent tumour-board debate being unusable and feeling real-time.
 
-**Real AMD Instinct hardware — verified.** The heavy-compute path runs on a live
-**AMD Instinct MI300X (VF)**, ROCm 7.2.4, 191.7 GiB HBM3, on the AMD Developer
-Cloud. See the raw `rocm-smi` capture at
+**Real AMD Instinct hardware — verified, under real load.** The heavy-compute path
+runs on a live **AMD Instinct MI300X (VF)**, ROCm 7.2.4, 191.7 GiB HBM3, on the AMD
+Developer Cloud. Our **In-Silico Structural Rescue** feature folds full-length p53
+(393 aa) with **ESMFold in ~2.8 s per structure**, and `rocm-smi` captured *during*
+the fold shows the accelerator saturated: **GPU 100%, 749 W (at the 750 W cap),
+clock boosted 138 MHz → 1719 MHz**. See the raw capture at
 [`data/amd_mi300x_rocm_smi.txt`](data/amd_mi300x_rocm_smi.txt) — genuine device
 telemetry, not a mock. The ROCm/vLLM inference-throughput run
 (`tools/benchmark_amd.py --vllm <model>`) is executed on this device; numbers are
