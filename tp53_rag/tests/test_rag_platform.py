@@ -4030,6 +4030,77 @@ class TestVoiceConversation:
             "Okay Gemma, I think that will be all for today, thanks") is True
 
 
+class TestAMDAccelerator:
+    """Real MI300X vLLM measurements + live logprobs client."""
+
+    def test_available_and_summary(self):
+        from agents import amd_accelerator as amd
+        assert amd.available() is True
+        s = amd.load_summary()
+        for k in ("device", "throughput_tok_per_s", "logprobs_vote",
+                  "batch_fp8", "speculative_decoding", "hardware_action"):
+            assert k in s
+
+    def test_throughput_positive(self):
+        from agents import amd_accelerator as amd
+        assert amd.throughput_tok_per_s() > 0
+
+    def test_logprobs_vote_is_distribution(self):
+        from agents import amd_accelerator as amd
+        dist = amd.logprobs_vote()["distribution"]
+        assert set(dist) <= {"A", "B", "C", "D"}
+        assert abs(sum(dist.values()) - 1.0) < 0.05   # softmaxed, sums to ~1
+
+    def test_batch_speedup_gt_one(self):
+        from agents import amd_accelerator as amd
+        b = amd.batch_fp8()
+        assert b["speedup"] > 1 and b["n"] == 6
+
+    def test_speculative_reported_honestly(self):
+        from agents import amd_accelerator as amd
+        sd = amd.speculative_decoding()
+        assert sd["helped"] is False          # honest negative result
+        assert "tok_per_s_off" in sd and "tok_per_s_on" in sd
+        assert "verdict" in sd and len(sd["verdict"]) > 0
+
+    def test_hardware_action_reclaim(self):
+        from agents import amd_accelerator as amd
+        hw = amd.hardware_action()
+        assert hw["reclaimed_gb"] > 0
+        assert hw["after_alloc_gb"] > hw["before_gb"]
+
+    def test_accessors_none_when_missing(self, monkeypatch, tmp_path):
+        from agents import amd_accelerator as amd
+        monkeypatch.setattr(amd, "SUMMARY_PATH", tmp_path / "nope.json")
+        assert amd.available() is False
+        assert amd.load_summary() is None
+        assert amd.throughput_tok_per_s() is None
+        assert amd.logprobs_vote() is None
+
+    def test_load_summary_graceful_on_bad_json(self, monkeypatch, tmp_path):
+        from agents import amd_accelerator as amd
+        bad = tmp_path / "bad.json"
+        bad.write_text("{not json")
+        monkeypatch.setattr(amd, "SUMMARY_PATH", bad)
+        assert amd.load_summary() is None
+
+    def test_vllm_client_unconfigured(self):
+        from agents.amd_accelerator import VLLMClient
+        c = VLLMClient(base_url="")
+        assert c.is_configured() is False
+        assert c.logprobs_vote("Best option?") is None
+
+    def test_vllm_client_configured_flag(self):
+        from agents.amd_accelerator import VLLMClient
+        c = VLLMClient(base_url="http://example.invalid:8000")
+        assert c.is_configured() is True
+
+    def test_vllm_client_graceful_on_unreachable(self):
+        from agents.amd_accelerator import VLLMClient
+        c = VLLMClient(base_url="http://127.0.0.1:1")   # nothing listening
+        assert c.logprobs_vote("Best option? A/B/C/D", timeout=2) is None
+
+
 class TestTrustWeight:
     """Retrieval-layer trust prior (compute_trust_weight in rag_chain)."""
 

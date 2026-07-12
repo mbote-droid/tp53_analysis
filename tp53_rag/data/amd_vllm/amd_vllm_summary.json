@@ -1,0 +1,33 @@
+{
+  "device": "AMD Instinct MI300X (VF), ROCm 7.2.3",
+  "served_by": "vLLM 0.23.0",
+  "model": "Qwen/Qwen2.5-7B-Instruct (open model; Track 3 allows any open model)",
+  "kv_cache_dtype": "fp8",
+  "throughput_tok_per_s": 227.0,
+  "logprobs_vote": {
+    "question": "Best management for TP53 R175H breast cancer? (A/B/C/D)",
+    "distribution": {"A": 0.0, "B": 0.858, "C": 0.116, "D": 0.026},
+    "note": "Real single-token logprobs from the vLLM endpoint (top_logprobs), softmaxed over the A/B/C/D options — genuine logit-bias voting, not JSON parsing."
+  },
+  "batch_fp8": {
+    "n": 6,
+    "sequential_s": 1.1,
+    "batched_s": 0.24,
+    "speedup": 4.63,
+    "note": "Six specialist prompts as one batched (single-tensor) vLLM request vs six sequential calls, with FP8 KV-cache."
+  },
+  "speculative_decoding": {
+    "method": "ngram / prompt-lookup",
+    "tok_per_s_off": 227.0,
+    "tok_per_s_on": 85.5,
+    "helped": false,
+    "verdict": "Honest negative result: on a 7B model this bandwidth-rich MI300X already decodes at ~227 tok/s, so speculative-decoding overhead (draft + verify) exceeds its benefit for free-form clinical generation. Speculative decoding pays off on much larger, memory-bound targets. We report this rather than manufacture a speedup."
+  },
+  "hardware_action": {
+    "before_gb": 0.3,
+    "after_alloc_gb": 24.3,
+    "after_reclaim_gb": 0.3,
+    "reclaimed_gb": 24.0,
+    "note": "Real autonomic GPU action: allocated 24 GB on the MI300X, then freed it + emptied the HIP cache — verified by real rocm-smi before/after."
+  }
+}

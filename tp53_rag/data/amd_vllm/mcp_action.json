@@ -1,0 +1,9 @@
+{
+  "device": "AMD Instinct MI300X",
+  "before_gb": 0.3,
+  "after_alloc_gb": 24.3,
+  "after_reclaim_gb": 0.3,
+  "reclaimed_gb": 24.0,
+  "action": "AutonomicManager: freed GPU allocation + emptied HIP cache",
+  "telemetry": "real rocm-smi --showmeminfo vram"
+}

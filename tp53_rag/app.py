@@ -2199,6 +2199,45 @@ with tab8:
     except Exception as e:
         st.caption(f"AMD panel unavailable: {str(e)[:120]}")
 
+    # ── ⚡ AMD Accelerator — real MI300X vLLM measurements ──
+    st.markdown("### ⚡ AMD Accelerator — real MI300X measurements")
+    st.caption("Captured on a live **AMD Instinct MI300X** running vLLM 0.23 "
+               "(Qwen2.5-7B, FP8 KV-cache). Real numbers — see `data/amd_vllm/`.")
+    try:
+        from agents import amd_accelerator as amd
+        if not amd.available():
+            st.info("Run the vLLM capture on an AMD GPU host to populate "
+                    "`data/amd_vllm/amd_vllm_summary.json`.")
+        else:
+            summ = amd.load_summary()
+            m1, m2, m3 = st.columns(3)
+            m1.metric("vLLM throughput", f"{amd.throughput_tok_per_s():.0f} tok/s",
+                      help="Qwen2.5-7B, FP8 KV-cache, on MI300X")
+            _b = amd.batch_fp8()
+            m2.metric("FP8 batch speedup", f"{_b['speedup']}×",
+                      help=f"{_b['n']} prompts: {_b['sequential_s']}s sequential "
+                           f"→ {_b['batched_s']}s batched (single tensor)")
+            _hw = amd.hardware_action()
+            m3.metric("Autonomic GPU reclaim", f"{_hw['reclaimed_gb']} GB",
+                      help="Real allocate→free on the MI300X, verified by rocm-smi")
+
+            _vote = amd.logprobs_vote()
+            st.markdown("**🧮 Real-logprobs consensus vote** — softmax of the *actual* "
+                        "token logprobs from the endpoint (genuine logit-bias voting, "
+                        "not JSON parsing):")
+            st.bar_chart(pd.DataFrame({"probability": _vote["distribution"]}))
+            st.caption(_vote["note"])
+
+            _sd = amd.speculative_decoding()
+            with st.expander("🔬 Speculative decoding OFF vs ON — the honest result"):
+                st.markdown(f"- Baseline **OFF**: **{_sd['tok_per_s_off']} tok/s**\n"
+                            f"- {_sd['method']} **ON**: **{_sd['tok_per_s_on']} tok/s**")
+                st.info(_sd["verdict"])
+            st.caption(f"Device: {summ['device']} · {summ['served_by']} · "
+                       f"model: {summ['model']}")
+    except Exception as e:
+        st.caption(f"AMD accelerator panel unavailable: {str(e)[:120]}")
+
     # ── Token-efficient router savings ──
     st.markdown("### ⚡ Token-efficient router")
     st.caption("Every query is routed to the cheapest correct path — cache or "

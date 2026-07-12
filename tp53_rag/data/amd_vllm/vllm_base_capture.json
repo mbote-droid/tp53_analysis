@@ -1,0 +1,22 @@
+{
+  "device": "AMD Instinct MI300X (ROCm)",
+  "model": "Qwen/Qwen2.5-7B-Instruct",
+  "kv_cache_dtype": "fp8",
+  "baseline": {
+    "latency_s": 3.45,
+    "output_tokens": 155,
+    "tok_per_s": 45.0
+  },
+  "logprobs_vote": {
+    "A": 0.0,
+    "B": 0.858,
+    "C": 0.116,
+    "D": 0.026
+  },
+  "batch": {
+    "n": 6,
+    "sequential_s": 1.1,
+    "batched_s": 0.24,
+    "speedup": 4.63
+  }
+}
