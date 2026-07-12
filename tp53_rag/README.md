@@ -38,10 +38,10 @@
 > ```
 > **See the wow in 60 seconds:** open the **⭐ Tumour Board** tab, enter `R175H`,
 > click **Convene the board** — watch the debate → consensus → the "Why?"
-> evidence trace. Guided walkthrough: **[DEMO.md](DEMO.md)**.
+> evidence trace.
 >
 > **AMD-specific submission details:** **[AMD_SUBMISSION.md](AMD_SUBMISSION.md)**
-> (integration, benchmarks, product/market). Pitch kit: **[PITCH.md](PITCH.md)**.
+> (integration, benchmarks, product/market).
 >
 > **Live demo:** https://tp53analysis-g8iqzkuhoqmjcjtkvjcgbb.streamlit.app/ · **AMD inference mode:** set
 > `INFERENCE_MODE=fireworks` in `.env`.
@@ -252,13 +252,10 @@ handled, see [SECURITY.md](SECURITY.md).**
 The quantitative methods are documented with their formulas (ESM-2 effect
 scoring, hybrid retrieval, semantic caching, consensus confidence, ΔΔG, pLDDT,
 routing and QC savings) — see [METHODS.md](METHODS.md). The system design and
-the heterogeneous AMD compute roadmap are in [ARCHITECTURE.md](ARCHITECTURE.md),
-and a 60-second guided demo walkthrough is in [DEMO.md](DEMO.md). A per-module
+the heterogeneous AMD compute roadmap are in [ARCHITECTURE.md](ARCHITECTURE.md). A per-module
 reference (purpose + public API of all 80 modules) is auto-generated in
-[CODE_MAP.md](CODE_MAP.md). To serve Gemma on AMD Instinct via vLLM, see
-[AMD_VLLM_SETUP.md](AMD_VLLM_SETUP.md). For the AMD hackathon:
-[AMD_SUBMISSION.md](AMD_SUBMISSION.md) (integration, benchmarks, product/market)
-and [PITCH.md](PITCH.md) (slides + video script).
+[CODE_MAP.md](CODE_MAP.md). For the AMD hackathon see
+[AMD_SUBMISSION.md](AMD_SUBMISSION.md) (integration, benchmarks, product/market).
 
 ## 🗺️ Future Build Considerations
 

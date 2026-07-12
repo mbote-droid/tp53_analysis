@@ -63,4 +63,12 @@ models/*.bin
 # Runtime artifacts (regenerated — never commit)
 data/semantic_cache.db
 data/conversation_memory.db
+
+# Local-only prep / submission docs (kept off the public repo)
+AMD_VLLM_SETUP.md
+DEMO.md
+DEMO_SCRIPT.md
+PITCH.md
+SLIDE_DECK.md
+SUBMISSION_FORM.md
 tp53_rag/

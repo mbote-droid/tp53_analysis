@@ -213,5 +213,5 @@ offline mode), which is what makes the low-resource market economically viable.
 
 - **Demo app:** https://tp53analysis-g8iqzkuhoqmjcjtkvjcgbb.streamlit.app/
 - **Repo:** https://github.com/mbote-droid/precision-onco-africa
-- **Guided demo:** [DEMO.md](DEMO.md) · **Methods:** [METHODS.md](METHODS.md) ·
+- **Methods:** [METHODS.md](METHODS.md) ·
   **Security:** [SECURITY.md](SECURITY.md) · **Architecture:** [ARCHITECTURE.md](ARCHITECTURE.md)
