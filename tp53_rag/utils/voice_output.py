@@ -80,19 +80,39 @@ def speak_html(text: Optional[str], autoplay: bool = True,
   var btn = document.getElementById('jv-btn');
   var wave = document.getElementById('jv-wave');
   var lbl = document.getElementById('jv-label');
+  var played = false;
+  // Pick the most natural English voice available in this browser/OS.
+  // Edge/Windows expose "…(Natural)" voices; Chrome has "Google US English".
+  function pickVoice(){
+    var vs = (window.speechSynthesis.getVoices() || []).filter(function(v){
+      return v.lang && v.lang.toLowerCase().indexOf('en') === 0; });
+    if(!vs.length) return null;
+    var prefs = [/natural/i, /google us english/i, /google uk english/i,
+                 /aria/i, /jenny/i, /guy/i, /libby/i, /sonia/i,
+                 /microsoft/i, /female/i];
+    for(var p=0;p<prefs.length;p++){
+      for(var i=0;i<vs.length;i++){ if(prefs[p].test(vs[i].name)) return vs[i]; }
+    }
+    return vs[0];
+  }
   function speak(){
     if(!TEXT || !('speechSynthesis' in window)){
       lbl.textContent = '🔇 voice not available'; return;
     }
     window.speechSynthesis.cancel();
     var u = new SpeechSynthesisUtterance(TEXT);
-    u.rate = __RATE__;
+    var v = pickVoice(); if(v) u.voice = v;
+    u.rate = __RATE__ * 0.97; u.pitch = 1.0;
     u.onstart = function(){ wave.style.display='inline-block'; lbl.textContent='Speaking…'; };
     u.onend = function(){ wave.style.display='none'; lbl.textContent='🔊 ' + __LABEL__; };
     window.speechSynthesis.speak(u);
   }
-  if(btn){ btn.addEventListener('click', speak); }
-  if(__AUTO__){ setTimeout(speak, 300); }
+  function autoplay(){ if(__AUTO__ && !played){ played = true; speak(); } }
+  if(btn){ btn.addEventListener('click', function(){ played = true; speak(); }); }
+  // Voices load asynchronously — wait for them so we don't fall back to the
+  // default robotic voice on the first utterance.
+  if((window.speechSynthesis.getVoices() || []).length){ setTimeout(autoplay, 250); }
+  else { window.speechSynthesis.onvoiceschanged = function(){ setTimeout(autoplay, 80); }; }
 })();
 </script>
 </div>

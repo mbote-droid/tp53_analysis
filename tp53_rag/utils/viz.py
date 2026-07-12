@@ -243,44 +243,50 @@ def agent_graph_3d_html(graph_data: Optional[dict] = None, height: int = 560) ->
 <script>
 (function(){
   var DATA = __DATA__;
-  function boot(){
-    var el = document.getElementById('tp53-agraph');
-    var Graph = ForceGraph3D()(el)
-      .graphData(DATA)
-      .backgroundColor('#0d1117')
-      .nodeLabel(function(n){ return n.name; })
-      .nodeVal(function(n){ return n.val; })
-      .nodeColor(function(n){ return n.color; })
-      .nodeOpacity(0.95)
-      .nodeResolution(16)
-      .linkColor(function(){ return 'rgba(139,124,246,0.22)'; })
-      .linkWidth(0.6)
-      .linkDirectionalParticles(2)
-      .linkDirectionalParticleWidth(1.4)
-      .linkDirectionalParticleSpeed(0.006)
-      .warmupTicks(60)
-      .cooldownTicks(160)
-      .onNodeClick(function(node){
-        var ratio = 1 + 90 / Math.max(Math.hypot(node.x, node.y, node.z || 1), 1);
-        Graph.cameraPosition(
-          {x: node.x * ratio, y: node.y * ratio, z: (node.z || 1) * ratio},
-          node, 1400);
-      });
-  }
   function showFallback(){
-    document.getElementById('tp53-agraph-fallback').style.display = 'block';
+    var f = document.getElementById('tp53-agraph-fallback');
+    if(f) f.style.display = 'block';
   }
-  var s = document.createElement('script');
-  s.src = 'https://unpkg.com/3d-force-graph';
-  s.onload = boot;
-  s.onerror = function(){
-    var s2 = document.createElement('script');
-    s2.src = 'https://cdn.jsdelivr.net/npm/3d-force-graph';
-    s2.onload = boot;
-    s2.onerror = showFallback;
-    document.head.appendChild(s2);
-  };
-  document.head.appendChild(s);
+  function boot(){
+    // The bare package URL now serves an ES module with no UMD global — guard
+    // against that (and any init error) so we degrade to the fallback, not a
+    // silent blank box.
+    if(typeof ForceGraph3D === 'undefined'){ showFallback(); return; }
+    try{
+      var el = document.getElementById('tp53-agraph');
+      var Graph = ForceGraph3D()(el)
+        .graphData(DATA)
+        .backgroundColor('#0d1117')
+        .nodeLabel(function(n){ return n.name; })
+        .nodeVal(function(n){ return n.val; })
+        .nodeColor(function(n){ return n.color; })
+        .nodeOpacity(0.95)
+        .nodeResolution(16)
+        .linkColor(function(){ return 'rgba(139,124,246,0.22)'; })
+        .linkWidth(0.6)
+        .linkDirectionalParticles(2)
+        .linkDirectionalParticleWidth(1.4)
+        .linkDirectionalParticleSpeed(0.006)
+        .warmupTicks(60)
+        .cooldownTicks(160)
+        .onNodeClick(function(node){
+          var ratio = 1 + 90 / Math.max(Math.hypot(node.x, node.y, node.z || 1), 1);
+          Graph.cameraPosition(
+            {x: node.x * ratio, y: node.y * ratio, z: (node.z || 1) * ratio},
+            node, 1400);
+        });
+    }catch(e){ showFallback(); }
+  }
+  function load(url, onfail){
+    var s = document.createElement('script');
+    s.src = url; s.onload = boot; s.onerror = onfail;
+    document.head.appendChild(s);
+  }
+  // UMD /dist/ build exposes the ForceGraph3D global (the bare URL does not).
+  load('https://unpkg.com/3d-force-graph/dist/3d-force-graph.min.js', function(){
+    load('https://cdn.jsdelivr.net/npm/3d-force-graph/dist/3d-force-graph.min.js',
+         showFallback);
+  });
 })();
 </script>
 """
