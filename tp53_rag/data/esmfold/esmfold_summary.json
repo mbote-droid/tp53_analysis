@@ -1,0 +1,16 @@
+{
+  "available": true,
+  "device": "AMD Instinct MI300X (ROCm)",
+  "model": "facebook/esmfold_v1",
+  "mutation": "R175H",
+  "rescue_candidate": "N239Y",
+  "mean_plddt": {
+    "wt": 80.3,
+    "r175h": 80.0,
+    "r175h_n239y": 80.1
+  },
+  "warp_rmsd_wt_vs_r175h": 0.711,
+  "rescue_rmsd_r175h_vs_candidate": 1.077,
+  "plddt_delta_rescue": 0.1,
+  "disclaimer": "In-silico structural hypothesis \u2014 ESMFold (facebook/esmfold_v1) prediction run on AMD Instinct. pLDDT is model CONFIDENCE, not thermodynamic stability. Research use only; not therapeutic evidence."
+}

@@ -27,6 +27,7 @@ composite heuristic — NOT a validated efficacy or survival probability.
 """
 from __future__ import annotations
 
+import time
 from typing import Callable, Dict, List, Optional
 
 from utils.logger import log
@@ -144,6 +145,33 @@ _PROPOSER_SYSTEM = (
     "overclaim. 3–5 sentences.")
 
 
+def _generate_with_retry(gen_fn: Callable[[str, str], str], system: str,
+                         user: str, attempts: int = 3,
+                         base_delay: float = 0.6) -> str:
+    """Call `gen_fn(system, user)` with bounded retry + exponential backoff.
+
+    Hosted model endpoints occasionally return a transient error (e.g. a
+    provider HTTP 500) that succeeds on a second try. We retry ONLY on raised
+    exceptions — an empty string is a valid (if unhelpful) response and is
+    returned as-is so the caller degrades gracefully. If every attempt raises,
+    the last exception propagates so `bounded_debate` reports the debate as
+    unavailable instead of crashing.
+    """
+    attempts = max(1, int(attempts))
+    last: Optional[BaseException] = None
+    for i in range(attempts):
+        try:
+            return gen_fn(system, user)
+        except Exception as e:  # transient provider/network error
+            last = e
+            if i < attempts - 1:
+                log.warning(f"bounded_debate: generate attempt {i + 1}/"
+                            f"{attempts} failed ({e}); retrying")
+                time.sleep(base_delay * (2 ** i))
+    assert last is not None
+    raise last
+
+
 def bounded_debate(proposal: str, contradicting_evidence: List[str],
                    generate_fn: Callable[[str, str], str],
                    max_turns: int = 2,
@@ -171,7 +199,9 @@ def bounded_debate(proposal: str, contradicting_evidence: List[str],
         skeptic_user = (f"PROPOSED RECOMMENDATION:\n{proposal}\n\n"
                         f"CONTRADICTING EVIDENCE:\n{evidence_txt}\n\n"
                         "Give your strongest evidence-bound challenge.")
-        skeptic = (_gen_for("Skeptic")(_SKEPTIC_SYSTEM, skeptic_user) or "").strip()
+        skeptic = (_generate_with_retry(_gen_for("Skeptic"),
+                                        _SKEPTIC_SYSTEM, skeptic_user)
+                   or "").strip()
         turns.append({"role": "skeptic", "text": skeptic})
 
         if cap >= 2:
@@ -179,7 +209,8 @@ def bounded_debate(proposal: str, contradicting_evidence: List[str],
                              f"SKEPTIC'S CHALLENGE:\n{skeptic}\n\n"
                              "Respond: concede, rebut, and state residual "
                              "uncertainty.")
-            rebuttal = (_gen_for("Proposer")(_PROPOSER_SYSTEM, proposer_user)
+            rebuttal = (_generate_with_retry(_gen_for("Proposer"),
+                                             _PROPOSER_SYSTEM, proposer_user)
                         or "").strip()
             turns.append({"role": "proposer", "text": rebuttal})
     except Exception as e:

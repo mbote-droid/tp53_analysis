@@ -1945,6 +1945,62 @@ with tab6:
     except Exception as e:
         st.error(f"Structural analysis unavailable: {str(e)[:160]}")
 
+    # ── 🧬 In-Silico Structural Rescue (real ESMFold on AMD Instinct) ──
+    st.divider()
+    st.markdown("### 🧬 In-Silico Structural Rescue — the Virtual Wet-Lab")
+    st.caption("Gemma proposes a second-site suppressor for an oncogenic p53 "
+               "mutation; a real generative fold (ESMFold) was run on an **AMD "
+               "Instinct MI300X**; the geometry is measured so Gemma can reason "
+               "about it. In-silico hypothesis, research use only.")
+    from agents.structure_rescue import (structural_rescue_analysis,
+                                         structures_available, load_pdb,
+                                         rescue_overlay_html, hypothesis_prompt,
+                                         gemma_interpret)
+    if not structures_available():
+        st.info("Precomputed ESMFold structures not found — this feature needs the "
+                "one-time GPU fold (see AMD_VLLM_SETUP.md).")
+    else:
+        rescue = structural_rescue_analysis()
+        rc1, rc2, rc3 = st.columns(3)
+        rc1.metric("Warp vs wild-type",
+                   f"{rescue['warp_rmsd_wt_vs_r175h']} Å",
+                   help="Kabsch-aligned Cα RMSD, R175H vs wild-type")
+        rc2.metric("Mean pLDDT (confidence)",
+                   f"{rescue['mean_plddt']['wt']:.0f}",
+                   help="ESMFold confidence — NOT thermodynamic stability")
+        rc3.metric("Δ pLDDT with N239Y", f"{rescue['plddt_delta_rescue']:+.1f}")
+        if st.button("🧬 Run the rescue reasoning (Gemma ↔ AMD fold)",
+                     key="rescue_go", width="stretch"):
+            try:
+                from agents.rag_chain import _build_backend
+                backend = _build_backend()
+                gen = lambda s, u: backend.generate(s, u)  # noqa: E731
+                with st.spinner("Gemma proposing a second-site suppressor…"):
+                    sysp, usrp = hypothesis_prompt(rescue["mutation"])
+                    try:
+                        proposal = backend.generate(sysp, usrp)
+                    except Exception:
+                        proposal = None
+                if proposal:
+                    st.markdown(f"**🧠 Gemma (architect):** {proposal}")
+                with st.spinner("Interpreting the AMD-folded geometry…"):
+                    interp = gemma_interpret(rescue, gen)
+                st.markdown(f"**🔬 Gemma reads the fold:** "
+                            f"{interp or rescue['verdict']}")
+            except Exception as e:
+                st.warning(f"Rescue reasoning unavailable: {str(e)[:140]}")
+        st.markdown("**Wild-type (green ghost) vs R175H mutant (amethyst), "
+                    "mutation site in gold — folded on AMD Instinct:**")
+        try:
+            components.html(
+                rescue_overlay_html(load_pdb("wt"), load_pdb("r175h"), 175),
+                height=480)
+        except Exception as e:
+            st.caption(f"3D overlay unavailable: {str(e)[:120]}")
+        st.info(rescue["verdict"])
+        st.caption(f"⚠️ {rescue['disclaimer']} · device: {rescue['device']} · "
+                   f"model: {rescue['model']}")
+
 # ── TAB 7: Voice ──────────────────────────────────────────────────
 with tab7:
     st.markdown("## 🎤 Jarvis — hands-free voice loop")

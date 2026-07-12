@@ -3743,14 +3743,19 @@ class TestAdversarialEvidence:
         out = bounded_debate("claim", [], lambda s, u: "x", max_turns=1)
         assert out["turn_count"] == 1 and out["turns"][0]["role"] == "skeptic"
 
-    def test_bounded_debate_handles_llm_error(self):
-        from agents.adversarial_evidence import bounded_debate
+    def test_bounded_debate_handles_llm_error(self, monkeypatch):
+        import agents.adversarial_evidence as ae
+        monkeypatch.setattr(ae.time, "sleep", lambda *_a, **_k: None)
+        calls = []
 
         def boom(system, user):
+            calls.append(1)
             raise RuntimeError("llm down")
 
-        out = bounded_debate("claim", [], boom)
+        out = ae.bounded_debate("claim", [], boom)
         assert out["success"] is False and "llm down" in out["reason"]
+        # retried before giving up (3 attempts by default)
+        assert len(calls) == 3
 
     def test_gather_contradicting_evidence_shape(self):
         from agents.adversarial_evidence import gather_contradicting_evidence
@@ -3763,6 +3768,211 @@ class TestAdversarialEvidence:
                                             matcher=_EmptyMatcher())
         assert "contradictions" in out and "has_contradictions" in out
         assert isinstance(out["contradictions"], list)
+
+
+class TestBoundedDebateRetry:
+    """Transient-error retry/backoff around the debate LLM calls."""
+
+    def _no_sleep(self, monkeypatch):
+        import agents.adversarial_evidence as ae
+        monkeypatch.setattr(ae.time, "sleep", lambda *_a, **_k: None)
+        return ae
+
+    def test_retry_returns_first_success_no_retry(self, monkeypatch):
+        ae = self._no_sleep(monkeypatch)
+        calls = []
+        out = ae._generate_with_retry(
+            lambda s, u: calls.append(1) or "ok", "sys", "usr")
+        assert out == "ok" and len(calls) == 1
+
+    def test_retry_recovers_after_transient_failure(self, monkeypatch):
+        ae = self._no_sleep(monkeypatch)
+        calls = []
+
+        def flaky(s, u):
+            calls.append(1)
+            if len(calls) == 1:
+                raise RuntimeError("500 INTERNAL")
+            return "recovered"
+
+        assert ae._generate_with_retry(flaky, "s", "u") == "recovered"
+        assert len(calls) == 2
+
+    def test_retry_raises_after_all_attempts(self, monkeypatch):
+        ae = self._no_sleep(monkeypatch)
+        calls = []
+
+        def boom(s, u):
+            calls.append(1)
+            raise RuntimeError("500 INTERNAL")
+
+        with pytest.raises(RuntimeError):
+            ae._generate_with_retry(boom, "s", "u", attempts=3)
+        assert len(calls) == 3
+
+    def test_retry_empty_response_not_retried(self, monkeypatch):
+        ae = self._no_sleep(monkeypatch)
+        calls = []
+        out = ae._generate_with_retry(
+            lambda s, u: calls.append(1) or "", "s", "u")
+        assert out == "" and len(calls) == 1   # empty is valid, returned as-is
+
+    def test_retry_attempts_one_means_no_retry(self, monkeypatch):
+        ae = self._no_sleep(monkeypatch)
+        calls = []
+
+        def boom(s, u):
+            calls.append(1)
+            raise RuntimeError("x")
+
+        with pytest.raises(RuntimeError):
+            ae._generate_with_retry(boom, "s", "u", attempts=1)
+        assert len(calls) == 1
+
+    def test_debate_survives_transient_skeptic_error(self, monkeypatch):
+        ae = self._no_sleep(monkeypatch)
+        state = {"n": 0}
+
+        def gen(system, user):
+            state["n"] += 1
+            if state["n"] == 1:            # first skeptic call blips
+                raise RuntimeError("503 upstream")
+            return "argued"
+
+        out = ae.bounded_debate("Give drug X.", ["trial stopped"], gen)
+        assert out["success"] is True
+        assert out["turn_count"] == 2
+        assert out["turns"][0]["text"] == "argued"
+
+    def test_debate_survives_transient_proposer_error(self, monkeypatch):
+        ae = self._no_sleep(monkeypatch)
+        seen = {"skeptic_done": False, "proposer_fails": 1}
+
+        def gen(system, user):
+            if system.startswith("You are the PROPOSER") and seen["proposer_fails"]:
+                seen["proposer_fails"] = 0
+                raise RuntimeError("500 INTERNAL")
+            return "text"
+
+        out = ae.bounded_debate("claim", [], gen)
+        assert out["success"] is True and out["turn_count"] == 2
+
+    def test_debate_reports_unavailable_when_all_retries_fail(self, monkeypatch):
+        ae = self._no_sleep(monkeypatch)
+        out = ae.bounded_debate(
+            "claim", [], lambda s, u: (_ for _ in ()).throw(RuntimeError("down")))
+        assert out["success"] is False and "down" in out["reason"]
+
+
+class TestStructureRescue:
+    """In-silico structural rescue: real ESMFold outputs, honest geometry."""
+
+    @staticmethod
+    def _ca_line(x, y, z, b):
+        s = list(" " * 80)
+        s[0:6] = "ATOM  "
+        s[12:16] = " CA "
+        s[30:38] = f"{x:8.3f}"
+        s[38:46] = f"{y:8.3f}"
+        s[46:54] = f"{z:8.3f}"
+        s[60:66] = f"{b:6.2f}"
+        return "".join(s)
+
+    def test_structures_available(self):
+        from agents.structure_rescue import structures_available
+        assert structures_available() is True   # committed real ESMFold PDBs
+
+    def test_load_pdb_present_and_absent(self):
+        from agents.structure_rescue import load_pdb
+        assert (load_pdb("wt") or "").startswith(("HEADER", "ATOM", "PARENT", "REMARK", "MODEL"))
+        assert load_pdb("does_not_exist") is None
+
+    def test_parse_ca_counts_residues(self):
+        from agents.structure_rescue import load_pdb, parse_ca
+        coords, plddt = parse_ca(load_pdb("wt"))
+        assert len(coords) == len(plddt) == 393   # full p53 length
+        assert all(len(c) == 3 for c in coords)
+
+    def test_mean_plddt_range_real(self):
+        from agents.structure_rescue import load_pdb, mean_plddt
+        m = mean_plddt(load_pdb("wt"))
+        assert 0.0 < m <= 100.0 and m > 50   # ESMFold folded it with confidence
+
+    def test_mean_plddt_normalises_0_1_scale(self):
+        from agents.structure_rescue import mean_plddt
+        pdb = "\n".join(self._ca_line(i, i, i, 0.9) for i in range(5))
+        assert abs(mean_plddt(pdb) - 90.0) < 0.01
+
+    def test_mean_plddt_keeps_0_100_scale(self):
+        from agents.structure_rescue import mean_plddt
+        pdb = "\n".join(self._ca_line(i, i, i, 85.0) for i in range(5))
+        assert abs(mean_plddt(pdb) - 85.0) < 0.01
+
+    def test_mean_plddt_empty_is_zero(self):
+        from agents.structure_rescue import mean_plddt
+        assert mean_plddt("no atoms") == 0.0
+
+    def test_kabsch_identical_is_zero(self):
+        from agents.structure_rescue import kabsch_rmsd
+        P = [(0, 0, 0), (1, 0, 0), (0, 1, 0), (0, 0, 1)]
+        assert kabsch_rmsd(P, P) == 0.0
+
+    def test_kabsch_translation_invariant(self):
+        from agents.structure_rescue import kabsch_rmsd
+        P = [(0, 0, 0), (1, 0, 0), (0, 1, 0), (0, 0, 1)]
+        Q = [(x + 10, y - 5, z + 3) for (x, y, z) in P]
+        assert kabsch_rmsd(P, Q) < 1e-6
+
+    def test_kabsch_empty_is_zero(self):
+        from agents.structure_rescue import kabsch_rmsd
+        assert kabsch_rmsd([], []) == 0.0
+
+    def test_analysis_available_and_honest(self):
+        from agents.structure_rescue import structural_rescue_analysis
+        a = structural_rescue_analysis()
+        assert a["available"] is True
+        assert a["mutation"] == "R175H" and a["rescue_candidate"] == "N239Y"
+        assert a["warp_rmsd_wt_vs_r175h"] > 0
+        assert set(a["mean_plddt"]) == {"wt", "r175h", "r175h_n239y"}
+        assert "not evidence of therapeutic rescue" in a["verdict"].lower() or \
+               "not evidence" in a["verdict"].lower()
+        assert "stability" in a["disclaimer"].lower()   # names the honesty caveat
+
+    def test_analysis_unavailable_when_missing(self, monkeypatch, tmp_path):
+        import agents.structure_rescue as sr
+        monkeypatch.setattr(sr, "DATA_DIR", tmp_path)   # empty dir
+        a = sr.structural_rescue_analysis()
+        assert a["available"] is False and "disclaimer" in a
+
+    def test_hypothesis_prompt(self):
+        from agents.structure_rescue import hypothesis_prompt
+        system, user = hypothesis_prompt("R175H")
+        assert "R175H" in system and "R175H" in user
+
+    def test_gemma_interpret_injected(self):
+        from agents.structure_rescue import structural_rescue_analysis, gemma_interpret
+        a = structural_rescue_analysis()
+        out = gemma_interpret(a, lambda s, u: "The warp is modest.")
+        assert out == "The warp is modest."
+
+    def test_gemma_interpret_unavailable_is_none(self):
+        from agents.structure_rescue import gemma_interpret
+        assert gemma_interpret({"available": False}, lambda s, u: "x") is None
+
+    def test_gemma_interpret_graceful_on_error(self):
+        from agents.structure_rescue import structural_rescue_analysis, gemma_interpret
+        a = structural_rescue_analysis()
+
+        def boom(s, u):
+            raise RuntimeError("llm down")
+
+        assert gemma_interpret(a, boom) is None
+
+    def test_overlay_html_embeds_both_models(self):
+        from agents.structure_rescue import load_pdb, rescue_overlay_html
+        html = rescue_overlay_html(load_pdb("wt"), load_pdb("r175h"), mutation_resi=175)
+        assert "3Dmol" in html and "resi:175" in html
+        assert "addModel" in html and html.count("addModel") == 2
 
 
 class TestTrustWeight:
