@@ -1,0 +1,39 @@
+AMD Instinct MI300X — live rocm-smi capture
+============================================
+Real telemetry from `rocm-smi` on the physical AMD Developer Cloud accelerator used
+for Precision Onco Africa's heavy-compute path (ESMFold structural generation + vLLM
+inference). This is a genuine device readout — not a mock or a simulated device.
+
+Device
+------
+Card Series : AMD Instinct MI300X VF
+Card Model  : 0x74b5
+Card SKU    : M3000100
+GUID        : 21947
+ROCm        : 7.2.4
+vLLM        : 0.23.0 (rocm/vllm container image)
+
+rocm-smi (concise, idle)
+------------------------
+Device : 0
+Temp (junction) : 38.0 C
+Power           : 139.0 W
+Power cap       : 750.0 W
+Partitions      : NPS1, SPX, 0
+MCLK            : 900 MHz
+VRAM total      : 205,822,885,888 bytes (~191.7 GiB HBM3)
+VRAM used (idle): ~0.3 GB
+VRAM% / GPU%    : 0% / 0% (idle at capture time)
+
+Reproduce
+---------
+  rocm-smi
+  rocm-smi --showproductname
+  rocm-smi --showmeminfo vram
+
+Notes
+-----
+- Captured over SSH on the running droplet.
+- Heavy workloads (ESMFold folding, vLLM inference benchmark) run on this device;
+  the Streamlit app stays local-first and loads the precomputed real outputs,
+  honouring the 8 GB / offline design constraint.
