@@ -520,10 +520,6 @@ def transcribe(audio_bytes) -> str:
     Uses a NamedTemporaryFile so it never writes into the (read-only on
     Streamlit Cloud) app directory.
     """
-    model = load_whisper()
-    if model is None:
-        return "Transcription error: Whisper model failed to load"
-
     tmp_path = None
     try:
         with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp:
@@ -537,6 +533,19 @@ def transcribe(audio_bytes) -> str:
                 tmp.write(bytes(audio_bytes))
             tmp_path = Path(tmp.name)
 
+        # Prefer faster-whisper (≈4× faster, ~half the RAM on a CPU laptop);
+        # transparently fall back to openai-whisper if it is unavailable/fails.
+        try:
+            from utils.voice_conversation import (faster_whisper_available,
+                                                  transcribe_fast)
+            if faster_whisper_available():
+                return transcribe_fast(str(tmp_path))
+        except Exception as e:
+            log.warning(f"faster-whisper path failed, falling back to whisper: {e}")
+
+        model = load_whisper()
+        if model is None:
+            return "Transcription error: Whisper model failed to load"
         try:
             result = model.transcribe(str(tmp_path), language="en", fp16=False)
         except TypeError:
@@ -553,6 +562,13 @@ def transcribe(audio_bytes) -> str:
 
 
 def whisper_available() -> bool:
+    """True if any local speech-to-text backend is installed (faster-whisper
+    preferred, openai-whisper as fallback)."""
+    try:
+        import faster_whisper  # noqa: F401  (optional dep, preferred)
+        return True
+    except ImportError:
+        pass
     try:
         import whisper  # type: ignore[import-not-found]  # noqa: F401  (optional dep)
         return True
@@ -2009,12 +2025,19 @@ with tab7:
                 "whose hands are busy.")
 
     WHISPER_AVAILABLE = whisper_available()
+    try:
+        from utils.voice_conversation import faster_whisper_available
+        _fast_stt = faster_whisper_available()
+    except Exception:
+        _fast_stt = False
     vc1, vc2 = st.columns(2)
     with vc1:
-        if WHISPER_AVAILABLE:
-            st.success("✅ Whisper STT ready")
+        if _fast_stt:
+            st.success("✅ Speech-to-text ready (faster-whisper)")
+        elif WHISPER_AVAILABLE:
+            st.success("✅ Speech-to-text ready (whisper)")
         else:
-            st.warning("⚠️ `pip install openai-whisper` for speech-in")
+            st.warning("⚠️ `pip install faster-whisper` for speech-in")
     vc2.success("✅ Jarvis TTS ready (in-browser)")
     vtc1, vtc2 = st.columns(2)
     speak_back = vtc1.toggle("🔊 Speak the answer back", value=True,
@@ -2040,18 +2063,46 @@ with tab7:
                 st.caption(f"Voice output unavailable: {str(e)[:120]}")
         render_clinvar_safety(result.get("answer", ""), key_prefix="voice")
 
+    # ── 🗣️ Talk to Gemma — a real multi-turn spoken conversation ──
+    st.markdown("#### 🗣️ Talk to Gemma")
+    st.caption("A back-and-forth conversation — Gemma remembers the thread. Say "
+               "*“thank you Gemma, that will be all”* to close it politely.")
+    talk_log = st.session_state.setdefault("talk_log", [])
+    for speaker, msg in talk_log[-8:]:
+        icon = "🧑‍⚕️" if speaker == "you" else "🧬"
+        st.markdown(f"{icon} **{speaker.title()}:** {msg}")
+    if talk_log and st.button("🧹 New conversation", key="talk_clear"):
+        st.session_state.talk_log = []
+        st.rerun()
+
     audio_bytes = st.audio_input("🎙️ Record your question (max 30s):")
 
     if audio_bytes and WHISPER_AVAILABLE:
-        with st.spinner("Transcribing with Whisper..."):
+        with st.spinner("Transcribing…"):
             text = transcribe(audio_bytes)
-        if not text.startswith("Transcription error"):
-            st.success(f"🗣️ **Heard:** {text}")
-            with st.spinner("Querying Gemma 4..."):
-                result = safe_query(text, agent_type=forced_agent)
-            _render_voice_answer(result)
-        else:
+        if text.startswith("Transcription error"):
             st.error(text)
+        else:
+            from utils.voice_conversation import (detect_dismiss_intent,
+                                                  DISMISS_RESPONSE)
+            st.session_state.talk_log.append(("you", text))
+            st.success(f"🗣️ **Heard:** {text}")
+            if detect_dismiss_intent(text):
+                # Understood the sign-off — close gracefully, no new query.
+                st.session_state.talk_log.append(("gemma", DISMISS_RESPONSE))
+                st.markdown(f"🧬 **Gemma:** {DISMISS_RESPONSE}")
+                if speak_back:
+                    try:
+                        from utils.voice_output import speak_html
+                        components.html(speak_html(DISMISS_RESPONSE, autoplay=True),
+                                        height=70)
+                    except Exception as e:
+                        st.caption(f"Voice output unavailable: {str(e)[:120]}")
+            else:
+                with st.spinner("Gemma is thinking…"):
+                    result = safe_query(text, agent_type=forced_agent)
+                st.session_state.talk_log.append(("gemma", result.get("answer", "")))
+                _render_voice_answer(result)
 
     st.divider()
     st.markdown("### ⌨️ Or Type Your Question")

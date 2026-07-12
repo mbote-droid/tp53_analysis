@@ -90,4 +90,5 @@ pytest-asyncio>=0.21.0
 # torch>=2.0.0                 # pathology vision + local embeddings
 # torchvision>=0.15.0          # pathology image transforms
 # timm>=0.9.0                  # UNI / ResNet pathology models
-# openai-whisper>=20231117     # voice transcription (also needs system ffmpeg)
+# faster-whisper>=1.0.0        # PREFERRED voice STT (≈4× faster, no torch); needs ffmpeg
+# openai-whisper>=20231117     # fallback voice transcription (also needs system ffmpeg)

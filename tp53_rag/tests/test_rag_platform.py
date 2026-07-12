@@ -3975,6 +3975,61 @@ class TestStructureRescue:
         assert "addModel" in html and html.count("addModel") == 2
 
 
+class TestVoiceConversation:
+    """Conversational voice engine: dismiss-intent + faster-whisper wiring."""
+
+    def test_dismiss_that_will_be_all(self):
+        from utils.voice_conversation import detect_dismiss_intent
+        assert detect_dismiss_intent("thank you Gemma, that will be all") is True
+
+    def test_dismiss_variants_true(self):
+        from utils.voice_conversation import detect_dismiss_intent
+        for s in ["that's all", "That Will Be All.", "we're done", "goodbye",
+                  "no more questions", "stop there", "that's enough",
+                  "that'll be all for now", "bye Gemma"]:
+            assert detect_dismiss_intent(s) is True, s
+
+    def test_thanks_and_continue_not_dismiss(self):
+        from utils.voice_conversation import detect_dismiss_intent
+        assert detect_dismiss_intent("thanks, and what about R248Q?") is False
+
+    def test_bare_thanks_not_dismiss(self):
+        from utils.voice_conversation import detect_dismiss_intent
+        assert detect_dismiss_intent("thank you") is False
+
+    def test_real_question_not_dismiss(self):
+        from utils.voice_conversation import detect_dismiss_intent
+        assert detect_dismiss_intent(
+            "What is the prognosis for the R175H mutation?") is False
+
+    def test_empty_and_none_not_dismiss(self):
+        from utils.voice_conversation import detect_dismiss_intent
+        assert detect_dismiss_intent("") is False
+        assert detect_dismiss_intent(None) is False
+
+    def test_punctuation_and_case_insensitive(self):
+        from utils.voice_conversation import detect_dismiss_intent
+        assert detect_dismiss_intent("  THAT IS ALL!!!  ") is True
+
+    def test_dismiss_response_is_graceful(self):
+        from utils.voice_conversation import DISMISS_RESPONSE
+        assert isinstance(DISMISS_RESPONSE, str) and len(DISMISS_RESPONSE) > 0
+        assert "doctor" in DISMISS_RESPONSE.lower()
+
+    def test_faster_whisper_available_is_bool(self):
+        from utils.voice_conversation import faster_whisper_available
+        assert isinstance(faster_whisper_available(), bool)
+
+    def test_transcribe_fast_is_callable(self):
+        from utils.voice_conversation import transcribe_fast
+        assert callable(transcribe_fast)
+
+    def test_mid_sentence_dismiss_phrase(self):
+        from utils.voice_conversation import detect_dismiss_intent
+        assert detect_dismiss_intent(
+            "Okay Gemma, I think that will be all for today, thanks") is True
+
+
 class TestTrustWeight:
     """Retrieval-layer trust prior (compute_trust_weight in rag_chain)."""
 
