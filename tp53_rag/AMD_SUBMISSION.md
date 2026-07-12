@@ -87,7 +87,21 @@ Developer Cloud. Our **In-Silico Structural Rescue** feature folds full-length p
 the fold shows the accelerator saturated: **GPU 100%, 749 W (at the 750 W cap),
 clock boosted 138 MHz → 1719 MHz**. See the raw capture at
 [`data/amd_mi300x_rocm_smi.txt`](data/amd_mi300x_rocm_smi.txt) — genuine device
-telemetry, not a mock. The ROCm/vLLM inference-throughput run
+telemetry, not a mock.
+
+**Real vLLM inference measured on the MI300X** (Qwen2.5-7B, an open model, served by
+vLLM 0.23 with **FP8 KV-cache**; captures in [`data/amd_vllm/`](data/amd_vllm/)):
+- **227 tok/s** sustained decode throughput.
+- **Real logit-bias consensus**: a specialist's A/B/C/D vote taken from the *actual*
+  token logprobs (softmaxed) — genuine mathematical voting, surfaced in-app.
+- **Single-batch tensor + FP8**: six specialist prompts in one batched request run
+  **4.6× faster** than six sequential calls (1.10 s → 0.24 s).
+- **Autonomic GPU action**: allocated 24 GB on the device then reclaimed it, verified
+  by `rocm-smi` before/after.
+- **Speculative decoding — reported honestly**: n-gram/prompt-lookup spec-decode did
+  **not** speed up a 7B model on this bandwidth-rich GPU (227 → 85 tok/s); we report
+  the negative result rather than manufacture a speedup. It pays off on much larger,
+  memory-bound targets. *Honesty over theatre — throughout.* The ROCm/vLLM inference-throughput run
 (`tools/benchmark_amd.py --vllm <model>`) is executed on this device; numbers are
 committed to `data/amd_benchmark.json`. The tumour board is excluded from the
 latency table above because it is a deterministic agent with no LLM call (see
