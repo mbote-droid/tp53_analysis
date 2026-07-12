@@ -1905,7 +1905,7 @@ with tab6:
             try:
                 from utils.voice_output import speak_html
                 components.html(speak_html(result.get("answer", ""),
-                                           autoplay=True), height=70)
+                                           autoplay=False), height=70)
             except Exception as e:
                 st.caption(f"Voice output unavailable: {str(e)[:120]}")
 
@@ -2064,7 +2064,7 @@ with tab7:
                 if bargein:
                     components.html(speak_html_bargein(ans), height=96)
                 else:
-                    components.html(speak_html(ans, autoplay=True), height=70)
+                    components.html(speak_html(ans, autoplay=False), height=70)
             except Exception as e:
                 st.caption(f"Voice output unavailable: {str(e)[:120]}")
         render_clinvar_safety(result.get("answer", ""), key_prefix="voice")
@@ -2100,7 +2100,7 @@ with tab7:
                 if speak_back:
                     try:
                         from utils.voice_output import speak_html
-                        components.html(speak_html(DISMISS_RESPONSE, autoplay=True),
+                        components.html(speak_html(DISMISS_RESPONSE, autoplay=False),
                                         height=70)
                     except Exception as e:
                         st.caption(f"Voice output unavailable: {str(e)[:120]}")
