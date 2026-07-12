@@ -940,10 +940,10 @@ def mutation_structure_html(pdb_text: Optional[str], mutation: str,
             spin: function(btn){ spinning=!spinning;
               viewer.spin(spinning?'y':false, 0.4);
               if(btn) btn.className = spinning ? '' : 'on'; },
-            reset: function(){ viewer.zoomTo(mut>0?{resi:mut}:{}); viewer.render(); }
+            reset: function(){ viewer.zoomTo(); viewer.render(); }
           };
           apply('cartoon');
-          viewer.zoomTo(mut>0?{resi:mut}:{});
+          viewer.zoomTo();
           viewer.render();
           viewer.spin('y', 0.4);
         } catch (e) {

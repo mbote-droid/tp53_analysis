@@ -201,8 +201,7 @@ def rescue_overlay_html(wt_pdb: str, mutant_pdb: str,
   v.setStyle({{model:1}}, {{cartoon:{{color:'#8b7cf6'}}}});
   v.addStyle({{model:1, resi:{mutation_resi}}},
              {{stick:{{color:'#f0a830', radius:0.4}}}});
-  v.zoomTo({{model:1, resi:{mutation_resi}}});
-  v.zoom(0.7);
+  v.zoomTo();
   v.render();
   v.spin('y', 0.4);
 }})();
