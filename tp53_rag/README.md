@@ -61,12 +61,21 @@
 >   for *contradicting* evidence — retracted papers, trials stopped early —
 >   before any answer reaches the clinician.
 > - 🌍 **Gemma *speaks the clinic's language*.** Kiswahili symptoms are mapped to
->   HPO/ICD-10 codes; answers can be read back hands-free (with on-device barge-in).
+>   HPO/ICD-10 codes; and you can **hold a spoken, multi-turn conversation** with it
+>   (faster-whisper in, browser TTS out, on-device barge-in, understands "that will
+>   be all").
+> - 🧬 **Gemma *designs*, AMD *folds*.** In the *In-Silico Structural Rescue*, Gemma
+>   proposes a second-site suppressor for R175H, **ESMFold folds it for real on an
+>   AMD Instinct MI300X**, and Gemma reads the measured geometry back — reasoning
+>   about 3D space, fact-checked by GPU compute. (In-silico hypothesis, RUO.)
 >
 > **AMD, used intelligently — cloud to clinic on one codebase:**
 > - ⚡ **Hardware-elastic.** One env var moves inference from an 8 GB *offline*
 >   laptop to **Gemma served on AMD Instinct via Fireworks / vLLM** — **182 s →
 >   5.1 s (~35×)**, measured.
+> - 🔥 **Real MI300X compute.** ESMFold folds full-length p53 in **2.8 s** on a live
+>   **AMD Instinct MI300X**; `rocm-smi` captured *under load* shows **GPU 100% at
+>   749 W** — genuine telemetry in [`data/amd_mi300x_rocm_smi.txt`](data/amd_mi300x_rocm_smi.txt).
 > - 🩺 **Autonomic GPU ops.** A self-healing manager watches *real* `rocm-smi` +
 >   `psutil` telemetry and reclaims memory under load — honest by design (real
 >   GPU numbers only on real AMD hardware, never faked).

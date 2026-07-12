@@ -68,7 +68,7 @@ challenges it in a bounded exchange."
 
 ---
 
-### ⏱ 1:30–2:05 — TAB 2: 🧬 Molecular → 🔬 Structure  *(Gemma track)*
+### ⏱ 1:30–2:05 — TAB 2a: 🧬 Molecular → 🔬 Structure  *(Gemma track)*
 **Clicks:** "Gemma sees the structure" → enter `R175H` → **Render & let Gemma see it**.
 Show the rendered backbone + Gemma's narration side-by-side.
 **Say:** "This is the Gemma track. We render the protein backbone with the mutation
@@ -76,9 +76,26 @@ highlighted and hand the **image** to Gemma 4. It doesn't read a description —
 **looks** at the structure and reasons about it."
 **⚡** One open model doing *sight* and *language* — not an OCR pipeline bolted on.
 
+### ⏱ 2:05–2:45 — TAB 2b: 🧬 In-Silico Structural Rescue  *(THE CROWN JEWEL — Gemma × AMD)*
+Scroll to **In-Silico Structural Rescue**. The **rotating overlay** is already on
+screen: wild-type p53 as a green ghost, the **R175H mutant solid in amethyst**, the
+mutation site in gold. Click **🧬 Run the rescue reasoning (Gemma ↔ AMD fold)**.
+**Say:** "Here's the virtual wet-lab. Gemma *proposes* a second-site suppressor —
+N239Y — to rescue the mutation. That candidate sequence was folded for real by
+**ESMFold on an AMD Instinct MI300X**: full-length p53 in **2.8 seconds**, and while
+it ran the GPU hit **100% utilisation at 749 watts**. Then Gemma reads the measured
+geometry back — a 0.71 Å structural warp — and interprets it. This is Gemma reasoning
+*about 3D space*, fact-checked by real AMD compute."
+**⚡** No chatbot runs a real physics model on a data-center GPU mid-conversation and
+reasons over the result. And it's **honest** — pLDDT is framed as confidence, not
+stability; it's labelled an in-silico hypothesis, not a cure.
+> This one beat carries **both** tracks at once: Gemma (proposes + interprets) and AMD
+> (the MI300X does the folding). It's your pattern-interrupt "BOOM" — the moment a
+> judge stops thinking "RAG wrapper."
+
 ---
 
-### ⏱ 2:05–2:35 — TAB 3: 🔬 Pathology  *(Gemma track, more modalities)*
+### ⏱ 2:45–3:05 — TAB 3: 🔬 Pathology  *(Gemma track, more modalities)*
 **Clicks:** **✨ Use sample report (synthetic demo)** → **📑 Read report with Gemma
 Vision**. Show extracted fields + ClinVar cross-check. *(Sample is built in — one
 click, no upload.)*
@@ -89,35 +106,45 @@ H&E slides the same way."
 
 ---
 
-### ⏱ 2:35–3:05 — TAB 4: 🔍 Query  *(equity + Jarvis — skip generic Q&A)*
+### ⏱ 3:05–3:20 — TAB 4: 🔍 Query  *(equity — Kiswahili)*
 **Clicks:** open the **Kiswahili** expander → type `mgonjwa ana kohoa` → show the
-HPO/ICD-10 mapping. Then trigger **🔊 Read answer aloud** on an existing answer.
-> **Don't** do a plain "type a question, read the answer" — that's the one beat that
-> looks like an ordinary chatbot. Show only the Kiswahili mapping + the voice read.
+HPO/ICD-10 mapping. *(Skip plain Q&A — the conversation beat below carries voice.)*
 **Say:** "For the people it's built for: a clinician types a symptom in **Kiswahili**
-and it maps to standard clinical codes. And Jarvis reads the answer aloud — hands-free."
-**⚡** Localized clinical-code mapping + on-device voice, for low-literacy, hands-busy
-frontline settings.
-**Optional wow:** while Jarvis is speaking, **talk over it** — the barge-in stops it
-and it says "Go ahead." (Needs mic permission.)
+and it maps to standard clinical codes."
+**⚡** Localized clinical-code mapping most tools ignore.
 
 ---
 
-### ⏱ 3:05–3:35 — TAB 5: 🎤 Voice & Tools → 🛠 Debug  *(hardware honesty)*
+### ⏱ 3:20–3:50 — TAB 4b: 🎤 Talk to Gemma  *(the human-conversation wow — record LOCAL)*
+**Clicks:** Voice tab → **🎙️ Record** a spoken question (e.g. *"What does the R175H
+mutation mean for my patient?"*) → Gemma answers, **Jarvis reads it back**, the running
+transcript grows. Ask a **follow-up by voice** (Gemma remembers the thread). Then say
+**"thank you Gemma, that will be all"** — it recognises the sign-off and closes
+gracefully (*"Anytime, doctor."*).
+**Say:** "And you can just *talk* to it. Speech in, Gemma answers, Jarvis speaks back —
+a real back-and-forth that remembers the conversation, and understands when I'm done."
+*(Optional: talk over Jarvis mid-answer — the barge-in stops it.)*
+**⚡** A multi-turn spoken conversation with memory and a polite sign-off — fully
+on-device (faster-whisper in, browser TTS out). Almost nobody ships this.
+> Record on your **local** run; confirm the Voice tab shows **"✅ Speech-to-text
+> ready"** first.
+
+---
+
+### ⏱ 3:50–4:10 — TAB 5: 🎤 Voice & Tools → 🛠 Debug  *(hardware honesty)*
 **Clicks:** Autonomic panel → show live **RAM** + the honest **GPU line** → click
 **Run self-heal now** (watch RAM before/after).
 **Say:** "It's hardware-aware. One environment variable moves inference from an 8 GB
 laptop to AMD Instinct — same code, cloud to clinic. An autonomic manager watches
 **real** memory and heals itself."
 **⚡** Real telemetry, not a fake dashboard.
-> **HONESTY:** on the laptop the GPU line honestly reads *"no AMD GPU present."* Do
-> **not** stage a VRAM spike here. The live `rocm-smi` / self-heal-on-VRAM beat is
-> recorded separately on the AMD droplet ([AMD_VLLM_SETUP.md](AMD_VLLM_SETUP.md)) if
-> you get it up — otherwise narrate it as the documented AMD path, don't fake it.
+> **HONESTY:** on the laptop the GPU line honestly reads *"no AMD GPU present"* — that's
+> correct and fine. Your real AMD proof is the **MI300X capture** from the rescue beat
+> (100% GPU, 749 W, 2.8 s fold). Do **not** stage a fake VRAM spike on the laptop.
 
 ---
 
-### ⏱ 3:35–4:00 — Close
+### ⏱ 4:10–4:30 — Close
 **Show:** back to the consensus / "Why?" trace, then the title card.
 **Say:** "Transparent, offline-capable, and honest about what it doesn't know — Gemma
 on AMD, bringing the tumour board to the clinics that never had one. Thank you."
@@ -126,16 +153,21 @@ on AMD, bringing the tumour board to the clinics that never had one. Thank you."
 
 ## Both-tracks callouts (say at least one of each)
 - **Track 3 (Unicorn):** the Amara user + market; **Gemma served on AMD Instinct**
-  (Fireworks/vLLM); ROCm benchmark (182 s → 5.1 s, ~35×); the honest self-healing
-  GPU-ops layer.
+  (Fireworks); **real ESMFold folding on a live MI300X** — full p53 in **2.8 s**, GPU
+  at **100% / 749 W** (captured in [`data/amd_mi300x_rocm_smi.txt`](data/amd_mi300x_rocm_smi.txt));
+  the honest self-healing GPU-ops layer.
 - **Best Use of Gemma:** Gemma is the **multimodal core** — sees rendered structures,
-  reads lab-report photos (no OCR), reads H&E slides — plus offline local Gemma via
-  Ollama, and the six-persona probability vote.
+  reads lab-report photos (no OCR), reads H&E slides, **proposes a structural rescue
+  then interprets the folded geometry**, holds a spoken conversation — plus offline
+  local Gemma via Ollama and the six-persona probability vote.
 
 ## Honesty guardrails
-- No faked VRAM spike on the laptop — record the GPU beat on the real AMD droplet or
-  narrate it as documented.
-- Everything else in the flow is genuinely live; nothing is scripted or faked.
+- The MI300X numbers (2.8 s fold, 100% GPU, 749 W) are **real captures** — show/narrate
+  those. Do **not** fake a VRAM spike on the laptop; the live laptop autonomic panel
+  honestly reads *"no AMD GPU present"* and that's fine.
+- The rescue beat: pLDDT is **confidence, not stability**; it's an *in-silico
+  hypothesis*, never a proven cure. Say so.
+- Everything in the flow is genuinely live; nothing is scripted or faked.
 - Keep the RUO banner visible — it's a copilot, not a diagnosis.
 
 ## If you record in segments (instead of one take)
