@@ -233,7 +233,9 @@ def agent_graph_3d_html(graph_data: Optional[dict] = None, height: int = 560) ->
 
     template = """
 <div style="width:100%;background:#0d1117;border-radius:10px;overflow:hidden;">
-  <div id="tp53-agraph" style="width:100%;height:__H__px;"></div>
+  <div id="tp53-agraph" style="width:100%;height:__H__px;">
+    <div style="padding:18px;color:#8b98a5;font-family:sans-serif;font-size:.85rem;">Loading 3D network…</div>
+  </div>
   <div id="tp53-agraph-fallback" style="display:none;padding:18px;color:#8b98a5;
        font-family:sans-serif;font-size:0.85rem;">
     3D agent graph needs internet access once to load the WebGL library.
@@ -254,7 +256,11 @@ def agent_graph_3d_html(graph_data: Optional[dict] = None, height: int = 560) ->
     if(typeof ForceGraph3D === 'undefined'){ showFallback(); return; }
     try{
       var el = document.getElementById('tp53-agraph');
+      el.textContent = '';
+      var W = el.clientWidth || el.offsetWidth || 900;
       var Graph = ForceGraph3D()(el)
+        .width(W)
+        .height(__H__)
         .graphData(DATA)
         .backgroundColor('#0d1117')
         .nodeLabel(function(n){ return n.name; })
@@ -287,6 +293,11 @@ def agent_graph_3d_html(graph_data: Optional[dict] = None, height: int = 560) ->
     load('https://cdn.jsdelivr.net/npm/3d-force-graph/dist/3d-force-graph.min.js',
          showFallback);
   });
+  // Safety net: if the library never defines the global, show the fallback
+  // instead of a silent blank box.
+  setTimeout(function(){
+    if(typeof ForceGraph3D === 'undefined'){ showFallback(); }
+  }, 9000);
 })();
 </script>
 """
