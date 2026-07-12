@@ -1902,6 +1902,12 @@ with tab6:
             with st.spinner("Querying Gemma 4..."):
                 result = safe_query(struct_q, agent_type="domain_annotation")
             st.markdown(result["answer"])
+            try:
+                from utils.voice_output import speak_html
+                components.html(speak_html(result.get("answer", ""),
+                                           autoplay=True), height=70)
+            except Exception as e:
+                st.caption(f"Voice output unavailable: {str(e)[:120]}")
 
     # ── 🖼️ Gemma SEES the structure (visual protein snapshot) ──
     st.divider()
