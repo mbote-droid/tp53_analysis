@@ -24,6 +24,7 @@ pattern.
 from __future__ import annotations
 
 import re
+import time
 from typing import Dict, Optional
 
 from utils.logger import log
@@ -82,6 +83,27 @@ class GemmaVisionAgent:
             self._backend = GoogleGenAIBackend(api_key=self._api_key, model=self._model)
         return self._backend
 
+    def _generate_vision(self, *, system_prompt, image_bytes, mime_type,
+                         user_prompt, attempts: int = 3,
+                         base_delay: float = 0.6) -> str:
+        """Vision call with bounded retry + backoff. Transient provider errors
+        (e.g. a Google AI Studio HTTP 500) usually clear on a retry; the last
+        exception propagates if every attempt fails, so callers keep their
+        existing graceful try/except."""
+        last = None
+        for i in range(max(1, attempts)):
+            try:
+                return self._get_backend().generate_vision(
+                    system_prompt=system_prompt, image_bytes=image_bytes,
+                    mime_type=mime_type, user_prompt=user_prompt)
+            except Exception as e:  # transient provider/network error
+                last = e
+                if i < attempts - 1:
+                    log.warning(f"gemma vision attempt {i + 1}/{attempts} "
+                                f"failed ({e}); retrying")
+                    time.sleep(base_delay * (2 ** i))
+        raise last
+
     def health(self) -> bool:
         return bool(self._api_key)
 
@@ -103,7 +125,7 @@ class GemmaVisionAgent:
                           "malignancy associated with these mutations, say so; "
                           "otherwise note that correlation is not visually "
                           "determinable from a single image.")
-            narration = self._get_backend().generate_vision(
+            narration = self._generate_vision(
                 system_prompt=PATHOLOGY_SYSTEM_PROMPT,
                 image_bytes=image_bytes, mime_type=mime_type,
                 user_prompt=prompt,
@@ -124,7 +146,7 @@ class GemmaVisionAgent:
                     "error": "GOOGLE_API_KEY not configured — Gemma vision "
                              "requires the Google AI Studio backend."}
         try:
-            summary = self._get_backend().generate_vision(
+            summary = self._generate_vision(
                 system_prompt=LAB_REPORT_SYSTEM_PROMPT,
                 image_bytes=image_bytes, mime_type=mime_type,
                 user_prompt="Transcribe and summarise the key fields on this report.",
@@ -165,7 +187,7 @@ class GemmaVisionAgent:
             if mutation:
                 prompt = (f"The highlighted residue is the site of TP53 "
                           f"{mutation}. " + prompt)
-            narration = self._get_backend().generate_vision(
+            narration = self._generate_vision(
                 system_prompt=STRUCTURE_SYSTEM_PROMPT,
                 image_bytes=image_bytes, mime_type=mime_type,
                 user_prompt=prompt)
