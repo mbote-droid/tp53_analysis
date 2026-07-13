@@ -129,6 +129,66 @@ of known scientific hosts.
 
 ---
 
+## Data privacy & compliance posture
+
+This is **research-use-only** software and is **not** a certified medical device
+or a HIPAA/GDPR-compliant system. This section states, honestly, what protects
+data today and what a real-world clinical deployment would still require.
+
+### Privacy by design (implemented today)
+- **Offline-first is the core privacy control.** In local inference mode
+  (`INFERENCE_MODE=ollama` / `llamacpp`), patient-adjacent data **never leaves the
+  device** — no cloud call, no third party. This is the strongest guarantee and it
+  is real.
+- **No patient database, no PHI persistence.** Inputs are processed in-session;
+  uploaded files (VCF, images, audio) are handled as transient temp files, not
+  stored long-term. Conversation memory is PII/PHI-scrubbed (threat #10) and
+  hashed to non-reversible tokens before anything is persisted.
+- **Boundary hardening.** Every untrusted input is validated (threats #1–#12):
+  upload sniffing, path-traversal-safe filenames, prompt-injection neutralisation,
+  output escaping, parameterised SQL, and DoS caps.
+- **Honest labelling.** A persistent "do not enter real patient data" notice and
+  research-use-only stamps on every export.
+
+### Honest limitation — cloud inference mode
+In **cloud modes** (`api` = Google, `fireworks` = AMD-hosted), the query text is
+sent to a **third-party model provider**. The offline modes are the
+privacy-preserving path; the cloud modes trade some privacy for speed and are
+labelled as such. We do **not** claim end-to-end privacy while calling an external
+API.
+
+### Deployment security headers (CSP / HSTS / SRI)
+The public demo runs on **Streamlit Community Cloud**, which does **not** expose
+custom HTTP response headers — so Content-Security-Policy, HSTS, and Subresource
+Integrity **cannot** be set there, and third-party header scanners will grade the
+demo host accordingly. These headers **are** part of the **containerised
+production deployment**: place the app behind an nginx/Caddy reverse proxy (see
+`docker-compose.yml`) and set a strict CSP, HSTS, SRI on pinned assets, and
+`X-Frame-Options` there. The header gap on the demo is a hosting-tier limitation,
+not an architectural one.
+
+### Roadmap to clinical-grade (NOT yet implemented)
+The following are required before any real patient data is processed. Several are
+**legal/organisational programmes, not code** — we name them honestly rather than
+overclaim:
+- **HIPAA / GDPR compliance** — *not a code feature.* Requires risk assessments,
+  data-processing agreements, a lawful basis, data-subject-rights processes,
+  breach-notification procedures, a named privacy/security officer, workforce
+  training, and independent audit. Code is necessary but far from sufficient.
+- **Business Associate Agreements (BAAs)** — *legal contracts* signed with every
+  vendor (model providers, cloud, hosting). Cannot be "added" in software.
+- **Authentication + role-based access control** — no user auth today (public
+  demo); production needs identity + RBAC.
+- **Encryption at rest** — local cache/memory stores are not encrypted today.
+- **Audit logging** — tamper-evident access/action logs for accountability.
+- **Formal de-identification** — beyond the current PII scrubber, a validated
+  Safe-Harbor / expert-determination de-identification pipeline.
+
+**In short:** privacy-by-design and app-layer hardening are implemented and
+tested; regulatory compliance is a documented roadmap, not a current claim.
+
+---
+
 ## Reporting
 
 This is a research project. If you find a security issue, please open an issue
