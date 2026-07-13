@@ -196,7 +196,7 @@ def rescue_overlay_html(wt_pdb: str, mutant_pdb: str,
   var el = document.getElementById('rescue3d');
   var v = $3Dmol.createViewer(el, {{backgroundColor:'#0b0e1a'}});
   v.addModel({wt_js}, 'pdb');
-  v.setStyle({{model:0}}, {{cartoon:{{color:'#34d399', opacity:0.35}}}});
+  v.setStyle({{model:0}}, {{cartoon:{{color:'#4ade80', opacity:0.6}}}});
   v.addModel({mut_js}, 'pdb');
   v.setStyle({{model:1}}, {{cartoon:{{color:'#8b7cf6'}}}});
   v.addStyle({{model:1, resi:{mutation_resi}}},
