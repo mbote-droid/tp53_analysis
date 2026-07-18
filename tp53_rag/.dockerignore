@@ -2,7 +2,6 @@
 # VCS / editor / agent
 .git
 .gitignore
-.claude
 .vscode
 
 # Secrets — never bake into the image (compose still reads .env at runtime via env_file)

@@ -3,6 +3,10 @@
 [![Python](https://img.shields.io/badge/Python-3.11%2B-blue?logo=python&logoColor=white)](https://www.python.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://tp53analysis-dzu3mspufjp9b43o2rmmog.streamlit.app/)
+[![Tests](https://github.com/mbote-droid/tp53_analysis/actions/workflows/tests.yml/badge.svg)](https://github.com/mbote-droid/tp53_analysis/actions/workflows/tests.yml)
+[![Code Quality](https://github.com/mbote-droid/tp53_analysis/actions/workflows/pylint.yml/badge.svg)](https://github.com/mbote-droid/tp53_analysis/actions/workflows/pylint.yml)
+[![BioPython](https://img.shields.io/badge/BioPython-sequence%20analysis-1a5276?logo=python&logoColor=white)](https://biopython.org)
+[![Docker](https://img.shields.io/badge/Docker-compose-2496ED?logo=docker&logoColor=white)](Dockerfile)
 
 A comprehensive bioinformatics pipeline for analyzing the TP53 gene (tumor suppressor protein p53) and its orthologs across species. This pipeline fetches sequences from NCBI, performs sequence analysis, detects mutations, discovers open reading frames, conducts multi-species phylogenetic comparisons, and annotates protein domains.
 

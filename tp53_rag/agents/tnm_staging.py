@@ -8,7 +8,7 @@ Analyses pathology vision output + TP53 mutation data to
 produce AJCC/UICC 8th edition TNM staging with Kenya-
 contextualised clinical next steps.
 
-Design principles (claudesam_master_requirements.md):
+Design principles:
   • Reusable components only — uses shared RAG chain,
     PII scrubber, audit logger, rate limiter from rag_chain.py
   • Strict JSON guardrails — LLM prompt forces structured output
@@ -1047,7 +1047,7 @@ def stage_cancer(
 
 
 # ═══════════════════════════════════════════════════════════════════
-# Self-tests — Break & Fix Method (claudesam_master_requirements.md)
+# Self-tests — Break & Fix Method
 # Run: python agents/tnm_staging.py
 # ═══════════════════════════════════════════════════════════════════
 

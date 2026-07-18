@@ -13,21 +13,11 @@
 
 ![Precision Onco Africa trailer](assets/trailer.gif)
 
-> ## 🏁 Quick Start for Judges — AMD Hackathon ACT II · Track 3 **and** Best Use of Gemma
+> ## 🏁 Quick Start
 >
 > **What it is:** an offline-capable, honesty-first oncology copilot where six AI
 > specialists **debate a TP53 case, vote toward a consensus, and hunt for
 > evidence that would _contradict_ it** — before it reaches a clinician.
->
-> **Why it wins Track 3 (Unicorn):** a concrete user (Dr. Amara, a district
-> clinician with no oncologist and no reliable internet), a real market, and
-> genuine AMD use — **Gemma served on AMD Instinct via Fireworks/vLLM**, a ROCm
-> benchmark harness, and an honest self-healing GPU-ops layer.
->
-> **Why it wins Best Use of Gemma:** Gemma is the **multimodal core** — it *sees*
-> pathology slides, *reads* photographed lab reports (no OCR), and *looks at* a
-> rendered protein structure, then reasons over all of it. One open model for
-> sight + language, offline or on AMD.
 >
 > **Run it in one command:**
 > ```bash
@@ -36,19 +26,16 @@
 > docker compose up --build
 > # App → http://localhost:8501     API docs → http://localhost:8000/docs
 > ```
-> **See the wow in 60 seconds:** open the **⭐ Tumour Board** tab, enter `R175H`,
+> **Try it in 60 seconds:** open the **⭐ Tumour Board** tab, enter `R175H`,
 > click **Convene the board** — watch the debate → consensus → the "Why?"
 > evidence trace.
->
-> **AMD-specific submission details:** **[AMD_SUBMISSION.md](AMD_SUBMISSION.md)**
-> (integration, benchmarks, product/market).
 >
 > **Live demo:** https://tp53analysis-g8iqzkuhoqmjcjtkvjcgbb.streamlit.app/ · **AMD inference mode:** set
 > `INFERENCE_MODE=fireworks` in `.env`.
 >
 > ---
 >
-> ### ✨ Why this is a *creative* use of Gemma 4 and AMD
+> ### ✨ How it uses Gemma 4 and AMD
 >
 > **Gemma 4 as a multimodal reasoning core — not a chatbot:**
 > - 👁️ **Gemma *sees* the protein.** We render the mutated p53 backbone and hand
@@ -254,8 +241,7 @@ scoring, hybrid retrieval, semantic caching, consensus confidence, ΔΔG, pLDDT,
 routing and QC savings) — see [METHODS.md](METHODS.md). The system design and
 the heterogeneous AMD compute roadmap are in [ARCHITECTURE.md](ARCHITECTURE.md). A per-module
 reference (purpose + public API of all 80 modules) is auto-generated in
-[CODE_MAP.md](CODE_MAP.md). For the AMD hackathon see
-[AMD_SUBMISSION.md](AMD_SUBMISSION.md) (integration, benchmarks, product/market).
+[CODE_MAP.md](CODE_MAP.md).
 
 ## 🗺️ Future Build Considerations
 

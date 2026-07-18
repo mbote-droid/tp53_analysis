@@ -2,8 +2,6 @@
 results/
 *.log
 
-# Claude files & project notes (don't push)
-CLAUDE*.md
 progress.md
 backups_temporary/
 
@@ -76,7 +74,6 @@ htmlcov/
 .env.local
 *.bak
 
-# TP53 RAG Platform (Gemma 4 Hackathon)
 tp53_rag/venv/
 tp53_rag/data/chroma_db/
 tp53_rag/.env

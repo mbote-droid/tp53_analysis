@@ -41,10 +41,7 @@ htmlcov/
 .DS_Store
 Thumbs.db
 
-#claude files
-CLAUDE.local.md
 progress.md
-.claude/
 
 # Internal build notes (not for publication)
 BUILD_STATUS.md
