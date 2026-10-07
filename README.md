@@ -10,6 +10,8 @@
 
 A comprehensive bioinformatics pipeline for analyzing the TP53 gene (tumor suppressor protein p53) and its orthologs across species. This pipeline fetches sequences from NCBI, performs sequence analysis, detects mutations, discovers open reading frames, conducts multi-species phylogenetic comparisons, and annotates protein domains.
 
+> **Repository layout:** this pipeline's own code and its 63 tests live at the top level (`tests/`). The `tp53_rag/` folder is the deployment copy of [Precision Onco Africa](https://github.com/mbote-droid/precision-onco-africa) used for that project's live demo; develop it in its own repository.
+
 ## Features
 
 - **Sequence Fetching**: Download nucleotide sequences from NCBI Entrez

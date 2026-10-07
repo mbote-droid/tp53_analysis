@@ -1,0 +1,22 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it using the metadata below."
+type: software
+title: "TP53 Bioinformatics Analysis Pipeline"
+abstract: "Bioinformatics pipeline for the TP53 gene: NCBI sequence retrieval, translation, six-frame ORF discovery, pairwise alignment, multi-species phylogenetics, InterPro domain annotation and a cancer-mutation heatmap."
+authors:
+  - family-names: "Mbote"
+    given-names: "Samuel"
+    orcid: "https://orcid.org/0009-0003-2319-8873"
+    affiliation: "Daktari Genomed Labs"
+repository-code: "https://github.com/mbote-droid/tp53_analysis"
+url: "https://github.com/mbote-droid/tp53_analysis"
+license: MIT
+version: "1.0.0"
+date-released: "2026-10-07"
+keywords:
+  - "TP53"
+  - "bioinformatics"
+  - "phylogenetics"
+  - "BioPython"
+  - "protein domains"
+  - "cancer genomics"
