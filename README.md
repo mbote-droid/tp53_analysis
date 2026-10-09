@@ -1,5 +1,6 @@
 # TP53 Bioinformatics Analysis Pipeline
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.23250330.svg)](https://doi.org/10.5281/zenodo.23250330)
 [![Python](https://img.shields.io/badge/Python-3.11%2B-blue?logo=python&logoColor=white)](https://www.python.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://tp53analysis-dzu3mspufjp9b43o2rmmog.streamlit.app/)
